@@ -2,7 +2,9 @@
 logs/**/*
 models/**/*
 plots/**/*
+libVoodoo/plots/**/*
 
 # ignore files
 training*
 nohup*
+
