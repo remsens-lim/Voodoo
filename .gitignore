@@ -1,0 +1,8 @@
+# ignore folders
+logs/**/*
+models/**/*
+plots/**/*
+
+# ignore files
+training*
+nohup*
