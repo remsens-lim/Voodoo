@@ -31,8 +31,6 @@ import numpy as np
 import itertools
 from tensorflow import keras
 
-from sklearn.model_selection import train_test_split
-
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
 sys.path.append('../larda/')
@@ -67,64 +65,35 @@ __status__      = "Prototype"
 
 t0_voodoo = datetime.datetime.today()
 time_str = f'{t0_voodoo:%Y%m%d-%H%M%S}'
-#var = input("Training [t] or Predicting [p]?:  ")
-var = 't'
 
-if var == 'p':
-    train_model   = False
-    predict_model = True
-else:
-    train_model   = True
-    predict_model = False
+predict_model = False
 
-plot_training_set           = True
+plot_training_set           = False
 plot_training_set_histogram = False
-plot_training_history       = True
-plot_bsc_dpl_rangespec      = False
+plot_bsc_dpl_rangespec      = True
 
 add_moments = False
 add_spectra = False
 add_cwt     = True
 
 fig_size   = [12, 7]
-plot_range = [0, 12000]
-window_dimension = (3, 3)
+plot_range = [0, 10000]
 
 TRAIN_SHEET = 'training_cases.toml'
 TEST_SHEET  = 'training_cases.toml'
 
-# define ANN model hyperparameter space
-use_mlp_model = False
-use_cnn_model = True
-
-BATCH_SIZE   = 1
-EPOCHS       = 500
-
-DENSE_LAYERS = [0]
-LAYER_SIZES  = []
-
-CONV_LAYERS  = [3]
-KERNEL_SIZE  = (4, 4)
-POOL_SIZE    = (2, 2)
-NFILTERS     = [(32, 64, 128)]
-
-OPTIMIZERS   = ['sgd']
-ACTIVATIONS  = ['leakyrelu']
-LOSS_FCNS    = ['mse']
-
 # define paths
 VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
-BOARD_NAME   = f'voodoo-mlp-training-{time_str}__{BATCH_SIZE}-bachsize-{EPOCHS}-epochs'
 LOGS_PATH    = f'{VOODOO_PATH}logs/'
 MODELS_PATH  = f'{VOODOO_PATH}models/'
 PLOTS_PATH   = f'{VOODOO_PATH}plots/'
 
-#TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191128-173950.h5'  # even better
-TRAINED_MODEL = ''
 
-# define normalization boundaries and conversion for radar (feature) and lidar (label) space
+TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191128-173950.h5'  # even better
+
+
 radar_list = []
-radar_info = {'spec_lims':     [1.e-5, 1.e2],
+radar_info = {'spec_lims':     [1.e-6, 1.e2],
               'spec_converter': 'lin2z',
               'normalization':  'normalize'}
 
@@ -133,7 +102,7 @@ lidar_info = {'attbsc1064_lims': [1.e-7, 1.e-3],
               'voldepol_lims': [1.e-7, 0.3],
               'bsc_converter': 'log',
               'dpl_converter': 'none',
-              'normalization': 'nore',
+              'normalization': 'none',
               'bsc_shift': 0,
               'dpl_shift': 0}
 
@@ -204,7 +173,6 @@ if __name__ == '__main__':
         print(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
         print(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
 
-        lidar_list = ['attbsc1064']
         # interpolate polly xt data onto limrad grid (so that spectra can be used directly)
         lidar_container.update({f'{var}_ip': pyLARDA.Transformations.interpolate2d(
                 lidar_container[var], new_time=ts_radar, new_range=rg_radar) for var in lidar_list})
@@ -217,8 +185,7 @@ if __name__ == '__main__':
 
         if plot_bsc_dpl_rangespec:
             new_spec = Loader.equalize_radar_chirps(radar_container['spectra'])
-            Plot.lidar_profile_range_spectra(lidar_container, new_spec, iT=0, plot_range=plot_range)
-            sys.exit(42)
+            Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range, colormap='cloudnet_jet')
 
         ########################################################################################################################################################
         #   _____          _____  _______ _______ _____ __   _  ______       _____
@@ -227,122 +194,6 @@ if __name__ == '__main__':
         #
         if plot_training_set:
             Plot.Quicklooks(radar_container['moments'], lidar_container, radar_list, lidar_list, begin_dt, end_dt)
-
-        ########################################################################################################################################################
-        #  _______  ______ _______ _____ __   _      _______ __   _ __   _
-        #     |    |_____/ |_____|   |   | \  |      |_____| | \  | | \  |
-        #     |    |    \_ |     | __|__ |  \_|      |     | |  \_| |  \_|
-        #
-        if train_model:
-            train_set, train_label, list_ts, list_rg = Loader.load_trainingset(radar_container['spectra'],
-                                                                               radar_container['moments'],
-                                                                               lidar_container,
-                                                                               input_dim=window_dimension,
-                                                                               n_time=n_time_LR,
-                                                                               n_range=n_range_LR,
-                                                                               n_Dbins=n_velocity_LR,
-                                                                               task='train_radar_lidar',
-                                                                               add_moments=add_moments,
-                                                                               add_spectra=add_spectra,
-                                                                               add_cwt=add_cwt,
-                                                                               feature_info=radar_info,
-                                                                               feature_list=radar_list,
-                                                                               label_info=lidar_info,
-                                                                               label_list=lidar_list,
-                                                                               cwt=CWT_PARAMS)
-
-            # get dimensionality of the feature and target space
-            n_samples, n_input = train_set.shape[0], train_set.shape[1:]
-            n_output  = train_label.shape[1:]
-
-            print(f'min/max value in features = {np.min(train_set)},  maximum = {np.max(train_set)}')
-            print(f'min/max value in targets  = {np.min(train_label)},  maximum = {np.max(train_label)}')
-
-            ####################################################################################################################################
-            #  ___  _    ____ ___    _  _ _ ____ ___ ____ ____ ____ ____ _  _ ____
-            #  |__] |    |  |  |     |__| | [__   |  |  | | __ |__/ |__| |\/| [__
-            #  |    |___ |__|  |     |  | | ___]  |  |__| |__] |  \ |  | |  | ___]
-            #
-            if plot_training_set_histogram:
-                fig, _ = Plot.Histogram(train_set, var_info=radar_info, kind='cwt2d')
-                Plot.save_figure(fig, name=f'histo_input_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=200)
-
-                fig, _ = Plot.Histogram(train_label, var_info=lidar_info, kind='traininglabel')
-                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{lidar_info["normalization"]}.png', dpi=200)
-
-            ####################################################################################################################################
-            #  ___  ____ ____ _ _  _ ____    _  _ _  _ _    ___ _ _    ____ _   _ ____ ____    ___  ____ ____ ____ ____ ___  ___ ____ ____ _  _ 
-            #  |  \ |___ |___ | |\ | |___    |\/| |  | |     |  | |    |__|  \_/  |___ |__/    |__] |___ |__/ |    |___ |__]  |  |__/ |  | |\ | 
-            #  |__/ |___ |    | | \| |___    |  | |__| |___  |  | |___ |  |   |   |___ |  \    |    |___ |  \ |___ |___ |     |  |  \ |__| | \| 
-            #                                                                                                                                  
-            if use_mlp_model:
-                # loop through hyperparameter space
-                for dl, ls, af, il, op in itertools.product(DENSE_LAYERS, LAYER_SIZES, ACTIVATIONS, LOSS_FCNS, OPTIMIZERS):
-
-                    hyper_params = {'DENSE_LAYERS': dl,
-                                    'LAYER_SIZES': ls,
-                                    'ACTIVATIONS': af,
-                                    'LOSS_FCNS': il,
-                                    'OPTIMIZER': op,
-                                    'BATCH_SIZE': BATCH_SIZE,
-                                    'EPOCHS': EPOCHS}
-
-                    if not TRAINED_MODEL:
-                        new_model_name = f'{dl}-dense-{ls}-nodes-{af}--{time_str}.h5'
-                        hyper_params.update({'MODEL_PATH': MODELS_PATH + new_model_name,
-                                             'LOG_PATH':   LOGS_PATH   + new_model_name})
-                    else:
-                        hyper_params.update({'MODEL_PATH': MODELS_PATH + TRAINED_MODEL,
-                                             'LOG_PATH':   LOGS_PATH   + TRAINED_MODEL})
-
-                    dense_model = Model.define_dense(n_input, n_output, hyper_params)
-                    dense_model, history = Model.training(dense_model, train_set, train_label, **hyper_params)
-
-                    if plot_training_history:
-                        fig, ax = Plot.History(history)
-                        Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=200)
-
-                    if TRAINED_MODEL:
-                        break  # if a trained model was given, jump out of hyperparameter loop
-
-            ####################################################################################################################################
-            #  ___  ____ ____ _ _  _ ____    ____ ____ _  _ _  _ ____ _    _  _ ___ _ ____ _  _ ____ _
-            #  |  \ |___ |___ | |\ | |___    |    |  | |\ | |  | |  | |    |  |  |  | |  | |\ | |__| |
-            #  |__/ |___ |    | | \| |___    |___ |__| | \|  \/  |__| |___ |__|  |  | |__| | \| |  | |___
-            #
-            if use_cnn_model:
-                # loop through hyperparameter space
-                for cl, dl, af, il, op, nf in itertools.product(CONV_LAYERS, DENSE_LAYERS, ACTIVATIONS, LOSS_FCNS, OPTIMIZERS, NFILTERS):
-
-                    hyper_params = {'CONV_LAYERS': cl,
-                                    'DENSE_LAYERS': dl,
-                                    'NFILTERS': nf,
-                                    'KERNEL_SIZE': KERNEL_SIZE,
-                                    'POOL_SIZE':  POOL_SIZE,
-                                    'ACTIVATIONS': af,
-                                    'LOSS_FCNS': il,
-                                    'OPTIMIZER': op,
-                                    'BATCH_SIZE': BATCH_SIZE,
-                                    'EPOCHS': EPOCHS,
-                                    'DEVICE': 0}
-
-                    if not TRAINED_MODEL:
-                        new_model_name = f'{cl}-conv-{nf}-filter-{KERNEL_SIZE[0]}_{KERNEL_SIZE[1]}-kernelsize-{af}--{time_str}.h5'
-                        hyper_params.update({'MODEL_PATH': MODELS_PATH + new_model_name,
-                                             'LOG_PATH':   LOGS_PATH   + new_model_name})
-                    else:
-                        hyper_params.update({'MODEL_PATH': MODELS_PATH + TRAINED_MODEL,
-                                             'LOG_PATH':   LOGS_PATH   + TRAINED_MODEL})
-
-                    dense_model = Model.define_cnn(n_input, n_output, hyper_params)
-                    dense_model, history = Model.training(dense_model, train_set, train_label, hyper_params)
-
-                    if plot_training_history:
-                        fig, ax = Plot.History(history)
-                        Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=300)
-
-                    if TRAINED_MODEL:
-                        break  # if a trained model was given, jump out of hyperparameter loop
 
         ########################################################################################################################################################
         #  _______ _______ _     _ _______     _____   ______ _______ ______  _____ _______ _______ _____  _____  __   _
@@ -422,7 +273,7 @@ if __name__ == '__main__':
                 titlestring = f'scatter bsc-depol -- date: {begin_dt:%Y-%m-%da},\ntime: {begin_dt:%H:%M:%S} -' \
                               f' {end_dt:%H:%M:%S} UTC, range:{plot_range[0]}-{plot_range[1]}m'
 
-                lidar_pred_container['bsc']['var'][lidar_pred_container['bsc']['var']<=0.0] = lidar_pred_container['bsc']['var_lims'][0]
+                lidar_pred_container['bsc']['var'][lidar_pred_container['bsc']['var'] <= 0.0] = lidar_pred_container['bsc']['var_lims'][0]
                 lidar_pred_container['bsc']['var'] = np.log10(lidar_pred_container['bsc']['var'])
                 lidar_pred_container['bsc']['var_unit'] = 'log10(sr^-1 m^-1)'
                 lidar_pred_container['bsc']['var_lims'] = [-7, -3]
@@ -435,10 +286,3 @@ if __name__ == '__main__':
                                                                title=titlestring)
 
                 Plot.save_figure(fig, name=f'scatter_polly_depol_bsc_{begin_dt:%Y-%m-%d}_{TRAINED_MODEL[:-3]}.png', dpi=200)
-
-            if TRAINED_MODEL:
-                break  # if a trained model was given, jump out of hyperparameter loop
-
-    Plot.print_elapsed_time(start_time, '\nDone, elapsed time = ')
-
-

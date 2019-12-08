@@ -12,7 +12,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU
+from tensorflow.keras.models import Model as kmodel
+from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU, Input
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.callbacks import TensorBoard
 
@@ -93,6 +94,20 @@ def define_autoencoder(n_input, hyper_params):
 
     return model
 
+def add_activation(model, ACTIVATION):
+    """
+    Adds an activatin layer to a keras model.
+    Args:
+        -   ACTIVATION (string) : name of the activation function
+
+    Return:
+        -   model (tensorflow object) : the model
+    """
+    if ACTIVATION == 'leakyrelu':
+        model.add(LeakyReLU(alpha=.001))
+    else:
+        model.add(Activation=ACTIVATION)
+    return model
 
 def define_dense(n_input, n_output, hyper_params):
     DENSE_LAYERS = hyper_params['DENSE_LAYERS']
@@ -112,21 +127,14 @@ def define_dense(n_input, n_output, hyper_params):
         #model.add(LSTM(LAYER_SIZE, input_shape=(n_input,), return_sequences=True))
         model.add(Dense(LAYER_SIZE, input_shape=(n_input,)))
         model.add(BatchNormalization())
-        if ACTIVATION == 'leakyrelu':
-            model.add(LeakyReLU(alpha=.001))
-        else:
-            model.add(Activation=ACTIVATION)
+        model = add_activation(model, ACTIVATION)
 
         # add more dense layers
         for idl in range(DENSE_LAYERS - 1):
             #model.add(LSTM(LAYER_SIZE))
             model.add(Dense(LAYER_SIZE))
             model.add(BatchNormalization())
-            model.add(Activation(ACTIVATION))
-            if ACTIVATION == 'leakyrelu':
-                model.add(LeakyReLU(alpha=.001))
-            else:
-                model.add(Activation=ACTIVATION)
+            model = add_activation(model, ACTIVATION)
 
         # define output layer containing 2 nodes (backscatter and depolarization)
         model.add(Dense(n_output, activation='linear'))
@@ -151,7 +159,7 @@ def define_dense(n_input, n_output, hyper_params):
 def define_cnn(n_input, n_output, hyper_params):
     CONV_LAYERS = hyper_params['CONV_LAYERS']
     DENSE_LAYERS = hyper_params['DENSE_LAYERS']
-    DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else 64
+    DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else 0
     NFILTERS = hyper_params['NFILTERS']
     KERNEL_SIZE = hyper_params['KERNEL_SIZE']
     POOL_SIZE = hyper_params['POOL_SIZE']
@@ -159,9 +167,9 @@ def define_cnn(n_input, n_output, hyper_params):
     LOSSES = hyper_params['LOSS_FCNS']
     model_path = hyper_params['MODEL_PATH']
     OPTIMIZER = hyper_params['OPTIMIZER']
-    learning_rate = 1.e-3
-    decay_rate = learning_rate * 0.01
-    momentum = 0.5
+    learning_rate = 1.e-2
+    decay_rate = learning_rate * 1.e-3
+    momentum = 0.9
 
     if os.path.exists(model_path):
         # load model
@@ -171,34 +179,21 @@ def define_cnn(n_input, n_output, hyper_params):
         # create the model and add the input layer
         model = Sequential()
         model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, input_shape=n_input, padding="same"))
-
-        if ACTIVATION == 'leakyrelu':
-            model.add(LeakyReLU(alpha=.001))
-        else:
-            model.add(Activation=ACTIVATION)
-
+        model = add_activation(model, ACTIVATION)
         model.add(MaxPool2D(pool_size=POOL_SIZE))
 
-        # add more dense layers
+        # add more conv layers
         for idl in range(CONV_LAYERS - 1):
             model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, padding="same"))
-
-            if ACTIVATION == 'leakyrelu':
-                model.add(LeakyReLU(alpha=.001))
-            else:
-                model.add(Activation=ACTIVATION)
-
+            model = add_activation(model, ACTIVATION)
             model.add(MaxPool2D(pool_size=POOL_SIZE))
 
         # define output layer containing 2 nodes (backscatter and depolarization)
         model.add(Flatten())
-        if DENSE_LAYERS > 0:
-            for idense in range(DENSE_LAYERS):
-                model.add(Dense(DENSE_NODES))
-                if ACTIVATION == 'leakyrelu':
-                    model.add(LeakyReLU(alpha=.001))
-                else:
-                    model.add(Activation=ACTIVATION)
+
+        for idense in range(DENSE_LAYERS):
+            model.add(Dense(DENSE_NODES))
+            model = add_activation(model, ACTIVATION)
 
         model.add(Dense(n_output[0], activation='linear'))
         print(f"Created model {model_path}")
@@ -209,10 +204,7 @@ def define_cnn(n_input, n_output, hyper_params):
     else:
         opt = Adam(lr=learning_rate, momentum=momentum, decay=decay_rate)
 
-    model.compile(optimizer=opt,
-                  loss=LOSSES,
-                  metrics=['mae', 'mse']
-                  )
+    model.compile(optimizer=opt, loss=LOSSES, metrics=['mae', 'mse'])
 
     model.summary()
 
@@ -221,58 +213,55 @@ def define_cnn(n_input, n_output, hyper_params):
 
 def training(model, train_set, train_label, hyper_params):
     BATCH_SIZE = hyper_params['BATCH_SIZE']
-    EPOCHS = hyper_params['EPOCHS']
-    log_path = hyper_params['LOG_PATH']
-    model_path = hyper_params['MODEL_PATH']
+    EPOCHS     = hyper_params['EPOCHS']
+    LOG_PATH   = hyper_params['LOG_PATH']
+    MODEL_PATH = hyper_params['MODEL_PATH']
+    DEVICE     = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
 
     # log model training to tensorboard callback
-    tensorboard_callback = TensorBoard(log_dir=log_path,
+    tensorboard_callback = TensorBoard(log_dir=LOG_PATH,
                                        histogram_freq=1,
                                        write_graph=True,
                                        write_images=True)
 
-    history = model.fit(train_set, train_label,
-                        validation_split=0.0,
-                        batch_size=BATCH_SIZE,
-                        epochs=EPOCHS,
-                        shuffle=True,
-                        callbacks=[tensorboard_callback],
-                        # callbacks=[PrintDot()],
-                        #verbose=1
-                        )
+    with tf.device(f'/gpu:{DEVICE}'):
+        history = model.fit(train_set, train_label,
+                            batch_size=BATCH_SIZE,
+                            epochs=EPOCHS,
+                            shuffle=True,
+                            callbacks=[tensorboard_callback],
+                            validation_split=0.05,
+                            # callbacks=[PrintDot()],
+                            #verbose=1
+                            )
 
-    # serialize model to HDF5
-    model.save(model_path)
-    print(f"Saved model to disk :: {model_path}")
+        # serialize model to HDF5
+        model.save(MODEL_PATH)
+        print(f"Saved model to disk :: {MODEL_PATH}")
 
     return model, history
 
-
-################################################################################################
-#    _______ _______ _______ _______      _______ __   _ __   _
-#       |    |______ |______    |         |_____| | \  | | \  |
-#       |    |______ ______|    |         |     | |  \_| |  \_|
-#
 def predict_lidar(loaded_model, test_set):
-    pred = loaded_model.predict(test_set, verbose=1)
-    return pred
-
+    return loaded_model.predict(test_set, verbose=1)
 
 #
-def predict_spectra(loaded_model, test_set, dimensions, larda):
+def predict_spectra(loaded_model, test_set, dimensions):
+
     list_ts = dimensions['list_ts']
     list_rg = dimensions['list_rg']
     ts_radar = dimensions['ts_radar']
     rg_radar = dimensions['rg_radar']
     vel_radar = dimensions['rg_radar']
     spec_orig = dimensions['spec_container']
+    system_info = dimensions['system_info']
+
 
     pred = loaded_model.predict(test_set) #, verbose=1)
 
     cnt = 0
     container = []
     for ic in range(len(spec_orig)):
-        paraminfo = larda.connectors['LIMRAD94'].system_info['params']['VSpec']
+        paraminfo = system_info
         pred_var = np.full((ts_radar.size, spec_orig[ic]['rg'].size, spec_orig[ic]['vel'].size), fill_value=-999.0)
         for iT, iR in zip(list_ts, list_rg):
             iT, iR = int(iT), int(iR)
@@ -300,3 +289,55 @@ def predict_spectra(loaded_model, test_set, dimensions, larda):
                           'var': pred_var})
 
     return pred
+
+
+# copy from https://github.com/jg-fisher/autoencoder/blob/master/ffae.py
+class AutoEncoder:
+    def __init__(self, encoding_dim=3):
+        self.encoding_dim = encoding_dim
+        r = lambda: np.random.randint(1, 3)
+        self.x = np.array([[r(), r(), r()] for _ in range(1000)])
+        print(self.x)
+
+    def _encoder(self):
+        inputs = Input(shape=(self.x[0].shape))
+        encoded = Dense(self.encoding_dim, activation='relu')(inputs)
+        model = kmodel(inputs, encoded)
+        self.encoder = model
+        return model
+
+    def _decoder(self):
+        inputs = Input(shape=(self.encoding_dim,))
+        decoded = Dense(3)(inputs)
+        model = kmodel(inputs, decoded)
+        self.decoder = model
+        return model
+
+    def encoder_decoder(self):
+        ec = self._encoder()
+        dc = self._decoder()
+
+        inputs = Input(shape=self.x[0].shape)
+        ec_out = ec(inputs)
+        dc_out = dc(ec_out)
+        model = kmodel(inputs, dc_out)
+        model.summary()
+        self.model = model
+        return model
+
+    def fit(self, batch_size=10, epochs=300):
+        self.model.compile(optimizer='sgd', loss='mse')
+        log_dir = './logs/'
+        tbCallBack = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_images=True)
+        self.model.fit(self.x, self.x,
+                       epochs=epochs,
+                       batch_size=batch_size,
+                       callbacks=[tbCallBack])
+
+    def save(self):
+        if not os.path.exists(r'./weights'):
+            os.mkdir(r'./weights')
+        else:
+            self.encoder.save(r'./weights/encoder_weights.h5')
+            self.decoder.save(r'./weights/decoder_weights.h5')
+            self.model.save(r'./weights/ae_weights.h5')

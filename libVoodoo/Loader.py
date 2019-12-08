@@ -82,6 +82,7 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     add_spectra   = kwargs['add_spectra']  if 'add_spectra' in kwargs else True
     add_cwt       = kwargs['add_cwt']      if 'add_cwt'     in kwargs else True
     cwt_params    = kwargs['cwt']          if 'cwt'         in kwargs else {'none': -999}
+    input_dim     = kwargs['input_dim']    if 'input_dim'   in kwargs else 1
     # list of features and label
     feature_list  = kwargs['feature_list'] if 'feature_list' in kwargs else ['Ze', 'sw']
     label_list    = kwargs['label_list']   if 'label_list'   in kwargs else ['attbsc1064_ip', 'dpl']
@@ -254,10 +255,10 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     if add_cwt:
         t0 = time.time()
         assert 'sfacs' in cwt_params, 'The CWT needs scaling factors! No scaling factors were given'
-        n_cwt_scales = len(cwt_params['sfacs'])
-        assert n_cwt_scales > 0, 'The list of scaling factors has to be positive!'
+        assert len(cwt_params['sfacs']) > 0, 'The list of scaling factors has to be positive!'
 
-        N_cwt_flat = n_cwt_scales * n_Dbins
+        n_cwt_scales = len(cwt_params['sfacs'])
+        N_cwt_flat   = len(cwt_params['sfacs']) * n_Dbins
         cnt = 0
         cwt_list = []
         for iT in range(n_time):
@@ -298,6 +299,11 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                             fig_name = f'limrad_cwt_{str(cnt).zfill(4)}_iT-iH_{str(iT).zfill(4)}-{str(iH + rg_offsets[ic]).zfill(4)}.png'
                             fig.savefig(fig_name, dpi=150)
                             print(fig_name)
+
+        #if input_dim != (1, 1):
+        #    train_set = np.array(cwt_list, dtype=np.float32)
+        #    for i_sample in range(len(cwt_list)):
+
 
         if len(train_set) == 0:
             train_set = np.array(cwt_list, dtype=np.float32)
@@ -404,9 +410,11 @@ def load_lidar_data(larda, var_list, begin_dt, end_dt, plot_range, **kwargs):
 
     # remove multiple scattering effects caused by large field of view
     if 'msf' in kwargs and kwargs['msf']:
-        assert len(lidar_var) < 2, 'multiple scattering filter needs both attbsc1064 and voldepol532'
-        lidar_var['attbsc1064']['var'], lidar_var['voldepol532']['var'] = Multiscatter.apply_filter(
-            lidar_var['attbsc1064'], lidar_var['voldepol532'], despeckle=True)
+        assert len(lidar_var) == 2, 'multiple scattering filter needs both attbsc1064 and depol'
+        lidar_var['attbsc1064']['var'], lidar_var['depol']['var'], status_flags = Multiscatter.apply_filter(
+            lidar_var['attbsc1064'], lidar_var['depol'], despeckle=True)
+        lidar_var['attbsc1064'].update({'flags': status_flags})
+        lidar_var['depol'].update({'flags': status_flags})
 
     for var in var_list:
         lidar_var[var]['var'][np.isnan(lidar_var[var]['var'])] = 0.0

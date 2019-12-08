@@ -93,7 +93,9 @@ def apply_filter(bsc, depol, **kwargs):
         **despeckle (bool): if True, mask single pixels; default: True
 
     Returns:
-        bsc_out, depol_out (2D - numpy.arrays): containing corrected backscatter and depolarization matrices, NOTE: The mask of the input container is updated!
+        bsc_out (float): 2D - containing corrected backscatter and depolarization matrices, NOTE: The mask of the input container is updated!
+        depol_out (float): 2D - containing corrected backscatter and depolarization matrices, NOTE: The mask of the input container is updated!
+        flags (int): 2D - status flag, 0 = no signal, 1 = non-liquid, 2 = liquid, 3 = attenuated
     """
 
     min_bsc_thresh = kwargs['bsc_thresh'][0] if 'bsc_thresh' in kwargs else 1.e-6
@@ -111,7 +113,7 @@ def apply_filter(bsc, depol, **kwargs):
     bsc_var_lims_orig, depol_var_lims_orig = bsc['var_lims'], depol['var_lims']
 
     bsc_cpy, depol_cpy = bsc['var'].copy(), depol['var'].copy()
-    bsc_out, depol_out = bsc['var'].copy(), depol['var'].copy()
+    bsc_out, depol_out, flags = bsc['var'].copy(), depol['var'].copy(), np.zeros(bsc['var'].shape, dtype=np.int)
     n_rg = len(depol['rg'])
 
     # set all nan to 0 for smoothing
@@ -180,21 +182,30 @@ def apply_filter(bsc, depol, **kwargs):
         idx_scl_end = []
         idx_bsc_max = 0
         if len(idx_scl_end_2) > 0:
+            old_idx1 = None
             for idx1 in idx_scl_end_2:
                 base = idx1 - n_bins_250m if idx1 - n_bins_250m > 0 else 0
                 # idx0 = np.argmax(d_bsc_depol_gradient[base:idx1-5]) + base
                 idx0 = np.argmax(d_bsc_depol[base:idx1 - 5]) + base
 
                 if n_bins_250m + 5 >= idx1 - idx0 > 5:
+                    idx0 -= 10
                     idx_scl_start.append(idx0)
                     idx_scl_end.append(idx1)
 
-                    n_rg_scl_depol = idx1 - idx0 if n_rg > idx1 > 0 else n_rg - idx1
-                    new_depol = np.minimum(np.linspace(1.e-4, 5.e-4, n_rg_scl_depol), depol_corrected[idx0:idx1])
+                    idx_bsc_max = np.argmax(attbsc_corrected[idx0:idx1]) + idx0 
+                    #new_bsc = np.max(attbsc_corrected[idx0:idx1])
+
+                    n_rg_liq_dpl = idx1 - idx0 if n_rg > idx1 > 0 else n_rg - idx1
+                    new_depol = np.minimum(np.linspace(1.e-4, 5.e-4, n_rg_liq_dpl), depol_corrected[idx0:idx1])
 
                     # correct depolarization for multiple scattering
                     depol_corrected[idx0:idx1] = new_depol
                     depol_out[iT, idx0:idx1] = new_depol
+                    #bsc_out[iT, idx_bsc_max:idx1] = new_bsc
+                    flags[iT, old_idx1:idx0] = 1
+                    flags[iT, idx0:idx1] = 2
+                    old_idx1 = idx1
 
                     # if signal is attenuated, set range bins above liquid layer to nan
                     if np.mean(attbsc_corrected[idx0:idx1]) > 1.e-4:
@@ -203,6 +214,7 @@ def apply_filter(bsc, depol, **kwargs):
                         attbsc_corrected[idx_bsc_max:] = np.nan
                         depol_out[iT, idx_bsc_max:] = np.nan
                         bsc_out[iT, idx_bsc_max:] = np.nan
+                        flags[iT, idx0:] = 3
                         continue  # skip the rest of this profile
 
         if idx_bsc_max == 0:
@@ -213,6 +225,8 @@ def apply_filter(bsc, depol, **kwargs):
             attbsc_corrected[idx_bsc_max:] = np.nan
             depol_out[iT, idx_bsc_max:] = np.nan
             bsc_out[iT, idx_bsc_max:] = np.nan
+            flags[iT, :idx_bsc_max] = 1
+            flags[iT, idx_bsc_max:] = 3
 
         if plot_profiles:
             fltr = {'iT': iT,
@@ -235,7 +249,7 @@ def apply_filter(bsc, depol, **kwargs):
     bsc['var_lims'] = bsc_var_lims_orig
     depol['var_lims'] = depol_var_lims_orig
 
-    return bsc_out, depol_out
+    return bsc_out, depol_out, flags
 
 
 ########################################################################################################################
@@ -357,7 +371,7 @@ if __name__ == '__main__':
     ##
     #
     #
-    attbsc_1064['var'], voldepol_532['var'] = apply_filter(attbsc_1064, voldepol_532, plot_profiles=plot_profiles)
+    attbsc_1064['var'], voldepol_532['var'], status_flags = apply_filter(attbsc_1064, voldepol_532, plot_profiles=plot_profiles)
     attbsc_1064['var'][np.isnan(attbsc_1064['var'])] = -1.0
     voldepol_532['var'][np.isnan(voldepol_532['var'])] = 0.0
     mask1 = voldepol_532['var'] <= 0.0

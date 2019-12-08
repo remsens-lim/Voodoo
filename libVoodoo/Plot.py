@@ -166,35 +166,26 @@ def Quicklooks(RPG_moments, polly_var, radar_list, lidar_list, begin_dt, end_dt,
 
 
 def lidar_profile_range_spectra(lidar, spec, **kwargs):
-    fig_size    = kwargs['fig_size']    if 'fig_size'    in kwargs else [9, 6]
+    fig_size    = kwargs['fig_size']    if 'fig_size'    in kwargs else [15, 8]
     font_size   = kwargs['font_size']   if 'font_size'   in kwargs else 14
     font_weight = kwargs['font_weight'] if 'font_weight' in kwargs else 'semibold'
     path        = kwargs['path']        if 'path'        in kwargs else ''
-    bsc         = lidar['attbsc1064_ip']
-    dpl         = lidar['depol_ip']
-    plot_range  = kwargs['plot_range']  if 'plot_range'  in kwargs else [bsc['rg'][0], bsc['rg'][-1]]
-    iT          = kwargs['iT']
-    ts_list     = dpl['ts']
+    cmap        = kwargs['colormap']    if 'colormap'    in kwargs else spec['colormap']
+    plot_range  = kwargs['plot_range']  if 'plot_range'  in kwargs else [lidar['attbsc1064_ip']['rg'][0], lidar['attbsc1064_ip']['rg'][0]['rg'][-1]]
+    bsc         = lidar['attbsc1064']
+    bsc_interp  = lidar['attbsc1064_ip']
+    dpl         = lidar['depol']
+    dpl_interp  = lidar['depol_ip']
+    ts_list     = spec['ts']
     dt_list     = [h.ts_to_dt(ts) for ts in dpl['ts']]
     dt_begin    = dt_list[0]
+    vlims_bsc   = np.array(bsc['var_lims'])
+    vlims_dpl   = np.array(dpl['var_lims'])
     # plot it
-
-    n_chirps = len(spec)
-#    rg_offsets = spec['rg_offsets']
-#    spec_lims  = [-50, -10]     # radar['spectra'][0]['var_lims']
-#    ic_vel_max = np.argmax([spec[ic]['vel'][-1] for ic in range(n_chirps)])
-#    Dbins_max  = np.max([len(spec[ic]['vel']) for ic in range(n_chirps)])
-#
-#    masked = np.invert(np.concatenate([np.invert(spec[ic]['mask']).any(axis=2) for ic in range(n_chirps)], axis=1))     # default
-#
-#    if 'attbsc1064_ip' in lidar:
-#        masked = np.logical_or(lidar['attbsc1064_ip']['mask'], masked)
-#        masked[lidar['attbsc1064_ip']['var'] <= 1.e-7] = True
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     cnt = 0
-    plot_range = [0, 10000]
     for iT, ts in enumerate(ts_list):
 
         fig_name = path + f'limrad_{str(cnt).zfill(4)}_{dt_begin:%Y%m%d}_range_spectrogram.png'
@@ -202,14 +193,27 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
         spectrogram_slice = pyLARDA.Transformations.slice_container(spec, value=intervall)
 
         spectrogram_slice['colormap'] = 'jet'
-        spectrogram_slice['var_lims'] = [-40, 20]
+        spectrogram_slice['var_lims'] = [-60, 20]
         spectrogram_slice['rg_unit']  = 'km'
         spectrogram_slice['rg']       = spectrogram_slice['rg']/1000.
+        spectrogram_slice['colormap']  = cmap
+        bsc['var_lims'] = [5.e-8, 5.e-3]
+        dpl['var_lims'] = [-0.05, 0.35]
+        dpl['var'][dpl['var'] > 0.3] = 0.3
 
-        fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, fig_size=fig_size, v_lims=[-7, 7], grid='major', cbar=False)
+        iT_lidar = h.argnearest(dpl['ts'], ts_list[iT])
 
+        fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, fig_size=fig_size, v_lims=[-7, 7], grid='both', cbar=False)
+        axspec.patch.set_facecolor('#E0E0E0')
+        axspec.patch.set_alpha(0.7)
+        axspec.set_ylim(np.array(plot_range) / 1000.)
+        axspec.grid(b=True, which='major', color='white', linestyle='--')
+        axspec.grid(b=True, which='minor', color='white', linestyle=':')
         axspec.set_ylabel('Height [km]', fontsize=font_size, fontweight=font_weight)
+        axspec.grid(linestyle=':', color='white')
+        axspec.tick_params(axis='y', which='both', right=False, top=True)
         divider = make_axes_locatable(axspec)
+        # range spectrogram colorbar settings
         axcbar = divider.append_axes('top', size=0.2, pad=0.1)
         cbar = fig.colorbar(pcmesh, cax=axcbar, orientation="horizontal")
         cbar.ax.tick_params(axis='both', which='major', labelsize=font_size, width=2, length=4)
@@ -217,32 +221,60 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
         cbar.ax.minorticks_on()
         axcbar.xaxis.set_label_position('top')
         axcbar.xaxis.set_ticks_position('top')
-        axcbar.set_xlabel('Radar Reflectivity [dBZ]', fontweight=font_weight, fontsize=font_size)
-
-        axbsc = divider.append_axes("right", size=1.7, pad=0.05)
-        axbsc.set_title(f'{h.ts_to_dt(ts):%Y%m%d %H:%M:%S}', fontsize=font_size, fontweight=font_weight)
-        axbsc.plot(bsc['var'][iT, :], bsc['rg']/1000., color='royalblue', alpha=0.9, label=r'$\beta_{1064}$')
-        axbsc.yaxis.set_label_position("right")
-        axbsc.yaxis.tick_right()
-        axbsc.set_ylabel('Height [km]', fontsize=font_size, fontweight=font_weight)
-        axbsc.set_xlabel(f'att. bsc. [{bsc["var_unit"]}]', color='royalblue', fontsize=font_size, fontweight=font_weight)
+        axcbar.set_xlabel('Radar Reflectivity [dBZ m$\\mathregular{^{-1}}$ s$\\mathregular{^{-1}}$]', fontweight=font_weight, fontsize=font_size)
+        # backscatter plot settings
+        axbsc = divider.append_axes("right", size=2.5, pad=0.0)
+        axbsc.grid(b=True, which='major', color='white', linestyle='--')
+        axbsc.grid(b=True, which='minor', axis='y', color='white', linestyle=':')
+        axbsc.set_title(f'{h.ts_to_dt(ts):%b %d, %Y\n%H:%M:%S [UTC]}', fontsize=font_size, fontweight=font_weight)
+        settings = [['red', 'attenuated'], ['orange', 'non-liquid'], ['royalblue', 'liquid']]
+        for i, iset in enumerate(settings):
+            axbsc.scatter(bsc['var'][iT_lidar, bsc['flags'][iT_lidar, :] == i], bsc['rg'][np.where(bsc['flags'][iT_lidar, :] == i)] / 1000.,
+                          color=iset[0], alpha=0.9, label=iset[1])
+        axbsc.plot(bsc_interp['var'][iT, :], bsc_interp['rg'][:] / 1000., linewidth=2,
+                   color='black', alpha=0.5, label=r'interpolation')
+        axbsc.set_xlabel('att. bsc. [sr$\\mathregular{^{-1}}$ m$\\mathregular{^{-1}}$]', fontsize=font_size, fontweight=font_weight)
         axbsc.set_xscale('log')
         axbsc.set_xlim(bsc['var_lims'])
-        axbsc.set_ylim(np.array(plot_range)/1000.)
-        axbsc.grid(linestyle=':')
-
+        axbsc.set_ylim(np.array(plot_range) / 1000.)
+        axbsc.patch.set_facecolor('#E0E0E0')
+        axbsc.patch.set_alpha(0.7)
+        axbsc.xaxis.set_minor_locator(matplotlib.ticker.LogLocator(base=10.0, subs=(.1, .2, .3, .4, .5, .6, .7, .8, .9), numticks=6))
         axbsc.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-        axbsc.tick_params(axis='both', which='both', right=True, top=True)
+        axbsc.xaxis.set_major_locator(matplotlib.ticker.LogLocator(base=10.0, numticks=6))
+        axbsc.tick_params(axis='both', which='both', labelleft=False, left=False, right=False, top=True)
         axbsc.tick_params(axis='both', which='major', labelsize=font_size, width=3, length=5.5)
-        axbsc.tick_params(axis='y',    which='minor', width=2, length=3)
-        axbsc.xaxis.set_major_locator(matplotlib.ticker.LogLocator(base=10.0, numticks=3))
-
+        axbsc.tick_params(axis='y', which='minor', width=2, length=3)
+        axbsc.tick_params(axis='x', which='minor', width=0.75, length=1.5)
+        # depol plot settings
+        axdpl = divider.append_axes("right", size=2.5, pad=0.0)
+        axdpl.grid(b=True, which='major', color='white', linestyle='--')
+        axdpl.grid(b=True, which='minor', axis='y', color='white', linestyle=':')
+        for i, iset in enumerate(settings):
+            axdpl.scatter(dpl['var'][iT_lidar, dpl['flags'][iT_lidar, :] == i], dpl['rg'][np.where(dpl['flags'][iT_lidar, :] == i)] / 1000.,
+                          color=iset[0], alpha=0.9, label=iset[1])
+        axdpl.plot(dpl_interp['var'][iT, :], dpl_interp['rg'][:] / 1000., linewidth=2,
+                   color='black', alpha=0.5, label=r'interpolation')
+        axdpl.yaxis.set_label_position("right")
+        axdpl.yaxis.tick_right()
+        axdpl.set_ylabel('Height [km]', fontsize=font_size, fontweight=font_weight)
+        axdpl.set_xlabel('lin. vol. depol [1]', fontsize=font_size, fontweight=font_weight)
+        axdpl.set_xlim(dpl['var_lims'])
+        axdpl.set_ylim(np.array(plot_range) / 1000.)
+        axdpl.patch.set_facecolor('#E0E0E0')
+        axdpl.patch.set_alpha(0.7)
+        axdpl.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+        axdpl.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        axdpl.tick_params(axis='both', which='both', right=True, top=True)
+        axdpl.tick_params(axis='both', which='major', labelsize=font_size, width=3, length=5.5)
+        axdpl.tick_params(axis='y', which='minor', width=2, length=3)
+        axdpl.tick_params(axis='x', which='minor', width=1.5, length=2.)
+        axdpl.legend(loc=1, fontsize=font_size)
         save_figure(fig, name=fig_name)
         cnt += 1
-        #axdpl = axbsc.twiny()
-        #axdpl.set_ylabel('depol', color='red', fontsize=font_size, fontweight=font_weight)
-        #ln2 = axdpl.plot(dpl['var'][iT, :], dpl['rg'], 'red', alpha=0.75, label=r'$\delta_{532}$')
-        #axdpl.set_xlim(dpl['var_lims'])
+
+    bsc['var_lims'] = vlims_bsc
+    dpl['var_lims'] = vlims_dpl
 
     return fig, [axspec, axbsc]
 
