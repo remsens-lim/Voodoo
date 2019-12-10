@@ -64,13 +64,15 @@ __status__      = "Prototype"
 #
 ########################################################################################################################################################
 ########################################################################################################################################################
+# gather command line arguments
+method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
 t0_voodoo = datetime.datetime.today()
 time_str = f'{t0_voodoo:%Y%m%d-%H%M%S}'
 #var = input("Training [t] or Predicting [p]?:  ")
-var = 't'
+#var = ''
 
-if var == 'p':
+if args[0] == 'p':
     train_model   = False
     predict_model = True
 else:
@@ -97,14 +99,14 @@ TEST_SHEET  = 'training_cases.toml'
 use_mlp_model = False
 use_cnn_model = True
 
-BATCH_SIZE   = 1
-EPOCHS       = 500
+BATCH_SIZE   = 4
+EPOCHS       = 50
 
-DENSE_LAYERS = [0]
-LAYER_SIZES  = []
+DENSE_LAYERS = [1]
+LAYER_SIZES  = [(32,)]
 
 CONV_LAYERS  = [3]
-KERNEL_SIZE  = (4, 4)
+KERNEL_SIZE  = (3, 3)
 POOL_SIZE    = (2, 2)
 NFILTERS     = [(32, 64, 128)]
 
@@ -120,7 +122,8 @@ MODELS_PATH  = f'{VOODOO_PATH}models/'
 PLOTS_PATH   = f'{VOODOO_PATH}plots/'
 
 #TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191128-173950.h5'  # even better
-TRAINED_MODEL = ''
+#TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-2_4-kernelsize-leakyrelu--20191208-234138.h5' # ok
+TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-3_3-kernelsize-leakyrelu--20191209-230135.h5'
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 radar_list = []
@@ -133,13 +136,12 @@ lidar_info = {'attbsc1064_lims': [1.e-7, 1.e-3],
               'voldepol_lims': [1.e-7, 0.3],
               'bsc_converter': 'log',
               'dpl_converter': 'none',
-              'normalization': 'nore',
+              'normalization': 'none',
               'bsc_shift': 0,
               'dpl_shift': 0}
 
 # controls the ccontinuous wavelet transformation
-CWT_PARAMS   = {'dim': '2d',
-                'sfacs': np.linspace(2 ** 1., 2 ** 3.25, 32)}
+CWT_PARAMS   = {'dim': '2d', 'sfacs': np.linspace(2 ** 1., 2 ** 3.25, 32)}
 
 ########################################################################################################################################################
 ########################################################################################################################################################
@@ -217,8 +219,7 @@ if __name__ == '__main__':
 
         if plot_bsc_dpl_rangespec:
             new_spec = Loader.equalize_radar_chirps(radar_container['spectra'])
-            Plot.lidar_profile_range_spectra(lidar_container, new_spec, iT=0, plot_range=plot_range)
-            sys.exit(42)
+            Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range)
 
         ########################################################################################################################################################
         #   _____          _____  _______ _______ _____ __   _  ______       _____
@@ -245,6 +246,7 @@ if __name__ == '__main__':
                                                                                add_moments=add_moments,
                                                                                add_spectra=add_spectra,
                                                                                add_cwt=add_cwt,
+                                                                               print_cwt=False,
                                                                                feature_info=radar_info,
                                                                                feature_list=radar_list,
                                                                                label_info=lidar_info,
@@ -312,10 +314,11 @@ if __name__ == '__main__':
             #
             if use_cnn_model:
                 # loop through hyperparameter space
-                for cl, dl, af, il, op, nf in itertools.product(CONV_LAYERS, DENSE_LAYERS, ACTIVATIONS, LOSS_FCNS, OPTIMIZERS, NFILTERS):
+                for cl, dl, dn, af, il, op, nf in itertools.product(CONV_LAYERS, DENSE_LAYERS, LAYER_SIZES, ACTIVATIONS, LOSS_FCNS, OPTIMIZERS, NFILTERS):
 
                     hyper_params = {'CONV_LAYERS': cl,
                                     'DENSE_LAYERS': dl,
+                                    'DENSE_NODES': dn,
                                     'NFILTERS': nf,
                                     'KERNEL_SIZE': KERNEL_SIZE,
                                     'POOL_SIZE':  POOL_SIZE,

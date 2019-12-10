@@ -204,6 +204,7 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
         iT_lidar = h.argnearest(dpl['ts'], ts_list[iT])
 
         fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, fig_size=fig_size, v_lims=[-7, 7], grid='both', cbar=False)
+        # additional spectrogram settings
         axspec.patch.set_facecolor('#E0E0E0')
         axspec.patch.set_alpha(0.7)
         axspec.set_ylim(np.array(plot_range) / 1000.)

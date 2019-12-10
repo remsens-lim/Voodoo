@@ -167,7 +167,7 @@ def define_cnn(n_input, n_output, hyper_params):
     LOSSES = hyper_params['LOSS_FCNS']
     model_path = hyper_params['MODEL_PATH']
     OPTIMIZER = hyper_params['OPTIMIZER']
-    learning_rate = 1.e-2
+    learning_rate = 1.e-3
     decay_rate = learning_rate * 1.e-3
     momentum = 0.9
 
@@ -192,7 +192,7 @@ def define_cnn(n_input, n_output, hyper_params):
         model.add(Flatten())
 
         for idense in range(DENSE_LAYERS):
-            model.add(Dense(DENSE_NODES))
+            model.add(Dense(DENSE_NODES[idense]))
             model = add_activation(model, ACTIVATION)
 
         model.add(Dense(n_output[0], activation='linear'))
@@ -202,7 +202,7 @@ def define_cnn(n_input, n_output, hyper_params):
     if OPTIMIZER == 'sgd':
         opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
     else:
-        opt = Adam(lr=learning_rate, momentum=momentum, decay=decay_rate)
+        opt = Adam(lr=learning_rate, decay=decay_rate)
 
     model.compile(optimizer=opt, loss=LOSSES, metrics=['mae', 'mse'])
 
@@ -224,20 +224,20 @@ def training(model, train_set, train_label, hyper_params):
                                        write_graph=True,
                                        write_images=True)
 
-    with tf.device(f'/gpu:{DEVICE}'):
-        history = model.fit(train_set, train_label,
-                            batch_size=BATCH_SIZE,
-                            epochs=EPOCHS,
-                            shuffle=True,
-                            callbacks=[tensorboard_callback],
-                            validation_split=0.05,
-                            # callbacks=[PrintDot()],
-                            #verbose=1
-                            )
+    #with tf.device(f'/gpu:{DEVICE}'):
+    history = model.fit(train_set, train_label,
+                        batch_size=BATCH_SIZE,
+                        epochs=EPOCHS,
+                        shuffle=True,
+                        callbacks=[tensorboard_callback],
+                        validation_split=0.05,
+                        # callbacks=[PrintDot()],
+                        #verbose=1
+                        )
 
-        # serialize model to HDF5
-        model.save(MODEL_PATH)
-        print(f"Saved model to disk :: {MODEL_PATH}")
+    # serialize model to HDF5
+    model.save(MODEL_PATH)
+    print(f"Saved model to disk :: {MODEL_PATH}")
 
     return model, history
 

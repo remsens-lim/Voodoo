@@ -71,6 +71,7 @@ predict_model = False
 plot_training_set           = False
 plot_training_set_histogram = False
 plot_bsc_dpl_rangespec      = True
+plot_rspectro_cwt           = True
 
 add_moments = False
 add_spectra = False

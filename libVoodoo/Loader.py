@@ -270,9 +270,13 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                         spcij = spectra_interp[iT, iH, :] if ic == 2 else spec[ic]['var'][iT, iH, :]
 
                         # spcij_minmax = (spcij - radar_info['spec_lims'][0]) / max((radar_info['spec_lims'][1] - radar_info['spec_lims'][0]), 1.e-9)
-                        spcij_minmax = scaling(spcij, strat=radar_info['normalization'], var_lims=radar_info[f'spec_lims'])
-                        cwtmatr      = signal.cwt(spcij_minmax, signal.ricker, cwt_params['sfacs'])
-                        cwt_norm     = scaling(cwtmatr, strat=radar_info['normalization'], var_lims=[np.min(cwtmatr), np.max(cwtmatr)])
+                        dBZ = h.lin2z(spcij)
+                        dBZ_lims = h.lin2z(np.array(radar_info[f'spec_lims']))
+                        spcij_minmax = scaling(dBZ, strat=radar_info['normalization'], var_lims=dBZ_lims)
+                        cwtmatr      = -signal.cwt(spcij_minmax, signal.ricker, cwt_params['sfacs'])
+                        cwtmatr[cwtmatr < 1.e-1] = 0.0
+                        cwtmatr[cwtmatr > 3.e+1] = 30.0
+                        cwt_norm     = scaling(cwtmatr, strat=radar_info['normalization'], var_lims=[0, 30])
 
                         if cwt_params['dim'] == '1d':
                             cwt_list.append(np.reshape(cwt_norm, N_cwt_flat))
@@ -281,19 +285,19 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                         cnt += 1
 
                         if print_cwt:  # and spec[ic]['rg'][iH+rg_offsets[ic]] > 3500:
-                            z_lims = [0, 1]
+                            z_lims = [0, 30]
                             x_lims = [-6, 6]
                             # show spectra, normalized spectra and wavlet transformation
                             fig, ax = trf.plot_spectra_cwt(spec[ic], cwt_norm, iT, iH,
                                                            vspec_norm=spcij_minmax,
                                                            # features=cwt_features,
                                                            # mira_spec=MIRA_Zspec,
+                                                           colormap='cloudnet_jet',
                                                            z_lim=z_lims,
                                                            x_lim=x_lims,
                                                            scales=cwt_params['sfacs'],
                                                            z_converter='lin2z',
-                                                           colormap='jet',
-                                                           fig_size=[7, 6]
+                                                           fig_size=[7, 4]
                                                            )
                             fig.tight_layout()
                             fig_name = f'limrad_cwt_{str(cnt).zfill(4)}_iT-iH_{str(iT).zfill(4)}-{str(iH + rg_offsets[ic]).zfill(4)}.png'
@@ -354,22 +358,90 @@ def multiprocess_cwt(spec, **kwargs):
     return np.reshape(cwt_norm, (n_cwt_scales, n_Dbins, 1))
 
 
-def equalize_radar_chirps(spec):
+def wavlet_transformation(spectra, **cwt_params):
     t0 = time.time()
-    n_chirps = len(spec)
-    Dbins_max  = np.max([len(spec[ic]['vel']) for ic in range(n_chirps)])
+    assert 'sfacs' in cwt_params, 'The CWT needs scaling factors! No scaling factors were given'
+    assert len(cwt_params['sfacs']) > 0, 'The list of scaling factors has to be positive!'
 
-    f = interp1d(spec[2]['vel'], spec[2]['var'], axis=2, kind='nearest', bounds_error=False, fill_value=-999.)
+    n_cwt_scales = len(cwt_params['sfacs'])
+    N_cwt_flat = len(cwt_params['sfacs']) * n_Dbins
+    cnt = 0
+    cwt_list = []
+    for iT in range(n_time):
+        for ic in range(n_chirps):
+            print(f'Timesteps cwt(ichirp={ic + 1}) added :: {iT + 1:5d} of {n_time}', end='\r')
+            for iH in range(spec[ic]['rg'].size):
+                if not masked[iT, iH + rg_offsets[ic]]:
+                    # assign radar moments reflectivity, mean doppler velocity, spectral width, linear deplo ratio
+                    spcij = spectra_interp[iT, iH, :] if ic == 2 else spec[ic]['var'][iT, iH, :]
+
+                    # spcij_minmax = (spcij - radar_info['spec_lims'][0]) / max((radar_info['spec_lims'][1] - radar_info['spec_lims'][0]), 1.e-9)
+                    dBZ = h.lin2z(spcij)
+                    dBZ_lims = h.lin2z(np.array(radar_info[f'spec_lims']))
+                    spcij_minmax = scaling(dBZ, strat=radar_info['normalization'], var_lims=dBZ_lims)
+                    cwtmatr = -signal.cwt(spcij_minmax, signal.ricker, cwt_params['sfacs'])
+                    cwtmatr[cwtmatr < 1.e-1] = 0.0
+                    cwtmatr[cwtmatr > 3.e+1] = 30.0
+                    cwt_norm = scaling(cwtmatr, strat=radar_info['normalization'], var_lims=[0, 30])
+
+                    if cwt_params['dim'] == '1d':
+                        cwt_list.append(np.reshape(cwt_norm, N_cwt_flat))
+                    else:
+                        cwt_list.append(np.reshape(cwt_norm, (n_cwt_scales, n_Dbins, 1)))
+                    cnt += 1
+
+                    if print_cwt:  # and spec[ic]['rg'][iH+rg_offsets[ic]] > 3500:
+                        z_lims = [0, 30]
+                        x_lims = [-6, 6]
+                        # show spectra, normalized spectra and wavlet transformation
+                        fig, ax = trf.plot_spectra_cwt(spec[ic], cwt_norm, iT, iH,
+                                                       vspec_norm=spcij_minmax,
+                                                       # features=cwt_features,
+                                                       # mira_spec=MIRA_Zspec,
+                                                       colormap='cloudnet_jet',
+                                                       z_lim=z_lims,
+                                                       x_lim=x_lims,
+                                                       scales=cwt_params['sfacs'],
+                                                       z_converter='lin2z',
+                                                       fig_size=[7, 4]
+                                                       )
+                        fig.tight_layout()
+                        fig_name = f'limrad_cwt_{str(cnt).zfill(4)}_iT-iH_{str(iT).zfill(4)}-{str(iH + rg_offsets[ic]).zfill(4)}.png'
+                        fig.savefig(fig_name, dpi=150)
+                        print(fig_name)
+
+
+def equalize_radar_chirps(spec, **kwargs):
+    """This routine takes a list of larda spectrum containers and equalizes the number of spectrum dimensions.
+
+    Args:
+        -   spec (list) : spetrum container of len(spec)==n_chirps, and type(spec[i])==dict(), for n_chirps see RPG-FMCW94 Cloud Radar manual.
+
+    **Kwargs:
+        -   interp_method (string) : kind of the interpolation, see scipy.inperolation.interp1d(), default: nearest
+
+    Return:
+        -   new_spec (dict) : spectrum containing the concatinated chirps, unified to the maximum number of Doppler bins.
+    """
+
+    t0        = time.time()
+    method    = kwargs['interp_method'] if 'interp_method' in kwargs else 'nearest'
+
+    n_chirps  = len(spec)
+    Dbins_max = np.max([len(spec[ic]['vel']) for ic in range(n_chirps)])
+
+    f = interp1d(spec[2]['vel'], spec[2]['var'], axis=2, kind=method, bounds_error=False, fill_value=-999.)
     spectra_interp = f(np.linspace(spec[2]['vel'][0], spec[2]['vel'][-1], Dbins_max))
     spectra_interp[spectra_interp < 0.0] = 0.0
-    Plot.print_elapsed_time(t0, f'Interpolation of 3rd chirp to {Dbins_max} Doppler bins, elapsed time = ')
 
     # this will work if n_chirps=3 and n_Dbins(ichirp=3) < n_Dbins(ichirp=2) = n_Dbins(ichirp=1)
     varstack = np.concatenate((spec[0]['var'], spec[1]['var'], spectra_interp), axis=1)
     varstack = h.lin2z(varstack)
 
     new_spec = h.put_in_container(varstack, spec[0], name='VSpec', mask=np.ma.getmask(varstack))
-    new_spec['rg'] = np.hstack((spec[ic]['rg'] for ic in range(n_chirps))).ravel()
+    new_spec['rg'] = np.hstack((spec[ic]['rg'] for ic in range(n_chirps)))
+
+    Plot.print_elapsed_time(t0, f'Interpolation of 3rd chirp to {Dbins_max} Doppler bins, elapsed time = ')
 
     return new_spec
 
