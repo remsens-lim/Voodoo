@@ -17,6 +17,8 @@ from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalizati
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.callbacks import TensorBoard
 
+
+
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
 
@@ -40,6 +42,7 @@ __version__     = "0.0.1"
 __maintainer__  = "Willi Schimmel"
 __email__       = "willi.schimmel@uni-leipzig.de"
 __status__      = "Prototype"
+
 
 ########################################################################################################################
 ########################################################################################################################
@@ -212,6 +215,9 @@ def define_cnn(n_input, n_output, hyper_params):
 
 
 def training(model, train_set, train_label, hyper_params):
+    #from tensorflow.python.client import device_lib
+    #print(device_lib.list_local_devices())
+
     BATCH_SIZE = hyper_params['BATCH_SIZE']
     EPOCHS     = hyper_params['EPOCHS']
     LOG_PATH   = hyper_params['LOG_PATH']
@@ -224,16 +230,17 @@ def training(model, train_set, train_label, hyper_params):
                                        write_graph=True,
                                        write_images=True)
 
+    #with tf.device(f'/gpu:0'):
     #with tf.device(f'/gpu:{DEVICE}'):
     history = model.fit(train_set, train_label,
-                        batch_size=BATCH_SIZE,
-                        epochs=EPOCHS,
-                        shuffle=True,
-                        callbacks=[tensorboard_callback],
-                        validation_split=0.05,
-                        # callbacks=[PrintDot()],
-                        #verbose=1
-                        )
+                    batch_size=BATCH_SIZE,
+                    epochs=EPOCHS,
+                    shuffle=True,
+                    callbacks=[tensorboard_callback],
+                    validation_split=0.05,
+                    # callbacks=[PrintDot()],
+                    #verbose=1
+                    )
 
     # serialize model to HDF5
     model.save(MODEL_PATH)

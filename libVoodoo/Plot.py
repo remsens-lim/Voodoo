@@ -2,26 +2,24 @@
 This module contains additional plotting routines used for displaying quicklooks of the ANN input and output, also histories and histograms.
 """
 import sys
-
-#sys.path.append('../../larda/')
-#sys.path.append('.')
-
 import time
 import datetime
 import numpy as np
 import pandas as pd
-import pyLARDA
-import pyLARDA.helpers as h
-
-import libVoodoo.Plot as Plot
+import logging
 
 import matplotlib
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib import ticker
-from matplotlib import gridspec
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+import pyLARDA
+import pyLARDA.helpers as h
+import pyLARDA.VIS_Colormaps as VIS_Colormaps
+
+logger = logging.getLogger(__name__)
 
 __author__      = "Willi Schimmel"
 __copyright__   = "Copyright 2019, The Voodoo Project"
@@ -33,6 +31,15 @@ __email__       = "willi.schimmel@uni-leipzig.de"
 __status__      = "Prototype"
 
 def History(history):
+    """This routine generates a history quicklook for a trained Tensoflow ANN model.
+
+    Args:
+        - history (tensorflow object) : contains the training history
+
+    Returns:
+        - fig (matplotlib figure) : figure
+        - ax (matplotlib axis) : axis
+    """
     hist = pd.DataFrame(history.history)
     hist['epoch'] = history.epoch
 
@@ -47,58 +54,71 @@ def History(history):
     return figure, axis
 
 
-def Quicklooks(RPG_moments, polly_var, radar_list, lidar_list, begin_dt, end_dt, **kwargs):
-    fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [12, 7]
-    plot_range = kwargs['plot_range'] if 'plot_range' in kwargs else [RPG_moments['Ze']['rg'][0],
-                                                                      RPG_moments['Ze']['rg'][-1]]
+def Quicklooks(RPG_moments, polly_var, begin_dt, end_dt, **kwargs):
+    """This routine generates all quicklooks for a given training period.
+
+    Args:
+        - RPG_moments (dict) : contains the radar data set
+        - polly_var (dict) : contains the lidar data set
+
+    **Kwargs:
+        - fig_size (list) : size of the pyplot figures (in inches), default: [12, 7]
+        - plot_range (list) : range interval to be plotted, default: [0, 12000] meter
+        - rg_converter (bool) : if True, convert range from "m" to "km", default: True
+
+    Returns:
+        - fig (matplotlib figure) : figure
+        - ax (matplotlib axis) : axis
+    """
+    fig_size   = kwargs['fig_size']     if 'fig_size'     in kwargs else [12, 7]
+    plot_range = kwargs['plot_range']   if 'plot_range'   in kwargs else [0, 12000]
+    range2km   = kwargs['rg_converter'] if 'rg_converter' in kwargs else True
 
     # LIMRAD
-    RPG_moments['Ze']['var_unit'] = 'dBZ'
-    RPG_moments['Ze']['var_lims'] = [-60, 20]
-    fig_name = f'LIMRAD94_Ze_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['Ze'], fig_size=fig_size,
-                                                     range_interval=plot_range, z_converter='lin2z',
-                                                     rg_converter=True, title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'Ze' in RPG_moments:
+        RPG_moments['Ze']['var_unit'] = 'dBZ'
+        RPG_moments['Ze']['var_lims'] = [-60, 20]
+        fig_name = f'LIMRAD94_Ze_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['Ze'], fig_size=fig_size,
+                                                         range_interval=plot_range, z_converter='lin2z',
+                                                         rg_converter=range2km, title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
-    RPG_moments['VEL']['var_lims'] = [-4, 2]
-    fig_name = f'LIMRAD94_vel_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['VEL'], fig_size=fig_size,
-                                                     range_interval=plot_range, rg_converter=True,
-                                                     title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'VEL' in RPG_moments:
+        RPG_moments['VEL']['var_lims'] = [-4, 2]
+        fig_name = f'LIMRAD94_vel_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['VEL'], fig_size=fig_size,
+                                                         range_interval=plot_range, rg_converter=range2km,
+                                                         title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
 
-    RPG_moments['sw']['var_lims'] = [0, 1]
-    fig_name = f'LIMRAD94_sw_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['sw'], fig_size=fig_size,
-                                                     range_interval=plot_range, rg_converter=True,
-                                                     title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'sw' in RPG_moments:
+        RPG_moments['sw']['var_lims'] = [0, 1]
+        fig_name = f'LIMRAD94_sw_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['sw'], fig_size=fig_size,
+                                                         range_interval=plot_range, rg_converter=range2km,
+                                                         title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
     # POLLYxt
     if 'attbsc1064' in polly_var:
         fig_name = f'POLLYxt_attbsc1064_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
         fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['attbsc1064'], fig_size=fig_size,
                                                          range_interval=plot_range,
-                                                         z_converter="log", rg_converter=True, title=fig_name)
+                                                         z_converter="log", rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
-        fig.savefig(fig_name, dpi=300)
-        print(f' Save figure :: {fig_name}')
+        save_figure(fig, name=fig_name, dpi=300)
 
     if 'voldepol532' in polly_var:
         fig_name = f'POLLYxt_voldepol532_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
         fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['voldepol532'], fig_size=fig_size, range_interval=plot_range,
-                                                         rg_converter=True, title=fig_name)
+                                                         rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
-        fig.savefig(fig_name, dpi=300)
-        print(f' Save figure :: {fig_name}')
+        save_figure(fig, name=fig_name, dpi=300)
 
     # POLLYxt interpolated
     orig_masks = {'attbsc1064_ip':  polly_var['attbsc1064_ip']['mask'],
@@ -116,45 +136,42 @@ def Quicklooks(RPG_moments, polly_var, radar_list, lidar_list, begin_dt, end_dt,
         fig_name = f'traing_label_POLLYxt_attbsc1064_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
         fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['attbsc1064_ip'], fig_size=fig_size,
                                                          range_interval=plot_range,
-                                                         z_converter='log', rg_converter=True, title=fig_name)
+                                                         z_converter='log', rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
-        fig.savefig(fig_name, dpi=300)
-        print(f' Save figure :: {fig_name}')
+        save_figure(fig, name=fig_name, dpi=300)
 
     if 'voldepol532_ip' in polly_var:
         polly_var['voldepol532_ip']['mask'] = training_mask
         fig_name = f'traing_label_POLLYxt_voldepol532_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
         fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['voldepol532_ip'], fig_size=fig_size,
                                                          range_interval=plot_range,
-                                                         rg_converter=True, title=fig_name)
+                                                         rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
-        fig.savefig(fig_name, dpi=300)
-        print(f' Save figure :: {fig_name}')
+        save_figure(fig, name=fig_name, dpi=300)
 
-    fig_name = f'training_set_LIMRAD94_Ze_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['Ze'], fig_size=fig_size,
-                                                     range_interval=plot_range, z_converter='lin2z',
-                                                     rg_converter=True, title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'Ze' in RPG_moments:
+        fig_name = f'training_set_LIMRAD94_Ze_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['Ze'], fig_size=fig_size,
+                                                         range_interval=plot_range, z_converter='lin2z',
+                                                         rg_converter=range2km, title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
-    fig_name = f'training_set_LIMRAD94_vel_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['VEL'], fig_size=fig_size,
-                                                     range_interval=plot_range, rg_converter=True,
-                                                     title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'VEL' in RPG_moments:
+        fig_name = f'training_set_LIMRAD94_vel_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['VEL'], fig_size=fig_size,
+                                                         range_interval=plot_range, rg_converter=range2km,
+                                                         title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
-
-    fig_name = f'training_set_LIMRAD94_sw_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-    fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['sw'], fig_size=fig_size,
-                                                     range_interval=plot_range, rg_converter=True,
-                                                     title=fig_name)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(fig_name, dpi=300)
-    print(f' Save figure :: {fig_name}')
+    if 'sw' in RPG_moments:
+        fig_name = f'training_set_LIMRAD94_sw_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(RPG_moments['sw'], fig_size=fig_size,
+                                                         range_interval=plot_range, rg_converter=range2km,
+                                                         title=fig_name)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, name=fig_name, dpi=300)
 
     if 'attbsc1064_ip' in polly_var:
         polly_var['attbsc1064_ip']['mask'] = orig_masks['attbsc1064_ip']
@@ -163,6 +180,71 @@ def Quicklooks(RPG_moments, polly_var, radar_list, lidar_list, begin_dt, end_dt,
     RPG_moments['Ze']['mask'] = orig_masks['Ze']
     RPG_moments['VEL']['mask'] = orig_masks['VEL']
     RPG_moments['sw']['mask'] = orig_masks['sw']
+
+def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
+
+    widths   = kwargs['scales']   if 'scales'   in kwargs else [0.0, 7.00]
+    iT       = kwargs['idxts']    if 'idxts'    in kwargs else 0
+    iR       = kwargs['idxrg']    if 'idxrg'    in kwargs else 0
+    ts       = kwargs['ts']       if 'ts'       in kwargs else 0
+    rg       = kwargs['rg']       if 'rg'       in kwargs else 0
+    z_lims   = kwargs['z_lims']   if 'z_lims'   in kwargs else [0, 1]
+    x_lims   = kwargs['x_lims']   if 'x_lims'   in kwargs else [-10, 10]
+    y_lims   = kwargs['y_lims']   if 'y_lims'   in kwargs else [-60, 20]
+    colormap = kwargs['colormap'] if 'colormap' in kwargs else 'cloudnet_jet'
+    fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [10, 5.625]
+    font_size = kwargs['font_size'] if 'font_size' in kwargs else 10
+    font_weight = kwargs['font_weight'] if 'font_weight' in kwargs else 'semibold'
+
+    n_bins_signal = spectrum.size - np.ma.count_masked(spectrum)
+
+    logger.debug("custom colormaps {}".format(VIS_Colormaps.custom_colormaps.keys()))
+    if colormap in VIS_Colormaps.custom_colormaps.keys():
+        colormap = VIS_Colormaps.custom_colormaps[colormap]
+
+    # plot spectra
+    fig, ax = plt.subplots(nrows=2, ncols=1, figsize=fig_size)
+
+    ax[0].set_title(f'Doppler spectra, normalized and wavlet transformation\nheight: {str(round(rg, 2))} [m]; ' +
+                    f'time: {h.ts_to_dt(ts):%Y-%m-%d %H:%M:%S} [UTC]', fontweight=font_weight, fontsize=font_size)
+
+    nds = ax[0].plot(vel, spectrum, linestyle='-', color='royalblue')
+    ax[0].set_xlim(left=x_lims[0], right=x_lims[1])
+    ax[0].set_ylim(bottom=0, top=1)
+    ax[0].set_ylabel('normalized\nspectrum [1]', fontweight=font_weight, fontsize=font_size)
+    ax[0].set_yticks([0, 0.25, 0.5, 0.75, 1])
+    ax[0].grid(linestyle='--')
+    ax[0].text(x_lims[1] - 5.0, 10, f'nnz = {n_bins_signal}', fontweight=font_weight, fontsize=font_size)
+    ax[0].tick_params(axis='both', which='both', right=False, left=True, top=True)
+    ax[0].tick_params(axis='both', which='major', labelsize=font_size, width=2, length=5.5)
+
+    divider0 = make_axes_locatable(ax[0])
+    cax0 = divider0.append_axes("right", size="2.5%", pad=0.05)
+    cax0.axis('off')
+
+    img = ax[1].imshow(cwt_matrix, extent=[x_lims[0], x_lims[1], widths[-1], widths[0]], cmap=colormap, aspect='auto', vmin=z_lims[0], vmax=z_lims[1])
+
+    ax[1].set_ylabel('wavelet scale', fontweight=font_weight, fontsize=font_size)
+    ax[1].set_xlabel('Doppler Velocity [m s-1]', fontweight=font_weight, fontsize=font_size)
+    ax[1].set_xlim(left=x_lims[0], right=x_lims[1])
+    ax[1].set_ylim(bottom=widths[0], top=widths[-1])
+    ax[1].set_yticks(np.linspace(widths[0], widths[-1], 4))
+    ax[1].grid(linestyle='--')
+    ax[1].xaxis.set_ticks_position('both')
+    ax[1].invert_yaxis()
+
+    # add the colorbar
+    divider = make_axes_locatable(ax[1])
+    cax = divider.append_axes("right", size="2.5%", pad=0.05)
+    fig.add_axes(cax)
+    cbar = fig.colorbar(img, cax=cax, orientation="vertical")
+    cbar.set_label('||Magnitude||', fontsize=font_size, fontweight=font_weight)
+    ax[1].tick_params(axis='both', which='both', right=False, left=True, top=True)
+    ax[1].tick_params(axis='both', which='major', labelsize=font_size, width=2, length=5.5)
+
+    fig.subplots_adjust(hspace=0.25)
+
+    return fig, ax
 
 
 def lidar_profile_range_spectra(lidar, spec, **kwargs):
