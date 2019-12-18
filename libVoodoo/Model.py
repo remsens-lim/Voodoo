@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.models import Model as kmodel
-from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU, Input
+from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU, ReLU, Input
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.callbacks import TensorBoard
 
@@ -55,6 +55,17 @@ __status__      = "Prototype"
 #
 ########################################################################################################################
 ########################################################################################################################
+class LogEpochScores(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super(LogEpochScores, self).__init__()
+
+    def on_train_begin(self, logs=None):
+        self.model.epoch_log = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.model.epoch_log.append(logs)
+
+
 def define_autoencoder(n_input, hyper_params):
     ACTIVATION = hyper_params['activations']
     LOSSES = hyper_params['loss_fcns']
@@ -108,6 +119,8 @@ def add_activation(model, ACTIVATION):
     """
     if ACTIVATION == 'leakyrelu':
         model.add(LeakyReLU(alpha=.001))
+    elif ACTIVATION == 'relu':
+        model.add(ReLU())
     else:
         model.add(Activation=ACTIVATION)
     return model
@@ -167,6 +180,7 @@ def define_cnn(n_input, n_output, hyper_params):
     KERNEL_SIZE = hyper_params['KERNEL_SIZE']
     POOL_SIZE = hyper_params['POOL_SIZE']
     ACTIVATION = hyper_params['ACTIVATIONS']
+    ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'linear'
     LOSSES = hyper_params['LOSS_FCNS']
     model_path = hyper_params['MODEL_PATH']
     OPTIMIZER = hyper_params['OPTIMIZER']
@@ -198,7 +212,7 @@ def define_cnn(n_input, n_output, hyper_params):
             model.add(Dense(DENSE_NODES[idense]))
             model = add_activation(model, ACTIVATION)
 
-        model.add(Dense(n_output[0], activation='linear'))
+        model.add(Dense(n_output[0], activation=ACTIVATION_OL))
         print(f"Created model {model_path}")
 
 
@@ -231,20 +245,20 @@ def training(model, train_set, train_label, hyper_params):
                                        write_images=True)
 
     #with tf.device(f'/gpu:0'):
-    #with tf.device(f'/gpu:{DEVICE}'):
-    history = model.fit(train_set, train_label,
-                    batch_size=BATCH_SIZE,
-                    epochs=EPOCHS,
-                    shuffle=True,
-                    callbacks=[tensorboard_callback],
-                    validation_split=0.05,
-                    # callbacks=[PrintDot()],
-                    #verbose=1
-                    )
+    with tf.device(f'/gpu:{DEVICE}'):
+        history = model.fit(train_set, train_label,
+                            batch_size=BATCH_SIZE,
+                            epochs=EPOCHS,
+                            shuffle=True,
+                            callbacks=[tensorboard_callback],
+                            validation_split=0.0,
+                            #callbacks=[PrintDot()],
+                            verbose=1
+                            )
 
-    # serialize model to HDF5
-    model.save(MODEL_PATH)
-    print(f"Saved model to disk :: {MODEL_PATH}")
+        # serialize model to HDF5
+        model.save(MODEL_PATH)
+        print(f"Saved model to disk :: {MODEL_PATH}")
 
     return model, history
 

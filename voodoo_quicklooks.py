@@ -17,18 +17,13 @@ Long description:
     An earlier approach was developed by Ed Luke et al. 2010
 """
 
-
-import glob
-import os
-import sys
-import time
-import datetime
 import logging
-
-import toml
+import os
 import pprint
-import numpy as np
-import itertools
+import sys
+
+import time
+import toml
 from tensorflow import keras
 
 # disable the OpenMP warnings
@@ -41,6 +36,7 @@ import pyLARDA.helpers as h
 import voodoo.libVoodoo.Loader as Loader
 import voodoo.libVoodoo.Plot   as Plot
 import voodoo.libVoodoo.Model  as Model
+from   voodoo.model_ini import *
 
 __author__      = "Willi Schimmel"
 __copyright__   = "Copyright 2019, The Voodoo Project"
@@ -50,70 +46,6 @@ __version__     = "0.0.1"
 __maintainer__  = "Willi Schimmel"
 __email__       = "willi.schimmel@uni-leipzig.de"
 __status__      = "Prototype"
-
-
-########################################################################################################################################################
-########################################################################################################################################################
-#
-#   ______         _____  ______  _______              _____  _______  ______ _______ _______      _______  _____  __   _ _______ _____  ______
-#  |  ____ |      |     | |_____] |_____| |           |_____] |_____| |_____/ |_____| |  |  |      |       |     | | \  | |______   |   |  ____
-#  |_____| |_____ |_____| |_____] |     | |_____      |       |     | |    \_ |     | |  |  |      |_____  |_____| |  \_| |       __|__ |_____|
-#
-#
-########################################################################################################################################################
-########################################################################################################################################################
-
-t0_voodoo = datetime.datetime.today()
-time_str = f'{t0_voodoo:%Y%m%d-%H%M%S}'
-
-predict_model = True
-
-plot_training_set           = True
-plot_training_set_histogram = False
-plot_bsc_dpl_rangespec      = False
-plot_spectra_cwt            = False
-
-add_moments = False
-add_spectra = False
-add_cwt     = True
-
-fig_size   = [12, 7]
-plot_range = [0, 10000]
-
-TRAIN_SHEET = 'training_cases.toml'
-TEST_SHEET  = 'training_cases.toml'
-
-# define paths
-VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
-LOGS_PATH    = f'{VOODOO_PATH}logs/'
-MODELS_PATH  = f'{VOODOO_PATH}models/'
-PLOTS_PATH   = f'{VOODOO_PATH}plots/'
-
-
-#TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191128-173950.h5'  # even better
-TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-3_3-kernelsize-leakyrelu--20191210-180151.h5'
-
-
-radar_list = []
-radar_info = {'spec_lims':     [1.e-6, 1.e2],
-              'spec_converter': 'lin2z',
-              'normalization':  'normalize'}
-
-lidar_list = ['attbsc1064', 'depol']
-lidar_info = {'attbsc1064_lims': [1.e-7, 1.e-3],
-              'voldepol_lims': [1.e-7, 0.3],
-              'bsc_converter': 'log',
-              'dpl_converter': 'none',
-              'normalization': 'none',
-              'bsc_shift': 0,
-              'dpl_shift': 0}
-
-# controls the ccontinuous wavelet transformation
-CWT_PARAMS   = {'dim': '2d',
-                'scales': np.linspace(2 ** 1., 2 ** 5.25, 32),
-                'plot_cwt': False,
-                'normalization': 'normalize'}
-
 
 ########################################################################################################################################################
 ########################################################################################################################################################
@@ -181,7 +113,7 @@ if __name__ == '__main__':
         # interpolate polly xt data onto limrad grid (so that spectra can be used directly)
         lidar_list = ['attbsc1064']
         lidar_container.update({f'{var}_ip': pyLARDA.Transformations.interpolate2d(
-                lidar_container[var], new_time=ts_radar, new_range=rg_radar) for var in lidar_list})
+                lidar_container[var], new_time=ts_radar, new_range=rg_radar, method='nearest') for var in lidar_list})
 
         ########################################################################################################################################################
         #   _____          _____  _______       ______  ______     _______  _____  _______ _______                          _____ ______  _______  ______
@@ -231,10 +163,12 @@ if __name__ == '__main__':
                                                                              add_moments=add_moments,
                                                                              add_spectra=add_spectra,
                                                                              add_cwt=add_cwt,
+                                                                             add_lidar_float=add_lidar_float,
+                                                                             add_lidar_binary=add_lidar_binary,
                                                                              feature_info=radar_info,
                                                                              feature_list=radar_list,
                                                                              label_info=lidar_info,
-                                                                             label_list=lidar_list,
+                                                                             target_list=lidar_list,
                                                                              cwt=CWT_PARAMS)
 
             dimensions = {'list_ts': list_ts, 'list_rg': list_rg, 'ts_radar': ts_radar, 'rg_radar': rg_radar, 'label_info': lidar_info}
@@ -250,7 +184,7 @@ if __name__ == '__main__':
             # |__] |    |  |  |     |__|  |   |  |___ |\ | |  | |__|  |  |___ |  \    |__] |__| |    |_/  [__  |    |__|  |   |  |___ |__/
             # |    |___ |__|  |     |  |  |   |  |___ | \| |__| |  |  |  |___ |__/    |__] |  | |___ | \_ ___] |___ |  |  |   |  |___ |  \
             #
-            if 'attbsc1064' in lidar_list:
+            if 'attbsc1064' in lidar_list and use_cnn_regression_model:
                 fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['attbsc1064_pred'],
                                                                  fig_size=fig_size,
                                                                  z_converter='log',
@@ -266,7 +200,7 @@ if __name__ == '__main__':
             #  |__] |    |  |  |     |  | |  | |    |  | |\/| |___    |  \ |___ |__] |  | |    |__| |__/ |   /  |__|  |  | |  | |\ |
             #  |    |___ |__|  |      \/  |__| |___ |__| |  | |___    |__/ |___ |    |__| |___ |  | |  \ |  /__ |  |  |  | |__| | \|
             #
-            if 'voldepol532' in lidar_list:
+            if 'voldepol532' in lidar_list and use_cnn_regression_model:
                 fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['voldepol532_pred'], fig_size=fig_size,
                                                                  range_interval=plot_range,
                                                                  zlim=lidar_pred_container['voldepol532_pred']['var_lims'],

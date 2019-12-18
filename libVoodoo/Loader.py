@@ -4,21 +4,19 @@ This module contains routines for loading and preprocessing cloud radar and lida
 """
 
 import sys
-import datetime
-import numpy as np
-import time
 from copy import deepcopy
+
+import datetime
+import libVoodoo.Multiscatter as Multiscatter
+import libVoodoo.Plot as Plot
+import numpy as np
+import pyLARDA.helpers as h
+import time
 from numba import jit
 from scipy import signal
 from scipy.interpolate import interp1d
-import concurrent.futures
 
-import pyLARDA.helpers as h
-import pyLARDA.Transformations as trf
 from larda.pyLARDA.spec2mom_limrad94 import spectra2moments, build_extended_container
-
-import libVoodoo.Multiscatter as Multiscatter
-import libVoodoo.Plot as Plot
 
 __author__      = "Willi Schimmel"
 __copyright__   = "Copyright 2019, The Voodoo Project"
@@ -99,37 +97,40 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     n_time        = kwargs['n_time']       if 'n_time'      in kwargs else 0
     n_range       = kwargs['n_range']      if 'n_range'     in kwargs else 0
     n_Dbins       = kwargs['n_Dbins']      if 'n_Dbins'     in kwargs else 0
+
+    # list of feature settings
     add_moments   = kwargs['add_moments']  if 'add_moments' in kwargs else True
     add_spectra   = kwargs['add_spectra']  if 'add_spectra' in kwargs else True
     add_cwt       = kwargs['add_cwt']      if 'add_cwt'     in kwargs else True
     cwt_params    = kwargs['cwt']          if 'cwt'         in kwargs else {'none': -999}
-    # list of features and label
-    feature_list  = kwargs['feature_list'] if 'feature_list' in kwargs else ['Ze', 'sw']
-    label_list    = kwargs['label_list']   if 'label_list'   in kwargs else ['attbsc1064_ip', 'dpl']
-    # normalization boundaries and other variables
+    feature_list  = kwargs['feature_list'] if 'feature_list' in kwargs else []
     radar_info    = kwargs['feature_info'] if 'feature_info' in kwargs else {'Ze_lims': [1.e-7, 1.e3],
                                                                              'VEL_lims': [-5, 5],
                                                                              'sw_lims': [0, 3],
                                                                              'skew_lims': [-3, 3],
                                                                              'kurt_lims': [0, 3],
                                                                              'normalization': 'none'}
-    lidar_info   = kwargs['label_info'] if 'label_info' in kwargs else {'bsc_lims': [1.0e-7, 1.0e-3],
-                                                                        'dpl_lims': [1.0e-7, 0.3],
-                                                                        'bsc_converter': 'none',
-                                                                        'dpl_converter': 'none',
-                                                                        'bsc_shift': 0,
-                                                                        'dpl_shift': 0,
-                                                                        'normalization': 'none'}
+    # list of target settings
+    target_list      = kwargs['target_list']      if 'target_list'      in kwargs else ['attbsc1064_ip', 'dpl']
+    add_lidar_float  = kwargs['add_lidar_float']  if 'add_lidar_float'  in kwargs else False
+    add_lidar_binary = kwargs['add_lidar_binary'] if 'add_lidar_binary' in kwargs else False
+    lidar_info       = kwargs['label_info'] if 'label_info' in kwargs else {'bsc_lims': [1.0e-7, 1.0e-3],
+                                                                            'dpl_lims': [1.0e-7, 0.3],
+                                                                            'bsc_converter': 'none',
+                                                                            'dpl_converter': 'none',
+                                                                            'bsc_shift': 0,
+                                                                            'dpl_shift': 0,
+                                                                            'normalization': 'none'}
 
     # quick check if any dimensions are positiv
     assert n_time*n_range*n_Dbins > 0, f'Error while loading data, n_time(={n_time}) AND n_range(={n_range}) AND n_Dbins(={n_Dbins}) must be larger than 0!'
-    assert 'mask' in kwargs, 'You should provide a mask for load_trainingset'
+    assert 'mask' in kwargs, 'You should provide a mask for load_trainingset!'
+    assert add_lidar_float != add_lidar_binary, 'Choose either float values or 0/1 for target variable for load_trainingset! Check model_ini.py'
     masked = kwargs['mask']
 
     # load dimensions,
-    add_lidar  = True
     n_chirps   = len(spec)
-    Times, Heights, moments_list, train_set  = [], [], [], []
+    Times, Heights, moments_list, feature_set  = [], [], [], []
 
     ####################################################################################################################################
     #  ____ ____ ___    ___  ____ ___ ____    _  _ ____ ____ _  _
@@ -168,7 +169,7 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                 if not masked[iT, iH]:
                     moments_list.append(np.array([features[feat][iT, iH] for feat in feature_list]))
 
-        train_set = np.array(moments_list, dtype=np.float32)
+        feature_set = np.array(moments_list, dtype=np.float32)
         Plot.print_elapsed_time(t0, '\nAdded radar moments to features, elapsed time = ')
 
     ####################################################################################################################################
@@ -176,10 +177,10 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  |__| |  \ |  \ | |\ | | __    |    | |  \ |__| |__/    |  | |__| |__/ | |__| |__] |    |___ [__
     #  |  | |__/ |__/ | | \| |__]    |___ | |__/ |  | |  \     \/  |  | |  \ | |  | |__] |___ |___ ___]
     #
-    if add_lidar:
+    if add_lidar_float:
         t0 = time.time()
-        train_label = []
-        labels = {ivar: scaling(lidar[f'{ivar}_ip']['var'], strat=lidar_info['normalization'], var_lims=lidar_info[f'{ivar}_lims']) for ivar in label_list}
+        target_set = []
+        labels = {ivar: scaling(lidar[f'{ivar}_ip']['var'], strat=lidar_info['normalization'], var_lims=lidar_info[f'{ivar}_lims']) for ivar in target_list}
 
         for iT in range(n_time):
             print(f'Timesteps converted :: {iT+1:5d} of {n_time}', end='\r')
@@ -187,9 +188,34 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                 if not masked[iT, iH]:
                     Times.append(iT)
                     Heights.append(iH)
-                    train_label.append(np.array([labels[label][iT, iH] for label in label_list]))
+                    target_set.append(np.array([labels[label][iT, iH] for label in target_list]))
 
-        train_label = np.array(train_label, dtype=np.float32)
+        target_set = np.array(target_set, dtype=np.float32)
+        Plot.print_elapsed_time(t0, '\nAdded lidar variables to targets, elapsed time = ')
+
+    ####################################################################################################################################
+    #  ____ ___  ___  _ _  _ ____    _    _ ___  ____ ____    ___  _ _  _ ____ ____ _   _ 
+    #  |__| |  \ |  \ | |\ | | __    |    | |  \ |__| |__/    |__] | |\ | |__| |__/  \_/  
+    #  |  | |__/ |__/ | | \| |__]    |___ | |__/ |  | |  \    |__] | | \| |  | |  \   |   
+    #
+    if add_lidar_binary:
+        t0 = time.time()
+        target_set = []
+        for iT, ts in enumerate(spec['ts']):
+            print(f'Timesteps converted :: {iT+1:5d} of {n_time}', end='\r')
+            iT_nearest = h.argnearest(lidar['attbsc1064']['ts'], ts)
+            for iH, rg in enumerate(spec['rg']):
+                if not masked[iT, iH]:
+                    iH_nearest = h.argnearest(lidar['attbsc1064']['rg'], rg)
+                    Times.append(iT)
+                    Heights.append(iH)
+                    val = lidar['attbsc1064']['flags'][iT_nearest, iH_nearest]
+                    if val in [0, 1, 3]:
+                        target_set.append([0])
+                    if val == 2:
+                        target_set.append([1])
+
+        target_set = np.array(target_set, dtype=np.float32)
         Plot.print_elapsed_time(t0, '\nAdded lidar variables to targets, elapsed time = ')
 
     ####################################################################################################################################
@@ -209,10 +235,10 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
                     spectra_list[i_sample, :] = scaling(spec['var'][iT, iH, :], strat=radar_info['normalization'], var_lims=radar_info[f'spec_lims'])
                     i_sample += 1
 
-        if len(train_set) == 0:
-            train_set = spectra_list.astype(np.float32)
+        if len(feature_set) == 0:
+            feature_set = spectra_list.astype(np.float32)
         else:
-            train_set = np.concatenate((train_set, spectra_list.astype(np.float32)), axis=1)
+            feature_set = np.concatenate((feature_set, spectra_list.astype(np.float32)), axis=1)
         Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (multi-core), elapsed time = ')
 
     ####################################################################################################################################
@@ -251,12 +277,12 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
 
         cwt_list = wavlet_transformation(spec, masked, z_converter=radar_info['spec_converter'], **cwt_params)
 
-        if len(train_set) == 0:
-            train_set = np.array(cwt_list, dtype=np.float32)
+        if len(feature_set) == 0:
+            feature_set = np.array(cwt_list, dtype=np.float32)
         else:
-            train_set = np.concatenate((train_set, np.array(cwt_list, dtype=np.float32)), axis=1)
+            feature_set = np.concatenate((feature_set, np.array(cwt_list, dtype=np.float32)), axis=1)
 
-    return train_set, train_label, Times, Heights
+    return feature_set, target_set, Times, Heights
 
 
 def rescale(data, load):
@@ -334,7 +360,7 @@ def wavlet_transformation(spectra, masked, z_converter='none', **cwt_params):
                 cwtmatr = -signal.cwt(spcij_minmax, signal.ricker, cwt_params['scales'])
                 cwtmatr[cwtmatr < 1.e-1] = 0.0
                 cwtmatr[cwtmatr > 3.e+1] = 30.0
-                cwt_norm = scaling(cwtmatr, strat=cwt_params['normalization'], var_lims=[0, 30])
+                cwt_norm = scaling(cwtmatr, strat=cwt_params['normalization'], var_lims=[np.min(cwtmatr), np.max(cwtmatr)])
 
                 cwt_list.append(np.reshape(cwt_norm, (n_cwt_scales, n_Dbins, 1)))
                 cnt += 1
@@ -343,14 +369,15 @@ def wavlet_transformation(spectra, masked, z_converter='none', **cwt_params):
                     velocity_lims = [-6, 6]
                     # show spectra, normalized spectra and wavlet transformation
                     fig, ax = Plot.spectra_wavelettransform(vel_list, spcij_minmax, cwt_norm,
-                                                            idxts=iT,   ts=ts_list[iT],
-                                                            idxrg=iH,   rg=rg_list[iH],
-                                                            colormap='cloudnet_jet',
-                                                            x_lim=velocity_lims,
-                                                            scales=cwt_params['scales'],
-                                                            fig_size=[7, 4]
-                                                            )
+                                                           idxts=iT,   ts=ts_list[iT],
+                                                           idxrg=iH,   rg=rg_list[iH],
+                                                           colormap='cloudnet_jet',
+                                                           x_lim=velocity_lims,
+                                                           scales=cwt_params['scales'],
+                                                           fig_size=[7, 4]
+                                                           )
                     #fig.tight_layout()
+                    #fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_minmax, cwt_params['scales'])
                     Plot.save_figure(fig, name=f'limrad_cwt_{str(cnt).zfill(4)}_iT-iH_{str(iT).zfill(4)}-{str(iH).zfill(4)}.png', dpi=300)
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
@@ -365,7 +392,7 @@ def equalize_rpg_radar_chirps(spec, **kwargs):
 
     **Kwargs:
         - interp_method (string) : kind of the interpolation, see scipy.inperolation.interp1d(), default: nearest
-        - fill_value (float) : non-signal values will be set to this value, default: -999.0
+        - fill_value (float) : noise will be set to this value, default: -999.0
 
     Return:
         - new_spec (dict) : spectrum containing the concatinated chirps, unified to the maximum number of Doppler bins.
@@ -391,7 +418,7 @@ def equalize_rpg_radar_chirps(spec, **kwargs):
 
     new_mask = np.ma.getmask(np.ma.masked_less_equal(varstack, 0.0))
     new_spec = h.put_in_container(varstack, spec[0], name='VSpec', mask=new_mask)
-    new_spec['rg'] = np.hstack((spec[ic]['rg'] for ic in range(n_chirps)))
+    new_spec['rg'] = np.hstack([spec[ic]['rg'] for ic in range(n_chirps)])
 
     Plot.print_elapsed_time(t0, f'Interpolation of 3rd chirp to {N_Dbins_max} Doppler bins, elapsed time = ')
 
@@ -553,7 +580,6 @@ def predict2container(pred, pred_list, dimensions, param_info):
         attbsc1064_pred['var_lims'] = bsc_lims
 
         predictions.update({'attbsc1064_pred': attbsc1064_pred})
-
 
     if 'voldepol532' in pred_list:
         dpl_shift = dimensions['label_info']['dpl_shift'] if 'dpl_shift' in dimensions else 0.0
