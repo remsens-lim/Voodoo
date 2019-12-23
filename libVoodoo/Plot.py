@@ -20,6 +20,8 @@ from matplotlib.collections  import PatchCollection
 from matplotlib              import ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+import itertools
+
 import pyLARDA
 import pyLARDA.helpers as h
 import pyLARDA.VIS_Colormaps as VIS_Colormaps
@@ -227,7 +229,7 @@ def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
     cax0 = divider0.append_axes("right", size="2.5%", pad=0.05)
     cax0.axis('off')
 
-    img = ax[1].imshow(cwt_matrix, extent=[x_lims[0], x_lims[1], widths[-1], widths[0]], cmap=colormap, aspect='auto', vmin=z_lims[0], vmax=z_lims[1])
+    img = ax[1].imshow(cwt_matrix, extent=[x_lims[0], x_lims[1], widths[-1], widths[0]], cmap=colormap, aspect='auto', ymin=z_lims[0], ymax=z_lims[1])
 
     ax[1].set_ylabel('wavelet scale', fontweight=font_weight, fontsize=font_size)
     ax[1].set_xlabel('Doppler Velocity [m s-1]', fontweight=font_weight, fontsize=font_size)
@@ -275,7 +277,7 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
     cnt = 0
     for iT, ts in enumerate(ts_list):
 
-        fig_name = path + f'limrad_{str(cnt).zfill(4)}_{dt_begin:%Y%m%d}_range_spectrogram.png'
+        fig_name = path + f'limradVSpolly_{str(cnt).zfill(5)}_{dt_begin:%Y%m%d-%H%M%S}_range_spectrogram.png'
         intervall = {'time': [ts], 'range': plot_range}
         spectrogram_slice = pyLARDA.Transformations.slice_container(spec, value=intervall)
 
@@ -290,7 +292,8 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
 
         iT_lidar = h.argnearest(dpl['ts'], ts_list[iT])
 
-        fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, fig_size=fig_size, v_lims=[-7, 7], grid='both', cbar=False)
+        fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, z_converter='lin2z',
+                                                                         fig_size=fig_size, v_lims=[-7, 7], grid='both',  cbar=False)
         # additional spectrogram settings
         axspec.patch.set_facecolor('#E0E0E0')
         axspec.patch.set_alpha(0.7)
@@ -490,7 +493,7 @@ def save_figure(fig, **kwargs):
     dotsperinch = kwargs['dpi']  if 'dpi'  in kwargs else 200
     name        = kwargs['name'] if 'name' in kwargs else 'no-name.png'
     fig.savefig(name, dpi=dotsperinch)
-    print(f'Save figure :: {name}')
+    logger.info(f'Save figure :: {name}')
 
 def Histogram(data, **kwargs):
     from copy import copy
@@ -513,10 +516,6 @@ def Histogram(data, **kwargs):
     var[var <= 0.0] = 1.e-6
 
     if 'Ze_lims' in var_info:
-#        if 'Ze_converter' in var_info and var_info['Ze_converter'] == 'lin2z':
-#            var_lims.update({'Ze': 10*np.log10(var_info['Ze_lims'])})
-#            var[:, 0] = 10*np.log10(var[:, i_moments])
-#        else:
         var_lims.update({'Ze': var_info['Ze_lims']})
         print(f'min/max      Ze = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
         print(f'boundaries   Ze = {var_lims["Ze"][0]:.4f}/{var_lims["Ze"][1]:.4f}')
@@ -541,31 +540,18 @@ def Histogram(data, **kwargs):
         list_moments.append('sw')
 
     if 'spec_lims' in var_info:
-#        if 'spec_converter' in var_info and var_info['spec_converter'] == 'lin2z':
-#            var_lims.update({'spec': 10*np.log10(var_info['spec_lims'])})
-#            var[:, i_moments:] = 10*np.log10(var[:, i_moments:])
-#        else:
-
         var_lims.update({'spec': var_info['spec_lims']})
         print(f'min/max    spec = {var[:, i_moments:].min():.4f}/{var[:, i_moments:].max():.4f}')
         print(f'boundaries spec = {0:.4f}/{1:.4f}')
         n_variables += 1
 
     if 'bsc_lims' in var_info:
-#        if 'bsc_converter' in var_info and var_info['bsc_converter'] == 'log':
-#            var_lims.update({'bsc': np.log10(var_info['bsc_lims'])})
-#            var[:, 0] = np.log10(var[:, 0])
-#        else:
         var_lims.update({'bsc': var_info['bsc_lims']})
         print(f'min/max     bsc = {var[:, 0].min():.4f}/{var[:, 0].max():.4f}')
         print(f'boundaries  bsc = {var_lims["bsc"][0]:.4f}/{var_lims["bsc"][1]:.4f}')
         n_variables += 1
 
     if 'dpl_lims' in var_info:
-#        if 'dpl_converter' in var_info and var_info['dpl_converter'] == 'ldr2cdr':
-#            var_lims.update({'dpl': np.log10(-2.0*var_info['dpl_lims']/(var_info['dpl_lims']-1.0))/(np.log10(2)+np.log10(5))})
-#            var[:, 1] = np.log10(-2.*var[:, 1]/(var[:, 1]-1.0))/(np.log10(2)+np.log10(5))
-#        else:
         var_lims.update({'dpl': var_info['dpl_lims']})
         print(f'min/max     dpl = {var[:, 1].min():.4f}/{var[:, 1].max():.4f}')
         print(f'boundaries  dpl = {var_lims["dpl"][0]:.4f}/{var_lims["dpl"][1]:.4f}')
@@ -610,7 +596,7 @@ def Histogram(data, **kwargs):
         cmap.set_under('white', 1.0)
 
         pcol = ax[i].pcolormesh(np.linspace(x_lim[0], x_lim[1], n_bins), y_val, H_spec.T,
-                                cmap=cmap, label='histogram', norm=colors.LogNorm(vmin=1, vmax=H_spec.max()))
+                                cmap=cmap, label='histogram', norm=colors.LogNorm(ymin=1, ymax=H_spec.max()))
 
         cbar = fig.colorbar(pcol, use_gridspec=True, extend='min', extendrect=True, extendfrac=0.01,
                             format='%2d', orientation='horizontal', fraction=0.1)
@@ -643,7 +629,7 @@ def Histogram(data, **kwargs):
         cmap.set_under('white', 1.0)
 
         pcol = ax[i].pcolormesh(np.linspace(x_lim[0], x_lim[1], n_bins), y_val, H_spec.T,
-                                cmap=cmap, label='histogram', norm=colors.LogNorm(vmin=1, vmax=H_spec.max()))
+                                cmap=cmap, label='histogram', norm=colors.LogNorm(ymin=1, ymax=H_spec.max()))
 
         cbar = fig.colorbar(pcol, use_gridspec=True, extend='min', extendrect=True, extendfrac=0.01,
                             format='%2d', orientation='horizontal', fraction=0.1)
@@ -749,7 +735,6 @@ def plot_wavelet(ax, time, signal, scales, waveletname='mexh',
     ax.set_ylim(scales[-1], 1)
     return yticks, ylim
 
-
 def spectra_wavelettransform2(time, signal, scales):
     fig = plt.figure(figsize=(9, 9))
     spec = gridspec.GridSpec(ncols=6, nrows=6)
@@ -765,3 +750,172 @@ def spectra_wavelettransform2(time, signal, scales):
     plt.tight_layout()
 
     return fig, (top_ax, bottom_left_ax, bottom_right_ax)
+
+def spectra_3by3(data, *args, **kwargs):
+    """Finds the closest match to a given point in time and height and plot Doppler spectra.
+
+        Notes:
+            The user is able to provide sliced containers, e.g.
+
+            - one spectrum: ``data['dimlabel'] = ['vel']``
+            - range spectrogram: ``data['dimlabel'] = ['range', 'vel']``
+            - time spectrogram: ``data['dimlabel'] = ['time, 'vel']``
+            - time-range spectrogram: ``data['dimlabel'] = ['time, 'range', 'vel']``
+
+        Args:
+            data (dict): data container
+            *data2 (dict or numpy.ndarray): data container of a second device
+            **z_converter (string): convert var before plotting use eg 'lin2z'
+            **var_converter (string): alternate name for the z_converter
+            **xmin (float): minimum x axis value
+            **xmax (float): maximum x axis value
+            **ymin (float): minimum y axis value
+            **ymax (float): maximum y axis value
+            **save (string): location where to save the pngs
+            **fig_size (list): size of png, default is [10, 5.7]
+            **mean (float): numpy array dimensions (time, height, 2) containing mean noise level for each spectra
+                            in linear units [mm6/m3]
+            **thresh (float): numpy array dimensions (time, height, 2) containing noise threshold for each spectra
+                              in linear units [mm6/m3]
+            **title (str or bool)
+            **alpha (float): triggers transparency of the line plot (not the bar plot), 0 <= alpha <= 1
+
+        Returns:  
+            tuple with
+
+            - fig (pyplot figure): contains the figure of the plot 
+              (for multiple spectra, the last fig is returned)
+            - ax (pyplot axis): contains the axis of the plot 
+              (for multiple spectra, the last ax is returned)
+        """
+
+    fig_size = kwargs['fig_size']  if 'fig_size'   in kwargs else [10, 5.7]
+    fsz      = kwargs['font_size'] if 'font_size'  in kwargs else 17
+    alpha    = kwargs['alpha']     if 'alpha'      in kwargs else 1.0
+    name     = kwargs['save']      if 'save'       in kwargs else ''
+
+    # reschape the spectrum data to (n_time, n_height, n_Dbin)
+    time_ts, height, var, mask = h.reshape_spectra(data)
+    n_time, n_height, n_Dbin   = data['var'].shape
+
+    ncol = 1    # number of columns for legend
+    # check if a second data container was given
+    if len(args) > 0 and type(args[0]) is dict:
+        data2 = args[0]
+        time2_ts, height2, var2, mask2 = h.reshape_spectra(data2)
+        if 'z_converter' in kwargs and kwargs['z_converter'] == 'lin2z':
+            var2 = h.get_converter_array(kwargs['z_converter'])[0](var2)
+        second_data_set = True
+        ncol += 1
+    else:
+        second_data_set = False
+
+    if 'mean'in kwargs:  ncol += 1
+    if 'thresh'in kwargs:  ncol += 1
+
+    # set x-axsis and y-axis limits
+    xmin = kwargs['xmin'] if 'xmin' in kwargs else max(min(data['vel']), -8.0)
+    xmax = kwargs['xmax'] if 'xmax' in kwargs else min(max(data['vel']),  8.0)
+    ymin = kwargs['ymin'] if 'ymin' in kwargs else data['var_lims'][0]
+    ymax = kwargs['ymax'] if 'ymax' in kwargs else data['var_lims'][1]
+
+    logger.debug(f'x-axis varlims {xmin} {xmax}')
+    logger.debug(f'y-axis varlims {ymin} {ymax}')
+
+    if 'var_converter' in kwargs:
+        kwargs['z_converter'] = kwargs['var_converter']
+    if 'z_converter' in kwargs and kwargs['z_converter'] == 'lin2z':
+        var = h.get_converter_array(kwargs['z_converter'])[0](var)
+
+    # plot spectra
+    ifig = 1
+    n_figs = (n_time-2) * (n_height-2)
+
+    assert n_time > 2 and n_height > 2, 'Time-Height slice too small. Need at least 3 time steps and 3 range gates!'
+
+    for iT in range(1, n_time-1):
+        for iH in range(1, n_height-1):
+
+            fig = plt.figure(figsize=fig_size)
+            gs1 = gridspec.GridSpec(3, 3)
+            gs1.update(wspace=0, hspace=0)  # set the spacing between axes.
+
+            dt_center, rg_center = h.ts_to_dt(time_ts[iT]), height[iH]
+            i = -1
+            for irow, icol in itertools.product(range(-1, 2), range(-1, 2)):
+                ax = plt.subplot(gs1[irow+1, icol+1])
+
+                # plot the spectrum
+                ax.plot(data['vel'], var[iT+icol, iH+irow, :], color='royalblue', linestyle='-',
+                        linewidth=2, alpha=alpha, label=data['system'] + ' ' + data['name'])
+
+                # if a 2nd dict is given, plot the spectrum of the 2nd device using the nearest
+                # spectrum point in time and height with respect to device 1
+                if second_data_set:
+                    # find the closest spectra to the first device
+                    iT2 = h.argnearest(time2_ts, time_ts[iT+icol])
+                    iH2 = h.argnearest(height2, height[iH+irow])
+                    ax.plot(data2['vel'], var2[iT2+icol, iH2+irow, :], color='darkred', linestyle='-',
+                            linewidth=2, alpha=alpha, label=data2['system'] + ' ' + data2['name'])
+
+                    diff_t = np.abs(time_ts[iT+icol]-time2_ts[iT2])
+                    diff_h = np.abs(height[iH+irow]-height2[iH2])
+                    ax.text(-6, 12, r'$\bigtriangleup t = $' + f'{diff_t:.1f} [s];', fontsize=12)
+                    ax.text(.5, 12, r'$\bigtriangleup h = $' + f'{diff_h:.1f} [m]', fontsize=12)
+
+                # if mean noise level is given add it to plot
+                if 'mean' in kwargs and kwargs['mean'][iT, iH]>0.0:
+                    mean = h.lin2z(kwargs['mean'][iT, iH]) if kwargs['mean'].shape != () \
+                        else h.lin2z(kwargs['mean'])
+                    legendtxt_mean = f'mean noise floor =  {mean:.2f} '
+                    ax.plot([data['vel'][0], data['vel'][-1]], [mean, mean], color='k', linestyle='--', linewidth=1, label=legendtxt_mean)
+
+                # if thresh noise level is given add it to plot
+                if 'thresh' in kwargs and kwargs['thresh'][iT, iH]>0.0:
+                    thresh = h.lin2z(kwargs['thresh'][iT, iH]) if kwargs['thresh'].shape != () \
+                        else h.lin2z(kwargs['thresh'])
+                    legendtxt_thresh = f'noise floor threshold =  {thresh:.2f} '
+                    ax.plot([data['vel'][0], data['vel'][-1]], [thresh, thresh], color='k', linestyle='-', linewidth=1, label=legendtxt_thresh)
+
+                ax.set_xlim(left=xmin, right=xmax)
+                ax.set_ylim(bottom=ymin, top=ymax)
+
+                ax.grid(which='major', linestyle='--', linewidth=1)
+                ax.grid(which='minor', linestyle=':', linewidth=0.75)
+
+                ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+                ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+                ax.tick_params(axis='both', which='both', right=True, top=True)
+                ax.tick_params(axis='both', which='major', labelsize=14, width=3, length=5.5)
+                ax.tick_params(axis='both', which='minor', width=2, length=3)
+                ax.set_yticks(np.linspace(ymin + 10, ymax - 10, 5))
+
+                # remove x and y labels from the upper right 4 subplots
+                if irow != 1:  ax.set_xticklabels([])
+                if icol != -1: ax.set_yticklabels([])
+
+            fig.text(0.5, 0.04, 'Doppler velocity [m s-1]', ha='center', fontsize=fsz)
+            fig.text(0.04, 0.5, 'spectrum power [dBZ]', va='center', rotation='vertical', fontsize=fsz)
+
+            if 'title' in kwargs and type(kwargs['title']) == str:
+                fig.suptitle(kwargs['title'], fontsize=20)
+            elif 'title' in kwargs and type(kwargs['title']) == bool:
+                if kwargs['title']:
+                    fig.suptitle(f'{data["paraminfo"]["location"]},  '
+                                 f'{dt_center:%Y-%m-%d %H:%M:%S} [UTC],  '
+                                 f'{rg_center:.0f} [m]',
+                                 fontsize=20)
+
+            # gather plot labels and generate legend
+            handles, labels = ax.get_legend_handles_labels()
+            fig.legend(handles, labels, loc='lower center', ncol=ncol)
+            fig.tight_layout(rect=[0.05, 0.05, 1, 0.96])
+
+            figure_name = name + f'{dt_center:%Y%m%d_%H%M%S_UTC}_{str(ifig).zfill(4)}_{height[iH]:5.0f}m.png'
+            fig.savefig(figure_name, dpi=150)
+            logger.info(f'Saved {ifig} of {n_figs} png to {figure_name}')
+
+            ifig += 1
+            if ifig != n_figs + 1: plt.close(fig)
+
+    return fig, ax

@@ -79,12 +79,23 @@ PLOTS_PATH   = f'{VOODOO_PATH}plots/'
 TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-6_6-kernelsize-leakyrelu--20191213-104630.h5'
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
+feature_info = {'VSpec':    {'var_lims': [1.0e-6, 1.0e2], 'var_converter': 'lin2z', 'scaling': 'normalize', 'used': True},
+                'Ze':       {'var_lims': [1.0e-6, 1.0e2], 'var_converter': '-',     'scaling': 'normalize', 'used': False},
+                'VEL':      {'var_lims': [-6.0, 4.0],     'var_converter': '-',     'scaling': 'normalize', 'used': False},
+                'sw':       {'var_lims': [0.0, 3.0],      'var_converter': '-',     'scaling': 'normalize', 'used': False},
+                'skew':     {'var_lims': [-3.0, 3.0],     'var_converter': '-',     'scaling': 'normalize', 'used': False},
+                'kurt':     {'var_lims': [0.0, 3.0],      'var_converter': '-',     'scaling': 'normalize', 'used': False},
+                }
 radar_list = []
 radar_info = {'spec_lims':      [1.0e-6, 1.0e2],
               'spec_converter': 'lin2z',
               'normalization':  'normalize'
               }
 
+# define normalization boundaries and conversion for radar (feature) and lidar (label) space
+target_info = {'attbsc1064': {'var_lims': [1.e-7, 1.e-3], 'var_converter': 'log',       'scaling': '-', 'used': True},
+               'depol':      {'var_lims': [1.e-7, 0.3],   'var_converter': 'ldr2cdr',   'scaling': '-', 'used': False},
+               }
 lidar_list = ['attbsc1064', 'depol']
 lidar_info = {'attbsc1064_lims': [1.e-7, 1.e-3],
               'voldepol_lims': [1.e-7, 0.3],

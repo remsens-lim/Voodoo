@@ -130,13 +130,13 @@ def apply_filter(bsc, depol, **kwargs):
     if n_smoothing_rg > 0:
         for i_smth in range(n_times_smoothing):
             for i in range(len(bsc['ts'])):
-                bsc_cpy[i, :] = tr.smooth(bsc_cpy[i, :], n_smoothing_rg)
-                depol_cpy[i, :] = tr.smooth(depol_cpy[i, :], n_smoothing_rg)
+                bsc_cpy[i, :] = h.smooth(bsc_cpy[i, :], n_smoothing_rg)
+                depol_cpy[i, :] = h.smooth(depol_cpy[i, :], n_smoothing_rg)
     if n_smoothing_ts > 0:
         for i_smth in range(n_times_smoothing):
             for i in range(len(bsc['rg'])):
-                bsc_cpy[:, i] = tr.smooth(bsc_cpy[:, i], n_smoothing_ts)
-                depol_cpy[:, i] = tr.smooth(depol_cpy[:, i], n_smoothing_ts)
+                bsc_cpy[:, i] = h.smooth(bsc_cpy[:, i], n_smoothing_ts)
+                depol_cpy[:, i] = h.smooth(depol_cpy[:, i], n_smoothing_ts)
 
     if do_despeckle:
         old_mask = bsc_mask_cpy.copy()
@@ -165,7 +165,7 @@ def apply_filter(bsc, depol, **kwargs):
             d_bsc_depol.append(norm_bsc - norm_depol)
 
         # smooth the distance between bsc and depol
-        d_bsc_depol = tr.smooth(np.array(d_bsc_depol), n_smoothing_rg)
+        d_bsc_depol = h.smooth(np.array(d_bsc_depol), n_smoothing_rg)
         # correct the boundaries (necessary due to smoothing)
         N = n_smoothing_rg // 2 + 1
         d_bsc_depol[-N:] = d_bsc_depol[-N]

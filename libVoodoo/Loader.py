@@ -97,6 +97,7 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     n_time        = kwargs['n_time']       if 'n_time'      in kwargs else 0
     n_range       = kwargs['n_range']      if 'n_range'     in kwargs else 0
     n_Dbins       = kwargs['n_Dbins']      if 'n_Dbins'     in kwargs else 0
+    task          = kwargs['task']         if 'task'        in kwargs else 'predict'
 
     # list of feature settings
     add_moments   = kwargs['add_moments']  if 'add_moments' in kwargs else True
@@ -126,7 +127,7 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     assert n_time*n_range*n_Dbins > 0, f'Error while loading data, n_time(={n_time}) AND n_range(={n_range}) AND n_Dbins(={n_Dbins}) must be larger than 0!'
     assert 'mask' in kwargs, 'You should provide a mask for load_trainingset!'
     assert add_lidar_float != add_lidar_binary, 'Choose either float values or 0/1 for target variable for load_trainingset! Check model_ini.py'
-    masked = kwargs['mask']
+
 
     # load dimensions,
     n_chirps   = len(spec)
@@ -137,8 +138,9 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  | __ |___  |     |  \ |__|  |  |__|    |\/| |__| [__  |_/
     #  |__] |___  |     |__/ |  |  |  |  |    |  | |  | ___] | \_
     #
+    masked = get_mask(spec, lidar, task=task)
 
-    if task == 'train_radar_lidar':
+    if task == 'train':
         if 'attbsc1064_ip' in lidar:
             if kwargs['label_info']['bsc_converter'] == 'log':
                 lidar['attbsc1064_ip']['var'][lidar['attbsc1064_ip']['var'] < lidar_info['attbsc1064_lims'][0]] = lidar_info['attbsc1064_lims'][0]
@@ -467,13 +469,14 @@ def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'],
                                     despeckle=dspckl, main_peak=main_peak, filter_ghost_C1=rm_crtn_ghst)
 
+    #radar_spectra = remove_noise_from_spectra(radar_spectra)
+
     # replace NaN values with fill_value
     for ic in range(len(radar_spectra)):
         radar_spectra[ic]['var'][np.isnan(radar_spectra[ic]['var'])] = fill_value
 
     Plot.print_elapsed_time(t0, f'Reading spectra + moment calculation, elapsed time = ')
     return {'spectra': radar_spectra, 'moments': radar_moments}
-
 
 def load_lidar_data(larda, var_list, begin_dt, end_dt, plot_range, **kwargs):
     t0 = time.time()

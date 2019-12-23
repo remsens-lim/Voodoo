@@ -124,28 +124,24 @@ if __name__ == '__main__':
         #     |    |    \_ |     | __|__ |  \_|      |     | |  \_| |  \_|
         #
         specta_interp    = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
-        time_height_mask = Loader.get_mask(specta_interp, lidar_container, task='predict')
 
-        train_set, train_label, list_ts, list_rg = Loader.load_trainingset(specta_interp,
-                                                                           radar_container['moments'],
-                                                                           lidar_container,
-                                                                           input_dim=window_dimension,
-                                                                           n_time=n_time_LR,
-                                                                           n_range=n_range_LR,
-                                                                           n_Dbins=n_velocity_LR,
-                                                                           task='train_radar_lidar',
-                                                                           mask=time_height_mask,
-                                                                           add_moments=add_moments,
-                                                                           add_spectra=add_spectra,
-                                                                           add_cwt=add_cwt,
-                                                                           add_lidar_float=add_lidar_float,
-                                                                           add_lidar_binary=add_lidar_binary,
-                                                                           print_cwt=False,
-                                                                           feature_info=radar_info,
-                                                                           feature_list=radar_list,
-                                                                           label_info=lidar_info,
-                                                                           target_list=lidar_list,
-                                                                           cwt=CWT_PARAMS)
+        trainingset_settings = {'n_time': n_time_LR,  # number of time steps for LIMRAD94
+                                'n_range': n_range_LR,  # number of range bins for LIMRAD94
+                                'n_Dbins': n_velocity_LR,  # number of Doppler bins steps for LIMRAD94
+                                'task': 'train',  # masks values for specific task
+                                'add_moments': add_moments,  # if True adding radar moments to training set
+                                'add_spectra': add_spectra,  # if True adding radar Doppler spectra to training set
+                                'add_cwt': add_cwt,  # if True adding cont. wavelet transformation to training set
+                                'add_lidar_float': add_lidar_float,  # if True use regression model
+                                'add_lidar_binary': add_lidar_binary,  # if True use binary classification
+                                'feature_info': radar_info,  # additional information about features
+                                'feature_list': radar_list,  # list of feature variables names
+                                'target_info': lidar_info,  # additional information about targets
+                                'target_list': lidar_list,  # list of target variables names
+                                'cwt': CWT_PARAMS}  # additional information about wavelet analysis
+
+        train_set, train_label, list_ts, list_rg = Loader.load_trainingset(specta_interp, radar_container['moments'],
+                                                                           lidar_container, **trainingset_settings)
 
         # get dimensionality of the feature and target space
         n_samples, n_input = train_set.shape[0], train_set.shape[1:]

@@ -36,16 +36,16 @@ import pyLARDA.helpers as h
 import voodoo.libVoodoo.Loader as Loader
 import voodoo.libVoodoo.Plot   as Plot
 import voodoo.libVoodoo.Model  as Model
-from   voodoo.model_ini import *
+from voodoo.model_ini import *
 
-__author__      = "Willi Schimmel"
-__copyright__   = "Copyright 2019, The Voodoo Project"
-__credits__     = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
-__license__     = "MIT"
-__version__     = "0.0.1"
-__maintainer__  = "Willi Schimmel"
-__email__       = "willi.schimmel@uni-leipzig.de"
-__status__      = "Prototype"
+__author__ = "Willi Schimmel"
+__copyright__ = "Copyright 2019, The Voodoo Project"
+__credits__ = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
+__license__ = "MIT"
+__version__ = "0.0.1"
+__maintainer__ = "Willi Schimmel"
+__email__ = "willi.schimmel@uni-leipzig.de"
+__status__ = "Prototype"
 
 ########################################################################################################################################################
 ########################################################################################################################################################
@@ -59,12 +59,16 @@ __status__      = "Prototype"
 ########################################################################################################################################################
 ########################################################################################################################################################
 if __name__ == '__main__':
+    plot_bsc_dpl_rangespec = False
 
     start_time = time.time()
 
-    log = logging.getLogger('pyLARDA')
-    log.setLevel(logging.CRITICAL)
-    log.addHandler(logging.StreamHandler())
+    log_larda = logging.getLogger('pyLARDA')
+    log_voodoo = logging.getLogger('libVoodoo')
+    log_larda.setLevel(logging.INFO)
+    log_voodoo.setLevel(logging.INFO)
+    log_larda.addHandler(logging.StreamHandler())
+    log_voodoo.addHandler(logging.StreamHandler())
 
     larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
 
@@ -75,7 +79,7 @@ if __name__ == '__main__':
         if case['notes'] == 'ex': continue  # exclude this case and check the next one
 
         begin_dt = datetime.datetime.strptime(case['begin_dt'], '%Y%m%d-%H%M%S')
-        end_dt   = datetime.datetime.strptime(case['end_dt'],   '%Y%m%d-%H%M%S')
+        end_dt = datetime.datetime.strptime(case['end_dt'], '%Y%m%d-%H%M%S')
 
         # create directory for plots
         h.change_dir(os.path.join(PLOTS_PATH + f'trainingdata-QL-{begin_dt:%Y%m%d-%H%M%S}/'))
@@ -85,18 +89,22 @@ if __name__ == '__main__':
         #  |_____/ |_____| |     \ |_____| |_____/        |   | \  | |_____] |     |    |
         #  |    \_ |     | |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
         #
-        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt,
-                                                 rm_precip_ghost=True,  rm_curtain_ghost=True,
-                                                 do_despeckle=True,     do_despeckle3d=-1.0,
-                                                 estimate_noise=True,   noise_factor=6.0,      main_peak=True
-                                                 )
+        radar_input_setting = {'rm_precip_ghost': True,  # removes ghost echos (speckles over all chirps) due to precipitation
+                               'rm_curtain_ghost': True,  # removes ghost echos (curtain like 1st chirp) due to high signals between 2-5km alt.
+                               'do_despeckle': True,  # removes a pixel in 2D arrays, when 80% or more neighbouring pixels are masked (5x5 window)
+                               'do_despeckle3d': -1.0,  # save as 2D version but in 3D (5x5x5 window), -1 = no despackle3d
+                               'estimate_noise': True,  # calculates the noise level of the Doppler spectra
+                               'noise_factor': 6.0,  # number of standard deviations above mean noise
+                               'main_peak': True}  # use only main peak for moment calculation
 
-        n_chirp       = len(radar_container['spectra'])
-        n_time_LR     = radar_container['moments']['Ze']['ts'].size
-        n_range_LR    = radar_container['moments']['Ze']['rg'].size
+        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt, **radar_input_setting)
+
+        n_chirp = len(radar_container['spectra'])
+        n_time_LR = radar_container['moments']['Ze']['ts'].size
+        n_range_LR = radar_container['moments']['Ze']['rg'].size
         n_velocity_LR = radar_container['spectra'][0]['vel'].size
-        ts_radar      = radar_container['moments']['Ze']['ts']
-        rg_radar      = radar_container['moments']['Ze']['rg']
+        ts_radar = radar_container['moments']['Ze']['ts']
+        rg_radar = radar_container['moments']['Ze']['rg']
 
         ########################################################################################################################################################
         #         _____ ______  _______  ______      _____ __   _  _____  _     _ _______
@@ -104,29 +112,16 @@ if __name__ == '__main__':
         #  |_____ __|__ |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
         #
         lidar_container = Loader.load_lidar_data(larda, lidar_list, begin_dt, end_dt, plot_range, msf=True)
-        n_time_Pxt      = lidar_container['attbsc1064']['ts'].size
-        n_range_Pxt     = lidar_container['attbsc1064']['rg'].size
+        n_time_Pxt = lidar_container['attbsc1064']['ts'].size
+        n_range_Pxt = lidar_container['attbsc1064']['rg'].size
 
-        print(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
-        print(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
+        log_voodoo.info(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
+        log_voodoo.info(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
 
         # interpolate polly xt data onto limrad grid (so that spectra can be used directly)
-        lidar_list = ['attbsc1064']
+        lidar_list = ['attbsc1064', 'depol']
         lidar_container.update({f'{var}_ip': pyLARDA.Transformations.interpolate2d(
-                lidar_container[var], new_time=ts_radar, new_range=rg_radar, method='nearest') for var in lidar_list})
-
-        ########################################################################################################################################################
-        #   _____          _____  _______       ______  ______     _______  _____  _______ _______                          _____ ______  _______  ______
-        #  |_____] |      |     |    |         |_____/ |  ____ ___ |______ |_____] |______ |            ___ ___      |        |   |     \ |_____| |_____/
-        #  |       |_____ |_____|    |         |    \_ |_____|     ______| |       |______ |_____                    |_____ __|__ |_____/ |     | |    \_
-        #                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    _
-        if plot_bsc_dpl_rangespec:
-            Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range, colormap='cloudnet_jet')
-
-        if plot_spectra_cwt:
-            new_spec         = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
-            time_height_mask = Loader.get_mask(new_spec, lidar_container, task='predict')
-            cwt_list         = Loader.wavlet_transformation(new_spec, time_height_mask, z_converter='lin2z', **CWT_PARAMS)
+            lidar_container[var], new_time=ts_radar, new_range=rg_radar, method='nearest') for var in lidar_list})
 
         ########################################################################################################################################################
         #   _____          _____  _______       _____  _     _ _____ _______ _     _         _____   _____  _     _ _______
@@ -135,6 +130,20 @@ if __name__ == '__main__':
         #
         if plot_training_set:
             Plot.Quicklooks(radar_container['moments'], lidar_container, begin_dt, end_dt)
+
+        ########################################################################################################################################################
+        #   _____          _____  _______       ______  ______     _______  _____  _______ _______                          _____ ______  _______  ______
+        #  |_____] |      |     |    |         |_____/ |  ____ ___ |______ |_____] |______ |            ___ ___      |        |   |     \ |_____| |_____/
+        #  |       |_____ |_____|    |         |    \_ |_____|     ______| |       |______ |_____                    |_____ __|__ |_____/ |     | |    \_
+        #                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    _
+
+        new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
+        if plot_bsc_dpl_rangespec:
+            Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range, colormap='cloudnet_jet')
+
+        if plot_spectra_cwt:
+            time_height_mask = Loader.get_mask(new_spec, lidar_container, task='predict')
+            cwt_list = Loader.wavlet_transformation(new_spec, time_height_mask, z_converter='lin2z', **CWT_PARAMS)
 
         ########################################################################################################################################################
         #  _______ _______ _     _ _______     _____   ______ _______ ______  _____ _______ _______ _____  _____  __   _
@@ -146,32 +155,30 @@ if __name__ == '__main__':
             # load weights
             file = os.path.join(MODELS_PATH, TRAINED_MODEL)
             loaded_model = keras.models.load_model(file)
-            print(f'Prediction with model :: {file}')
-            print('Loading input ...')
+            log_voodoo.info(f'Prediction with model :: {file}')
+            log_voodoo.info('Loading input ...')
 
             new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
-            time_height_mask = Loader.get_mask(new_spec, lidar_container, task='predict')
 
-            test_set, test_label, list_ts, list_rg = Loader.load_trainingset(new_spec,
-                                                                             radar_container['moments'],
-                                                                             lidar_container,
-                                                                             n_time=n_time_LR,
-                                                                             n_range=n_range_LR,
-                                                                             n_Dbins=n_velocity_LR,
-                                                                             task='predict',
-                                                                             mask=time_height_mask,
-                                                                             add_moments=add_moments,
-                                                                             add_spectra=add_spectra,
-                                                                             add_cwt=add_cwt,
-                                                                             add_lidar_float=add_lidar_float,
-                                                                             add_lidar_binary=add_lidar_binary,
-                                                                             feature_info=radar_info,
-                                                                             feature_list=radar_list,
-                                                                             label_info=lidar_info,
-                                                                             target_list=lidar_list,
-                                                                             cwt=CWT_PARAMS)
+            trainingset_settings = {'n_time': n_time_LR,  # number of time steps for LIMRAD94
+                                    'n_range': n_range_LR,  # number of range bins for LIMRAD94
+                                    'n_Dbins': n_velocity_LR,  # number of Doppler bins steps for LIMRAD94
+                                    'task': 'predict',  # masks values for specific task
+                                    'add_moments': add_moments,  # if True adding radar moments to training set
+                                    'add_spectra': add_spectra,  # if True adding radar Doppler spectra to training set
+                                    'add_cwt': add_cwt,  # if True adding cont. wavelet transformation to training set
+                                    'add_lidar_float': add_lidar_float,  # if True use regression model
+                                    'add_lidar_binary': add_lidar_binary,  # if True use binary classification
+                                    'feature_info': radar_info,  # additional information about features
+                                    'feature_list': radar_list,  # list of feature variables names
+                                    'target_info': lidar_info,  # additional information about targets
+                                    'target_list': lidar_list,  # list of target variables names
+                                    'cwt': CWT_PARAMS}  # additional information about wavelet analysis
 
-            dimensions = {'list_ts': list_ts, 'list_rg': list_rg, 'ts_radar': ts_radar, 'rg_radar': rg_radar, 'label_info': lidar_info}
+            test_set, test_label, list_ts, list_rg = Loader.load_trainingset(new_spec, radar_container['moments'],
+                                                                             lidar_container, **trainingset_settings)
+
+            dimensions = {'list_ts': list_ts, 'list_rg': list_rg, 'ts_radar': ts_radar, 'rg_radar': rg_radar, 'target_info': lidar_info}
 
             lidar_pred = Model.predict_lidar(loaded_model, test_set)
             lidar_pred_container = Loader.predict2container(lidar_pred,
