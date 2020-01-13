@@ -66,8 +66,11 @@ if __name__ == '__main__':
     start_time = time.time()
 
     log = logging.getLogger('pyLARDA')
-    log.setLevel(logging.CRITICAL)
+    log_vod = logging.getLogger('libVoodoo')
+    log.setLevel(logging.INFO)
+    log_vod.setLevel(logging.INFO)
     log.addHandler(logging.StreamHandler())
+    log_vod.addHandler(logging.StreamHandler())
 
     larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
 
@@ -88,11 +91,15 @@ if __name__ == '__main__':
         #  |_____/ |_____| |     \ |_____| |_____/        |   | \  | |_____] |     |    |
         #  |    \_ |     | |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
         #
-        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt,
-                                                 rm_precip_ghost=True,  rm_curtain_ghost=True,
-                                                 do_despeckle=True,     do_despeckle3d=-1.0,
-                                                 estimate_noise=True,   noise_factor=6.0,      main_peak=True
-                                                 )
+        radar_input_setting = {'rm_precip_ghost': True,  # removes ghost echos (speckles over all chirps) due to precipitation
+                               'rm_curtain_ghost': True,  # removes ghost echos (curtain like 1st chirp) due to high signals between 2-5km alt.
+                               'do_despeckle': True,  # removes a pixel in 2D arrays, when 80% or more neighbouring pixels are masked (5x5 window)
+                               'do_despeckle3d': -1.0,  # save as 2D version but in 3D (5x5x5 window), -1 = no despackle3d
+                               'estimate_noise': True,  # calculates the noise level of the Doppler spectra
+                               'noise_factor': 6.0,  # number of standard deviations above mean noise
+                               'main_peak': True}  # use only main peak for moment calculation
+
+        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt, **radar_input_setting)
 
         n_chirp       = len(radar_container['spectra'])
         n_velocity_LR = radar_container['spectra'][0]['vel'].size
@@ -106,14 +113,14 @@ if __name__ == '__main__':
         #  |        |   |     \ |_____| |_____/        |   | \  | |_____] |     |    |
         #  |_____ __|__ |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
         #
-        lidar_container = Loader.load_lidar_data(larda, lidar_list, begin_dt, end_dt, plot_range, msf=True)
+        lidar_container = Loader.load_lidar_data(larda, target_info.keys(), begin_dt, end_dt, msf=True)
         n_time_Pxt      = lidar_container['attbsc1064']['ts'].size
         n_range_Pxt     = lidar_container['attbsc1064']['rg'].size
 
         print(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
         print(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
 
-        lidar_list = ['attbsc1064']
+        lidar_list = ['attbsc1064', 'depol']
         # interpolate polly xt data onto limrad grid (so that spectra can be used directly)
         lidar_container.update({f'{var}_ip': pyLARDA.Transformations.interpolate2d(
                 lidar_container[var], new_time=ts_radar, new_range=rg_radar, method='nearest') for var in lidar_list})
@@ -123,24 +130,18 @@ if __name__ == '__main__':
         #     |    |_____/ |_____|   |   | \  |      |_____| | \  | | \  |
         #     |    |    \_ |     | __|__ |  \_|      |     | |  \_| |  \_|
         #
-        specta_interp    = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
+        radar_container['spectra'] = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
 
         trainingset_settings = {'n_time': n_time_LR,  # number of time steps for LIMRAD94
                                 'n_range': n_range_LR,  # number of range bins for LIMRAD94
                                 'n_Dbins': n_velocity_LR,  # number of Doppler bins steps for LIMRAD94
                                 'task': 'train',  # masks values for specific task
-                                'add_moments': add_moments,  # if True adding radar moments to training set
-                                'add_spectra': add_spectra,  # if True adding radar Doppler spectra to training set
-                                'add_cwt': add_cwt,  # if True adding cont. wavelet transformation to training set
-                                'add_lidar_float': add_lidar_float,  # if True use regression model
-                                'add_lidar_binary': add_lidar_binary,  # if True use binary classification
-                                'feature_info': radar_info,  # additional information about features
-                                'feature_list': radar_list,  # list of feature variables names
-                                'target_info': lidar_info,  # additional information about targets
-                                'target_list': lidar_list,  # list of target variables names
-                                'cwt': CWT_PARAMS}  # additional information about wavelet analysis
+                                'output_format': regression_or_binary,  # if True use regression model
+                                'feature_info': feature_info,  # additional information about features
+                                'target_info': target_info,  # additional information about targets
+                                }
 
-        train_set, train_label, list_ts, list_rg = Loader.load_trainingset(specta_interp, radar_container['moments'],
+        train_set, train_label, list_ts, list_rg = Loader.load_trainingset(radar_container['spectra'], radar_container['moments'],
                                                                            lidar_container, **trainingset_settings)
 
         # get dimensionality of the feature and target space
@@ -180,7 +181,7 @@ if __name__ == '__main__':
                 dense_model, history = Model.training(dense_model, train_set, train_label, **hyper_params)
 
                 fig, ax = Plot.History(history)
-                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=200)
+                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=200)
 
                 if TRAINED_MODEL:
                     break  # if a trained model was given, jump out of hyperparameter loop
@@ -220,7 +221,7 @@ if __name__ == '__main__':
                 dense_model, history = Model.training(dense_model, train_set, train_label, hyper_params)
 
                 fig, ax = Plot.History(history)
-                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=300)
+                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=300)
 
                 if TRAINED_MODEL:
                     break  # if a trained model was given, jump out of hyperparameter loop
@@ -262,7 +263,7 @@ if __name__ == '__main__':
                 dense_model, history = Model.training(dense_model, train_set, train_label, hyper_params)
 
                 fig, ax = Plot.History(history)
-                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}_{radar_info["normalization"]}.png', dpi=300)
+                Plot.save_figure(fig, name=f'histo_output_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=300)
 
                 if TRAINED_MODEL:
                     break  # if a trained model was given, jump out of hyperparameter loop

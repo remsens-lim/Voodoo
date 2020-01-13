@@ -120,9 +120,9 @@ def Quicklooks(RPG_moments, polly_var, begin_dt, end_dt, **kwargs):
         fig.tight_layout(rect=[0, 0, 1, 0.95])
         save_figure(fig, name=fig_name, dpi=300)
 
-    if 'voldepol532' in polly_var:
-        fig_name = f'POLLYxt_voldepol532_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-        fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['voldepol532'], fig_size=fig_size, range_interval=plot_range,
+    if 'depol' in polly_var:
+        fig_name = f'POLLYxt_depol_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['depol'], fig_size=fig_size, range_interval=plot_range,
                                                          rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
         save_figure(fig, name=fig_name, dpi=300)
@@ -147,10 +147,10 @@ def Quicklooks(RPG_moments, polly_var, begin_dt, end_dt, **kwargs):
         fig.tight_layout(rect=[0, 0, 1, 0.95])
         save_figure(fig, name=fig_name, dpi=300)
 
-    if 'voldepol532_ip' in polly_var:
-        polly_var['voldepol532_ip']['mask'] = training_mask
-        fig_name = f'traing_label_POLLYxt_voldepol532_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
-        fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['voldepol532_ip'], fig_size=fig_size,
+    if 'depol_ip' in polly_var:
+        polly_var['depol_ip']['mask'] = training_mask
+        fig_name = f'traing_label_POLLYxt_depol_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png'
+        fig, _ = pyLARDA.Transformations.plot_timeheight(polly_var['depol_ip'], fig_size=fig_size,
                                                          range_interval=plot_range,
                                                          rg_converter=range2km, title=fig_name)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -487,7 +487,7 @@ def lidar_profiles(bsc, depol, fltr, **kwargs):
     return fig, ax
 
 def print_elapsed_time(t0, string='time = '):
-    print(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [hour:min:sec]')
+    print(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [min:sec]')
 
 def save_figure(fig, **kwargs):
     dotsperinch = kwargs['dpi']  if 'dpi'  in kwargs else 200

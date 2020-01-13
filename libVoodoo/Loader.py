@@ -16,16 +16,21 @@ from numba import jit
 from scipy import signal
 from scipy.interpolate import interp1d
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from larda.pyLARDA.spec2mom_limrad94 import spectra2moments, build_extended_container
 
-__author__      = "Willi Schimmel"
-__copyright__   = "Copyright 2019, The Voodoo Project"
-__credits__     = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
-__license__     = "MIT"
-__version__     = "0.0.1"
-__maintainer__  = "Willi Schimmel"
-__email__       = "willi.schimmel@uni-leipzig.de"
-__status__      = "Prototype"
+__author__ = "Willi Schimmel"
+__copyright__ = "Copyright 2019, The Voodoo Project"
+__credits__ = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
+__license__ = "MIT"
+__version__ = "0.0.1"
+__maintainer__ = "Willi Schimmel"
+__email__ = "willi.schimmel@uni-leipzig.de"
+__status__ = "Prototype"
+
 
 def load_case_list(excel_sheet_path):
     # gather command line arguments
@@ -61,13 +66,16 @@ def scaling(data, strat='none', **kwargs):
         output = data * 1.0
     return output
 
+
 def ldr2cdr(ldr):
     ldr = np.array(ldr)
     return np.log10(-2.0 * ldr / (ldr - 1.0)) / (np.log10(2) + np.log10(5))
 
+
 def cdr2ldr(cdr):
     cdr = np.array(cdr)
     return np.power(10.0, cdr) / (2 + np.power(10.0, cdr))
+
 
 def get_mask(spec, lidar, task='training'):
     """This routine generates a 2d mask, where 1 is set if a specific spectrum contains exclusively fill values, otherwise 0.
@@ -91,47 +99,41 @@ def get_mask(spec, lidar, task='training'):
         return spec['mask'].all(axis=2)
 
 
+def is_key_in_dict(dictionary, var_list):
+    """Function that returns true when a dictionary contains variable name from a list that will be used by the ANN."""
+    for key, val in dictionary.items():
+        if key in var_list and dictionary[key]['used']:
+            return True
+    return False
 
-def load_trainingset(spec, mom, lidar, task, **kwargs):
+
+def load_trainingset(spec, mom, lidar, **kwargs):
     # normalize the input data
-    n_time        = kwargs['n_time']       if 'n_time'      in kwargs else 0
-    n_range       = kwargs['n_range']      if 'n_range'     in kwargs else 0
-    n_Dbins       = kwargs['n_Dbins']      if 'n_Dbins'     in kwargs else 0
-    task          = kwargs['task']         if 'task'        in kwargs else 'predict'
+    n_time = kwargs['n_time'] if 'n_time' in kwargs else 0
+    n_range = kwargs['n_range'] if 'n_range' in kwargs else 0
+    n_Dbins = kwargs['n_Dbins'] if 'n_Dbins' in kwargs else 0
+    task = kwargs['task'] if 'task' in kwargs else 'predict'
 
     # list of feature settings
-    add_moments   = kwargs['add_moments']  if 'add_moments' in kwargs else True
-    add_spectra   = kwargs['add_spectra']  if 'add_spectra' in kwargs else True
-    add_cwt       = kwargs['add_cwt']      if 'add_cwt'     in kwargs else True
-    cwt_params    = kwargs['cwt']          if 'cwt'         in kwargs else {'none': -999}
-    feature_list  = kwargs['feature_list'] if 'feature_list' in kwargs else []
-    radar_info    = kwargs['feature_info'] if 'feature_info' in kwargs else {'Ze_lims': [1.e-7, 1.e3],
-                                                                             'VEL_lims': [-5, 5],
-                                                                             'sw_lims': [0, 3],
-                                                                             'skew_lims': [-3, 3],
-                                                                             'kurt_lims': [0, 3],
-                                                                             'normalization': 'none'}
+    feature_info = kwargs['feature_info'] if 'feature_info' in kwargs else False
     # list of target settings
-    target_list      = kwargs['target_list']      if 'target_list'      in kwargs else ['attbsc1064_ip', 'dpl']
-    add_lidar_float  = kwargs['add_lidar_float']  if 'add_lidar_float'  in kwargs else False
-    add_lidar_binary = kwargs['add_lidar_binary'] if 'add_lidar_binary' in kwargs else False
-    lidar_info       = kwargs['label_info'] if 'label_info' in kwargs else {'bsc_lims': [1.0e-7, 1.0e-3],
-                                                                            'dpl_lims': [1.0e-7, 0.3],
-                                                                            'bsc_converter': 'none',
-                                                                            'dpl_converter': 'none',
-                                                                            'bsc_shift': 0,
-                                                                            'dpl_shift': 0,
-                                                                            'normalization': 'none'}
+    output_format = kwargs['output_format'] if 'output_format' in kwargs else 'regression'
+    target_info = kwargs['target_info'] if 'target_info' in kwargs else False
 
     # quick check if any dimensions are positiv
-    assert n_time*n_range*n_Dbins > 0, f'Error while loading data, n_time(={n_time}) AND n_range(={n_range}) AND n_Dbins(={n_Dbins}) must be larger than 0!'
-    assert 'mask' in kwargs, 'You should provide a mask for load_trainingset!'
-    assert add_lidar_float != add_lidar_binary, 'Choose either float values or 0/1 for target variable for load_trainingset! Check model_ini.py'
+    assert n_time * n_range * n_Dbins > 0, f'Error while loading data, n_time(={n_time}) AND n_range(={n_range}) AND n_Dbins(={n_Dbins}) must be larger than 0!'
+    # assert feature_info is dict(), 'Settings for features is missing!'
+    # assert target_info is dict(), 'Settings for targets is missing!'
 
+    add_moments = is_key_in_dict(feature_info, ['Ze', 'VEL', 'sw', 'skew', 'kurt'])
+    add_spectra = is_key_in_dict(feature_info, ['VSpec', 'HSpec', 'Zspec'])
+    add_cwt = is_key_in_dict(feature_info, ['cwt'])
 
     # load dimensions,
-    n_chirps   = len(spec)
-    Times, Heights, moments_list, feature_set  = [], [], [], []
+    n_chirps = len(spec)
+    Times, Heights, moments_list, feature_set = [], [], [], []
+    feature_list = [var for var in feature_info.keys() if feature_info[var]['used']]
+    target_list = [var for var in target_info.keys() if target_info[var]['used']]
 
     ####################################################################################################################################
     #  ____ ____ ___    ___  ____ ___ ____    _  _ ____ ____ _  _
@@ -142,16 +144,17 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
 
     if task == 'train':
         if 'attbsc1064_ip' in lidar:
-            if kwargs['label_info']['bsc_converter'] == 'log':
-                lidar['attbsc1064_ip']['var'][lidar['attbsc1064_ip']['var'] < lidar_info['attbsc1064_lims'][0]] = lidar_info['attbsc1064_lims'][0]
-                lidar['attbsc1064_ip']['var'] = np.log10(lidar['attbsc1064_ip']['var']) + lidar_info['bsc_shift']
-                kwargs['label_info']['attbsc1064_lims'] = np.log10(kwargs['label_info']['attbsc1064_lims']) + lidar_info['bsc_shift']
+            if target_info['attbsc1064']['var_converter'] == 'log':
+                lidar['attbsc1064_ip']['var'][lidar['attbsc1064_ip']['var'] < target_info['attbsc1064']['var_lims'][0]] = target_info['attbsc1064']['var_lims'][
+                    0]
+                lidar['attbsc1064_ip']['var'] = np.log10(lidar['attbsc1064_ip']['var'])
+                target_info['attbsc1064']['var_lims'] = np.log10(target_info['attbsc1064']['var_lims'])
 
-        if 'voldepol532_ip' in lidar:
-            if kwargs['label_info']['dpl_converter'] == 'ldr2cdr':
-                lidar['voldepol532_ip']['var'][lidar['voldepol532_ip']['var'] >= 1] = lidar_info['voldepol532_lims'][1]
-                lidar['voldepol532_ip']['var'] = ldr2cdr(lidar['voldepol532_ip']['var']) + lidar_info['dpl_shift']
-                kwargs['label_info']['voldepol532_lims'] = ldr2cdr(kwargs['label_info']['voldepol532_lims']) + lidar_info['dpl_shift']
+        if 'depol_ip' in lidar:
+            if target_info['depol']['var_converter'] == 'ldr2cdr':
+                lidar['depol_ip']['var'][lidar['depol_ip']['var'] >= 1] = target_info['depol']['var_lims'][1]
+                lidar['depol_ip']['var'] = ldr2cdr(lidar['depol_ip']['var'])
+                target_info['depol']['var_lims'] = ldr2cdr(target_info['depol']['var_lims'])
 
     n_samples = np.size(masked) - np.count_nonzero(masked)
     print(f'Number of samples in feature set = {n_samples}')
@@ -163,10 +166,10 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #
     if add_moments:
         t0 = time.time()
-        features = {ivar: scaling(mom[ivar]['var'], strat=radar_info['normalization'], var_lims=radar_info[f'{ivar}_lims']) for ivar in feature_list}
+        features = {ivar: scaling(mom[ivar]['var'], strat=feature_info['scaling'], var_lims=feature_info[f'{ivar}_lims']) for ivar in feature_list}
 
         for iT in range(n_time):
-            print(f'Timesteps converted :: {iT+1:5d} of {n_time}', end='\r')
+            print(f'Timesteps converted :: {iT + 1:5d} of {n_time}', end='\r')
             for iH in range(n_range):
                 if not masked[iT, iH]:
                     moments_list.append(np.array([features[feat][iT, iH] for feat in feature_list]))
@@ -179,13 +182,14 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  |__| |  \ |  \ | |\ | | __    |    | |  \ |__| |__/    |  | |__| |__/ | |__| |__] |    |___ [__
     #  |  | |__/ |__/ | | \| |__]    |___ | |__/ |  | |  \     \/  |  | |  \ | |  | |__] |___ |___ ___]
     #
-    if add_lidar_float:
+    if output_format == 'regression':
         t0 = time.time()
         target_set = []
-        labels = {ivar: scaling(lidar[f'{ivar}_ip']['var'], strat=lidar_info['normalization'], var_lims=lidar_info[f'{ivar}_lims']) for ivar in target_list}
+        labels = {ivar: scaling(lidar[f'{ivar}_ip']['var'], strat=target_info[ivar]['scaling'],
+                                var_lims=target_info[ivar][f'var_lims']) for ivar in target_list}
 
         for iT in range(n_time):
-            print(f'Timesteps converted :: {iT+1:5d} of {n_time}', end='\r')
+            print(f'Timesteps converted :: {iT + 1:5d} of {n_time}', end='\r')
             for iH in range(n_range):
                 if not masked[iT, iH]:
                     Times.append(iT)
@@ -200,11 +204,11 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  |__| |  \ |  \ | |\ | | __    |    | |  \ |__| |__/    |__] | |\ | |__| |__/  \_/  
     #  |  | |__/ |__/ | | \| |__]    |___ | |__/ |  | |  \    |__] | | \| |  | |  \   |   
     #
-    if add_lidar_binary:
+    if output_format == 'classification':
         t0 = time.time()
         target_set = []
         for iT, ts in enumerate(spec['ts']):
-            print(f'Timesteps converted :: {iT+1:5d} of {n_time}', end='\r')
+            print(f'Timesteps converted :: {iT + 1:5d} of {n_time}', end='\r')
             iT_nearest = h.argnearest(lidar['attbsc1064']['ts'], ts)
             for iH, rg in enumerate(spec['rg']):
                 if not masked[iT, iH]:
@@ -230,11 +234,13 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
         spectra_list = np.zeros((n_samples, 256), dtype=np.float32)
         i_sample = 0
         for iT in range(n_time):
-             for iH in range(spec['rg'].size):
+            for iH in range(spec['rg'].size):
                 print(f'Timesteps spectra added :: {iH + 1:5d} of {n_range}', end='\r')
                 if not masked[iT, iH]:
                     # assign radar moments reflectivity, mean doppler velocity, spectral width, linear deplo ratio
-                    spectra_list[i_sample, :] = scaling(spec['var'][iT, iH, :], strat=radar_info['normalization'], var_lims=radar_info[f'spec_lims'])
+                    spectra_list[i_sample, :] = scaling(spec['var'][iT, iH, :],
+                                                        strat=feature_info['Vspec']['scaling'],
+                                                        var_lims=feature_info['Vspec'][f'var_lims'])
                     i_sample += 1
 
         if len(feature_set) == 0:
@@ -249,24 +255,24 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  |  | |__/ |__/ | | \| |__]    |_|_| |  |  \/  |___ |___ |___  |  ___]    |  | |__| |___  |  |    |___ |__| |  \ |___
     #
     # add continuous wavelet transformation to list
-#    add_cwt_multi = False
-#    if add_cwt_multi:
-#        t0 = time.time()
-#        assert 'sfacs' in cwt_params['sfacs'], 'The CWT needs scaling factors! No scaling factors were given'
-#        n_cwt_scales = len(cwt_params['sfacs'])
-#        assert n_cwt_scales > 0, 'The list of scaling factors has to be positive!'
-#
-#        cnt = 0
-#        cwt_list = []
-#        keywargs = {'scales': cwt_params['sfacs'], 'n_Dbins': n_Dbins, 'var_lims': radar_info['spec_lims']}
-#        print(f'Timesteps cwt(ichir + 1}) added')
-#        with concurrent.futures.ProcessPoolExecutor() as executor:
-#            cwt_list.append(executor.map(multiprocess_cwt,
-#                                         spec[ic]['var'][np.where(masked[:, rg_offsets[ic]:rg_offsets[ic+1]]==False)],
-#                                         keywargs))
-#            cnt += 1
-#
-#        Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (multi-core), elapsed time = ')
+    #    add_cwt_multi = False
+    #    if add_cwt_multi:
+    #        t0 = time.time()
+    #        assert 'sfacs' in cwt_params['sfacs'], 'The CWT needs scaling factors! No scaling factors were given'
+    #        n_cwt_scales = len(cwt_params['sfacs'])
+    #        assert n_cwt_scales > 0, 'The list of scaling factors has to be positive!'
+    #
+    #        cnt = 0
+    #        cwt_list = []
+    #        keywargs = {'scales': cwt_params['sfacs'], 'n_Dbins': n_Dbins, 'var_lims': feature_info['spec_lims']}
+    #        print(f'Timesteps cwt(ichir + 1}) added')
+    #        with concurrent.futures.ProcessPoolExecutor() as executor:
+    #            cwt_list.append(executor.map(multiprocess_cwt,
+    #                                         spec[ic]['var'][np.where(masked[:, rg_offsets[ic]:rg_offsets[ic+1]]==False)],
+    #                                         keywargs))
+    #            cnt += 1
+    #
+    #        Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (multi-core), elapsed time = ')
 
     ####################################################################################################################################
     #  ____ ___  ___  _ _  _ ____    _ _ _ ____ _  _ ____ _    ____ ___ ____    ____ _ _  _ ____ _    ____    ____ ____ ____ ____
@@ -274,10 +280,7 @@ def load_trainingset(spec, mom, lidar, task, **kwargs):
     #  |  | |__/ |__/ | | \| |__]    |_|_| |  |  \/  |___ |___ |___  |  ___]    ___] | | \| |__] |___ |___    |___ |__| |  \ |___
     #
     if add_cwt:
-        assert 'scales' in cwt_params, 'The CWT needs scaling factors! No scaling factors were given'
-        assert len(cwt_params['scales']) > 0, 'The list of scaling factors has to be positive!'
-
-        cwt_list = wavlet_transformation(spec, masked, z_converter=radar_info['spec_converter'], **cwt_params)
+        cwt_list = wavlet_transformation(spec, masked, **feature_info['cwt'])
 
         if len(feature_set) == 0:
             feature_set = np.array(cwt_list, dtype=np.float32)
@@ -304,6 +307,7 @@ def norm(x, mini, maxi):
     x[x > maxi] = maxi
     return (x - mini) / max(1.e-15, maxi - mini)
 
+
 def multiprocess_cwt(spec, **kwargs):
     scales = kwargs['scales']
     n_Dbins = kwargs['n_Dbins']
@@ -311,23 +315,23 @@ def multiprocess_cwt(spec, **kwargs):
     lims = kwargs['var_lims']
 
     # assign radar moments reflectivity, mean doppler velocity, spectral width, linear deplo ratio
-    spcij_minmax = spec.copy()
+    spcij_scaled = spec.copy()
     mini, maxi = lims[0], lims[1]
 
-    spcij_minmax[spcij_minmax < mini] = mini
-    spcij_minmax[spcij_minmax > maxi] = maxi
-    spcij_minmax = (spcij_minmax - mini) / max(1.e-15, maxi - mini)
+    spcij_scaled[spcij_scaled < mini] = mini
+    spcij_scaled[spcij_scaled > maxi] = maxi
+    spcij_scaled = (spcij_scaled - mini) / max(1.e-15, maxi - mini)
 
-    cwtmatr = signal.cwt(spcij_minmax, signal.ricker, scales)
+    cwtmatr = signal.cwt(spcij_scaled, signal.ricker, scales)
 
     mini_cwt = np.min(cwtmatr)
     maxi_cwt = np.max(cwtmatr)
-    cwt_norm = (cwtmatr - mini_cwt) / max(1.e-15, maxi_cwt - mini_cwt)
+    cwt_scaled = (cwtmatr - mini_cwt) / max(1.e-15, maxi_cwt - mini_cwt)
 
-    return np.reshape(cwt_norm, (n_cwt_scales, n_Dbins, 1))
+    return np.reshape(cwt_scaled, (n_cwt_scales, n_Dbins, 1))
 
 
-def wavlet_transformation(spectra, masked, z_converter='none', **cwt_params):
+def wavlet_transformation(spectra, masked, **cwt_params):
     t0 = time.time()
     assert 'scales' in cwt_params, 'The CWT needs scaling factors! No scaling factors were given'
     assert len(cwt_params['scales']) > 0, 'The list of scaling factors has to be positive!'
@@ -336,17 +340,16 @@ def wavlet_transformation(spectra, masked, z_converter='none', **cwt_params):
     n_cwt_scales = len(cwt_params['scales'])
     spectra_unit = spectra['var_unit']
     spectra_lims = np.array(spectra['var_lims'])
-    spectra_3d   = spectra['var'].copy()
-    ts_list      = spectra['ts']
-    rg_list      = spectra['rg']
-    vel_list     = spectra['vel']
+    spectra_3d = spectra['var'].copy()
+    ts_list = spectra['ts']
+    rg_list = spectra['rg']
+    vel_list = spectra['vel']
 
     # convert to logarithmic units
-    if z_converter == 'lin2z':
+    if 'var_converter' in cwt_params and 'lin2z' in cwt_params['var_converter']:
         spectra_unit = 'dBZ'
-        spectra_3d   = h.get_converter_array(z_converter)[0](spectra_3d)
-        spectra_lims = h.get_converter_array(z_converter)[0](spectra_lims)
-
+        spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
+        spectra_lims = h.get_converter_array('lin2z')[0](spectra_lims)
 
     cnt = 0
     cwt_list = []
@@ -354,37 +357,36 @@ def wavlet_transformation(spectra, masked, z_converter='none', **cwt_params):
         print(f'Timestep cwt added :: {iT + 1:5d} of {n_time}', end='\r')
         for iH in range(n_range):
             if not masked[iT, iH]:
-                # assign radar moments reflectivity, mean doppler velocity, spectral width, linear deplo ratio
-                spcij = spectra_3d[iT, iH, :]
+                spcij_scaled = scaling(spectra_3d[iT, iH, :], strat=cwt_params['scaling'], var_lims=spectra_lims)
+                cwtmatr = signal.cwt(spcij_scaled, signal.ricker, cwt_params['scales'])
 
-                # spcij_minmax = (spcij - radar_info['spec_lims'][0]) / max((radar_info['spec_lims'][1] - radar_info['spec_lims'][0]), 1.e-9)
-                spcij_minmax = scaling(spcij, strat=cwt_params['normalization'], var_lims=spectra_lims)
-                cwtmatr = -signal.cwt(spcij_minmax, signal.ricker, cwt_params['scales'])
-                cwtmatr[cwtmatr < 1.e-1] = 0.0
-                cwtmatr[cwtmatr > 3.e+1] = 30.0
-                cwt_norm = scaling(cwtmatr, strat=cwt_params['normalization'], var_lims=[np.min(cwtmatr), np.max(cwtmatr)])
+                if 'chsgn' in cwt_params['var_converter']: cwtmatr *= -1.0
+                cwtmatr[cwtmatr < cwt_params['var_lims'][0]] = cwt_params['var_lims'][0]
+                cwtmatr[cwtmatr > cwt_params['var_lims'][1]] = cwt_params['var_lims'][1]
+                cwt_scaled = scaling(cwtmatr, strat=cwt_params['scaling'], var_lims=cwt_params['var_lims'])
+                # cwt_scaled = scaling(cwtmatr, strat=cwt_params['scaling'], var_lims=[np.min(cwtmatr), np.max(cwtmatr)])
 
-                cwt_list.append(np.reshape(cwt_norm, (n_cwt_scales, n_Dbins, 1)))
+                cwt_list.append(np.reshape(cwt_scaled, (n_cwt_scales, n_Dbins, 1)))
                 cnt += 1
 
-                if 'plot_cwt' in cwt_params and cwt_params['plot_cwt']:  # and spec[ic]['rg'][iH+rg_offsets[ic]] > 3500:
+                if 'plot_cwt' in cwt_params and cwt_params['plot_cwt']:
                     velocity_lims = [-6, 6]
                     # show spectra, normalized spectra and wavlet transformation
-                    fig, ax = Plot.spectra_wavelettransform(vel_list, spcij_minmax, cwt_norm,
-                                                           idxts=iT,   ts=ts_list[iT],
-                                                           idxrg=iH,   rg=rg_list[iH],
-                                                           colormap='cloudnet_jet',
-                                                           x_lim=velocity_lims,
-                                                           scales=cwt_params['scales'],
-                                                           fig_size=[7, 4]
-                                                           )
-                    #fig.tight_layout()
-                    #fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_minmax, cwt_params['scales'])
+                    fig, ax = Plot.spectra_wavelettransform(vel_list, spcij_scaled, cwt_scaled,
+                                                            idxts=iT, ts=ts_list[iT],
+                                                            idxrg=iH, rg=rg_list[iH],
+                                                            colormap='cloudnet_jet',
+                                                            x_lim=velocity_lims,
+                                                            scales=cwt_params['scales'],
+                                                            fig_size=[7, 4]
+                                                            )
+                    # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
                     Plot.save_figure(fig, name=f'limrad_cwt_{str(cnt).zfill(4)}_iT-iH_{str(iT).zfill(4)}-{str(iH).zfill(4)}.png', dpi=300)
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
     return cwt_list
+
 
 def equalize_rpg_radar_chirps(spec, **kwargs):
     """This routine takes a list of larda spectrum containers and equalizes the velocity dimensions.
@@ -400,14 +402,14 @@ def equalize_rpg_radar_chirps(spec, **kwargs):
         - new_spec (dict) : spectrum containing the concatinated chirps, unified to the maximum number of Doppler bins.
     """
 
-    t0         = time.time()
-    method     = kwargs['interp_method'] if 'interp_method' in kwargs else 'nearest'
-    fill_value = kwargs['fill_value']    if 'fill_value'    in kwargs else -999.0
+    t0 = time.time()
+    method = kwargs['interp_method'] if 'interp_method' in kwargs else 'nearest'
+    fill_value = kwargs['fill_value'] if 'fill_value' in kwargs else -999.0
 
     # at first find the maximums Doppler velocity fo all chrips
-    n_chirps  = len(spec)
-    N_Dbins_max = np.max([len(spec[ic]['vel'])   for ic in range(n_chirps)])
-    V_Dbins_max = np.max([spec[ic]['vel'][-1]    for ic in range(n_chirps)])
+    n_chirps = len(spec)
+    N_Dbins_max = np.max([len(spec[ic]['vel']) for ic in range(n_chirps)])
+    V_Dbins_max = np.max([spec[ic]['vel'][-1] for ic in range(n_chirps)])
     I_Dbins_max = np.argmax([spec[ic]['vel'][-1] for ic in range(n_chirps)])
 
     # most likely the first chirp has the Nyquist velocity
@@ -425,6 +427,7 @@ def equalize_rpg_radar_chirps(spec, **kwargs):
     Plot.print_elapsed_time(t0, f'Interpolation of 3rd chirp to {N_Dbins_max} Doppler bins, elapsed time = ')
 
     return new_spec
+
 
 def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     """ This routine loads the radar spectra from an RPG cloud radar and caluclates the radar moments.
@@ -452,24 +455,24 @@ def load_radar_data(larda, begin_dt, end_dt, **kwargs):
         stored in linear units [mm6 m-3]
     """
 
-    rm_prcp_ghst = kwargs['rm_precip_ghost']  if 'rm_precip_ghost'  in kwargs else False
+    rm_prcp_ghst = kwargs['rm_precip_ghost'] if 'rm_precip_ghost' in kwargs else False
     rm_crtn_ghst = kwargs['rm_curtain_ghost'] if 'rm_curtain_ghost' in kwargs else False
-    dspckl       = kwargs['do_despeckle']     if 'do_despeckle'     in kwargs else False
-    dspckl3d     = kwargs['do_despeckle3d']   if 'do_despeckle3d'   in kwargs else 95.
-    est_noise    = kwargs['estimate_noise']   if 'estimate_noise'   in kwargs else False
-    NF           = kwargs['noise_factor']     if 'noise_factor'     in kwargs else 6.0
-    main_peak    = kwargs['main_peak']        if 'main_peak'        in kwargs else True
-    fill_value   = kwargs['fill_value']       if 'fill_value'       in kwargs else -999.0
+    dspckl = kwargs['do_despeckle'] if 'do_despeckle' in kwargs else False
+    dspckl3d = kwargs['do_despeckle3d'] if 'do_despeckle3d' in kwargs else 95.
+    est_noise = kwargs['estimate_noise'] if 'estimate_noise' in kwargs else False
+    NF = kwargs['noise_factor'] if 'noise_factor' in kwargs else 6.0
+    main_peak = kwargs['main_peak'] if 'main_peak' in kwargs else True
+    fill_value = kwargs['fill_value'] if 'fill_value' in kwargs else -999.0
 
     t0 = time.time()
     radar_spectra = build_extended_container(larda, 'VSpec', begin_dt, end_dt,
                                              rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d,
-                                             estimate_noise=est_noise,     noise_factor=NF)
+                                             estimate_noise=est_noise, noise_factor=NF)
 
     radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'],
                                     despeckle=dspckl, main_peak=main_peak, filter_ghost_C1=rm_crtn_ghst)
 
-    #radar_spectra = remove_noise_from_spectra(radar_spectra)
+    # radar_spectra = remove_noise_from_spectra(radar_spectra)
 
     # replace NaN values with fill_value
     for ic in range(len(radar_spectra)):
@@ -478,16 +481,25 @@ def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     Plot.print_elapsed_time(t0, f'Reading spectra + moment calculation, elapsed time = ')
     return {'spectra': radar_spectra, 'moments': radar_moments}
 
-def load_lidar_data(larda, var_list, begin_dt, end_dt, plot_range, **kwargs):
+
+def load_lidar_data(larda, var_list, begin_dt, end_dt, **kwargs):
     t0 = time.time()
 
-    lidar_var = {var: larda.read("POLLY", var, [begin_dt, end_dt], plot_range) for var in var_list}
+    lidar_var = {var: larda.read("POLLY", var, [begin_dt, end_dt], [0, 12000]) for var in var_list}
 
     # remove multiple scattering effects caused by large field of view
     if 'msf' in kwargs and kwargs['msf']:
         assert len(lidar_var) == 2, 'multiple scattering filter needs both attbsc1064 and depol'
-        lidar_var['attbsc1064']['var'], lidar_var['depol']['var'], status_flags = Multiscatter.apply_filter(
-            lidar_var['attbsc1064'], lidar_var['depol'], despeckle=True)
+
+        status_flags = Multiscatter.get_filter_mask(lidar_var['attbsc1064'], lidar_var['depol'], despeckle=True)
+
+        logger.info(f'Number of non-liquid pixel = {np.sum(status_flags == 1)}')
+        logger.info(f'Number of liquid pixel     = {np.sum(status_flags == 2)}')
+        logger.info(f'Number of attenuated pixel = {np.sum(status_flags == 3)}')
+        lidar_var['depol']['var'], lidar_var['depol']['mask'] = Multiscatter.apply_filter_mask(status_flags, lidar_var['depol'],
+                                                                                               mask_attenuated=True, mask_liq=True)
+        lidar_var['attbsc1064']['var'], lidar_var['attbsc1064']['mask'] = Multiscatter.apply_filter_mask(status_flags, lidar_var['attbsc1064'],
+                                                                                                         mask_attenuated=True)
         lidar_var['attbsc1064'].update({'flags': status_flags})
         lidar_var['depol'].update({'flags': status_flags})
 
@@ -566,43 +578,36 @@ def make_container_from_prediction(pred_list, list_time, list_range, paraminfo, 
 def predict2container(pred, pred_list, dimensions, param_info):
     predictions = {}
     if 'attbsc1064' in pred_list:
-        bsc_shift = dimensions['label_info']['bsc_shift'] if 'bsc_shift' in dimensions else 0.0
-        bsc_lims = dimensions['label_info']['attbsc1064_lims']
+        bsc_lims = dimensions['target_info']['attbsc1064']['var_lims']
 
         # make prediction larda container
         attbsc1064_pred = make_container_from_prediction(pred[:, 0], dimensions['list_ts'], dimensions['list_rg'],
-                                                     param_info['attbsc1064'],
-                                                     dimensions['ts_radar'], dimensions['rg_radar'])
+                                                         param_info['attbsc1064'], dimensions['ts_radar'], dimensions['rg_radar'])
 
-        if dimensions['label_info']['normalization'] == 'normalize':
+        if dimensions['target_info']['attbsc1064']['scaling'] == 'normalize':
             attbsc1064_pred['var'] = attbsc1064_pred['var'] * (bsc_lims[1] - bsc_lims[0]) + bsc_lims[0]
 
-        if dimensions['label_info']['bsc_converter'] == 'log':
-            attbsc1064_pred['var'] = np.power(10., attbsc1064_pred['var'] - bsc_shift)
+        if dimensions['target_info']['attbsc1064']['var_converter'] == 'log':
+            attbsc1064_pred['var'] = np.power(10., attbsc1064_pred['var'])
 
         attbsc1064_pred['var_lims'] = bsc_lims
 
         predictions.update({'attbsc1064_pred': attbsc1064_pred})
 
-    if 'voldepol532' in pred_list:
-        dpl_shift = dimensions['label_info']['dpl_shift'] if 'dpl_shift' in dimensions else 0.0
-        dpl_lims = dimensions['label_info']['voldepol532_lims']
+    if 'depol' in pred_list:
+        dpl_lims = dimensions['target_info']['depol']['var_lims']
+        depol_pred = make_container_from_prediction(pred[:, 1], dimensions['list_ts'], dimensions['list_rg'],
+                                                          param_info['depol'], dimensions['ts_radar'], dimensions['rg_radar'])
 
+        if dimensions['target_info']['depol']['scaling'] == 'normalize':
+            depol_pred['var'] = depol_pred['var'] * (dpl_lims[1] - dpl_lims[0]) + dpl_lims[0]
 
-        voldepol532_pred = make_container_from_prediction(pred[:, 1], dimensions['list_ts'], dimensions['list_rg'],
-                                                   param_info['voldepol532'],
-                                                   dimensions['ts_radar'], dimensions['rg_radar'])
+        if dimensions['target_info']['depol']['var_converter'] == 'ldr2cdr':
+            depol_pred['var'] = cdr2ldr(depol_pred['var'])
 
+        depol_pred['var_lims'] = dpl_lims
 
-        if dimensions['label_info']['normalization'] == 'normalize':
-            voldepol532_pred['var'] = voldepol532_pred['var'] * (dpl_lims[1] - dpl_lims[0]) + dpl_lims[0]
-
-        if dimensions['label_info']['dpl_converter'] == 'ldr2cdr':
-            voldepol532_pred['var'] = cdr2ldr(voldepol532_pred['var'] - dpl_shift)
-
-        voldepol532_pred['var_lims'] = dpl_lims
-
-        predictions.update({'voldepol532_pred': voldepol532_pred})
+        predictions.update({'depol_pred': depol_pred})
 
     return predictions
 

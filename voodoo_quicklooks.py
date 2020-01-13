@@ -60,15 +60,16 @@ __status__ = "Prototype"
 ########################################################################################################################################################
 if __name__ == '__main__':
     plot_bsc_dpl_rangespec = False
+    predict_model = False
+    lidar_list = [key for key in target_info.keys() if target_info[key]['used']]
 
     start_time = time.time()
 
-    log_larda = logging.getLogger('pyLARDA')
-    log_voodoo = logging.getLogger('libVoodoo')
-    log_larda.setLevel(logging.INFO)
-    log_voodoo.setLevel(logging.INFO)
-    log_larda.addHandler(logging.StreamHandler())
-    log_voodoo.addHandler(logging.StreamHandler())
+    log = {'larda': logging.getLogger('pyLARDA'), 'voodoo': logging.getLogger('libVoodoo')}
+    log['larda'].setLevel(logging.INFO)
+    log['voodoo'].setLevel(logging.INFO)
+    log['larda'].addHandler(logging.StreamHandler())
+    log['voodoo'].addHandler(logging.StreamHandler())
 
     larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
 
@@ -97,7 +98,7 @@ if __name__ == '__main__':
                                'noise_factor': 6.0,  # number of standard deviations above mean noise
                                'main_peak': True}  # use only main peak for moment calculation
 
-        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt, **radar_input_setting)
+        radar_container = Loader.load_radar_data(larda, begin_dt, end_dt,  **radar_input_setting)
 
         n_chirp = len(radar_container['spectra'])
         n_time_LR = radar_container['moments']['Ze']['ts'].size
@@ -111,15 +112,15 @@ if __name__ == '__main__':
         #  |        |   |     \ |_____| |_____/        |   | \  | |_____] |     |    |
         #  |_____ __|__ |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
         #
-        lidar_container = Loader.load_lidar_data(larda, lidar_list, begin_dt, end_dt, plot_range, msf=True)
+
+        lidar_container = Loader.load_lidar_data(larda, lidar_list, begin_dt, end_dt, msf=True)
         n_time_Pxt = lidar_container['attbsc1064']['ts'].size
         n_range_Pxt = lidar_container['attbsc1064']['rg'].size
 
-        log_voodoo.info(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
-        log_voodoo.info(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
+        log['voodoo'].info(f'\nLIMRAD94  (n_ts, n_rg, n_vel) = ({n_time_LR},  {n_range_LR},  {n_velocity_LR})')
+        log['voodoo'].info(f'POLLYxt   (n_ts, n_rg)        = ({n_time_Pxt}, {n_range_Pxt}) \n')
 
         # interpolate polly xt data onto limrad grid (so that spectra can be used directly)
-        lidar_list = ['attbsc1064', 'depol']
         lidar_container.update({f'{var}_ip': pyLARDA.Transformations.interpolate2d(
             lidar_container[var], new_time=ts_radar, new_range=rg_radar, method='nearest') for var in lidar_list})
 
@@ -136,14 +137,13 @@ if __name__ == '__main__':
         #  |_____] |      |     |    |         |_____/ |  ____ ___ |______ |_____] |______ |            ___ ___      |        |   |     \ |_____| |_____/
         #  |       |_____ |_____|    |         |    \_ |_____|     ______| |       |______ |_____                    |_____ __|__ |_____/ |     | |    \_
         #                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    _
-
         new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
         if plot_bsc_dpl_rangespec:
             Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range, colormap='cloudnet_jet')
 
         if plot_spectra_cwt:
             time_height_mask = Loader.get_mask(new_spec, lidar_container, task='predict')
-            cwt_list = Loader.wavlet_transformation(new_spec, time_height_mask, z_converter='lin2z', **CWT_PARAMS)
+            cwt_list = Loader.wavlet_transformation(new_spec, time_height_mask, z_converter='lin2z', **feature_info['cwt'])
 
         ########################################################################################################################################################
         #  _______ _______ _     _ _______     _____   ______ _______ ______  _____ _______ _______ _____  _____  __   _
@@ -155,35 +155,25 @@ if __name__ == '__main__':
             # load weights
             file = os.path.join(MODELS_PATH, TRAINED_MODEL)
             loaded_model = keras.models.load_model(file)
-            log_voodoo.info(f'Prediction with model :: {file}')
-            log_voodoo.info('Loading input ...')
-
-            new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
+            log['voodoo'].info(f'Prediction with model :: {file}')
+            log['voodoo'].info('Loading input ...')
 
             trainingset_settings = {'n_time': n_time_LR,  # number of time steps for LIMRAD94
                                     'n_range': n_range_LR,  # number of range bins for LIMRAD94
                                     'n_Dbins': n_velocity_LR,  # number of Doppler bins steps for LIMRAD94
                                     'task': 'predict',  # masks values for specific task
-                                    'add_moments': add_moments,  # if True adding radar moments to training set
-                                    'add_spectra': add_spectra,  # if True adding radar Doppler spectra to training set
-                                    'add_cwt': add_cwt,  # if True adding cont. wavelet transformation to training set
-                                    'add_lidar_float': add_lidar_float,  # if True use regression model
-                                    'add_lidar_binary': add_lidar_binary,  # if True use binary classification
-                                    'feature_info': radar_info,  # additional information about features
-                                    'feature_list': radar_list,  # list of feature variables names
-                                    'target_info': lidar_info,  # additional information about targets
-                                    'target_list': lidar_list,  # list of target variables names
-                                    'cwt': CWT_PARAMS}  # additional information about wavelet analysis
+                                    'output_format': regression_or_binary,  # if True use regression model
+                                    'feature_info': feature_info,  # additional information about features
+                                    'target_info': target_info,  # additional information about targets
+                                    }
 
-            test_set, test_label, list_ts, list_rg = Loader.load_trainingset(new_spec, radar_container['moments'],
-                                                                             lidar_container, **trainingset_settings)
+            # loadinng the radar data and put into shape for tensorflow
+            test_set, test_label, list_ts, list_rg = Loader.load_trainingset(new_spec, radar_container['moments'], lidar_container, **trainingset_settings)
 
-            dimensions = {'list_ts': list_ts, 'list_rg': list_rg, 'ts_radar': ts_radar, 'rg_radar': rg_radar, 'target_info': lidar_info}
+            dimensions = {'list_ts': list_ts, 'list_rg': list_rg, 'ts_radar': ts_radar, 'rg_radar': rg_radar, 'target_info': target_info}
 
             lidar_pred = Model.predict_lidar(loaded_model, test_set)
-            lidar_pred_container = Loader.predict2container(lidar_pred,
-                                                            lidar_list,
-                                                            dimensions,
+            lidar_pred_container = Loader.predict2container(lidar_pred, lidar_list, dimensions,
                                                             {var: larda.connectors['POLLY'].system_info['params'][var] for var in lidar_list})
 
             ####################################################################################################################################
@@ -192,13 +182,9 @@ if __name__ == '__main__':
             # |    |___ |__|  |     |  |  |   |  |___ | \| |__| |  |  |  |___ |__/    |__] |  | |___ | \_ ___] |___ |  |  |   |  |___ |  \
             #
             if 'attbsc1064' in lidar_list and use_cnn_regression_model:
-                fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['attbsc1064_pred'],
-                                                                 fig_size=fig_size,
-                                                                 z_converter='log',
-                                                                 range_interval=plot_range,
+                fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['attbsc1064_pred'], z_converter='log',
                                                                  zlim=lidar_pred_container['attbsc1064_pred']['var_lims'],
-                                                                 rg_converter=True,
-                                                                 title=f'POLLYxt_bsc_pred_{begin_dt:%Y%m%d}')  # , contour=contour)
+                                                                 title=f'POLLYxt_bsc_pred_{begin_dt:%Y%m%d}', **plot_settings)
                 fig.tight_layout(rect=[0, 0, 1, 0.95])
                 Plot.save_figure(fig, name=f'POLLYxt_attbsc_pred_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}__{TRAINED_MODEL[:-3]}.png', dpi=300)
 
@@ -207,12 +193,10 @@ if __name__ == '__main__':
             #  |__] |    |  |  |     |  | |  | |    |  | |\/| |___    |  \ |___ |__] |  | |    |__| |__/ |   /  |__|  |  | |  | |\ |
             #  |    |___ |__|  |      \/  |__| |___ |__| |  | |___    |__/ |___ |    |__| |___ |  | |  \ |  /__ |  |  |  | |__| | \|
             #
-            if 'voldepol532' in lidar_list and use_cnn_regression_model:
-                fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['voldepol532_pred'], fig_size=fig_size,
-                                                                 range_interval=plot_range,
-                                                                 zlim=lidar_pred_container['voldepol532_pred']['var_lims'],
-                                                                 rg_converter=True,
-                                                                 title=f'POLLYxt_depol_pred_{begin_dt:%Y%m%d}')
+            if 'depol' in lidar_list and use_cnn_regression_model:
+                fig, _ = pyLARDA.Transformations.plot_timeheight(lidar_pred_container['depol_pred'],
+                                                                 zlim=lidar_pred_container['depol_pred']['var_lims'],
+                                                                 title=f'POLLYxt_depol_pred_{begin_dt:%Y%m%d}', **plot_settings)
                 fig.tight_layout(rect=[0, 0, 1, 0.95])
                 Plot.save_figure(fig, name=f'POLLYxt_depol_pred_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}__{TRAINED_MODEL[:-3]}.png', dpi=300)
 
@@ -231,11 +215,6 @@ if __name__ == '__main__':
                 lidar_pred_container['bsc']['var_unit'] = 'log10(sr^-1 m^-1)'
                 lidar_pred_container['bsc']['var_lims'] = [-7, -3]
 
-                fig, ax = pyLARDA.Transformations.plot_scatter(lidar_pred_container['dpl'],
-                                                               lidar_pred_container['bsc'],
-                                                               x_lim=[0, 0.4],
-                                                               y_lim=[-7, -3],
-                                                               # z_converter='log',
-                                                               title=titlestring)
-
+                fig, ax = pyLARDA.Transformations.plot_scatter(lidar_pred_container['dpl'], lidar_pred_container['bsc'],
+                                                               x_lim=[0, 0.4], y_lim=[-7, -3], title=titlestring)
                 Plot.save_figure(fig, name=f'scatter_polly_depol_bsc_{begin_dt:%Y-%m-%d}_{TRAINED_MODEL[:-3]}.png', dpi=200)
