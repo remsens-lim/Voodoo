@@ -139,3 +139,4 @@ if __name__ == '__main__':
         fig, ax = Plot.spectra_3by3(time_height_slice, MIRA_Zspec, **plot_kwargs)
 
         dummy = 5
+
