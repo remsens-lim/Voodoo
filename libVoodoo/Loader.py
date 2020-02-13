@@ -19,8 +19,8 @@ from scipy.interpolate import interp1d
 import logging
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-from larda.pyLARDA.spec2mom_limrad94 import spectra2moments, build_extended_container
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -388,7 +388,7 @@ def wavlet_transformation(spectra, masked, **cwt_params):
     return cwt_list
 
 
-def equalize_rpg_radar_chirps(spec, **kwargs):
+def equalize_rpg_radar_chirps(spec, varname, **kwargs):
     """This routine takes a list of larda spectrum containers and equalizes the velocity dimensions.
 
     Args:
@@ -408,15 +408,15 @@ def equalize_rpg_radar_chirps(spec, **kwargs):
 
     # at first find the maximums Doppler velocity fo all chrips
     n_chirps = len(spec)
-    N_Dbins_max = np.max([len(spec[ic]['vel']) for ic in range(n_chirps)])
-    V_Dbins_max = np.max([spec[ic]['vel'][-1] for ic in range(n_chirps)])
-    I_Dbins_max = np.argmax([spec[ic]['vel'][-1] for ic in range(n_chirps)])
+    N_Dbins_max = np.max([len(spec[ic][varname]['vel']) for ic in range(n_chirps)])
+    V_Dbins_max = np.max([spec[ic][varname]['vel'][-1] for ic in range(n_chirps)])
+    I_Dbins_max = np.argmax([spec[ic][varname]['vel'][-1] for ic in range(n_chirps)])
 
     # most likely the first chirp has the Nyquist velocity
     varstack = spec[0]['var'].copy()
     for ic in range(n_chirps):
         if ic != I_Dbins_max:
-            f = interp1d(spec[ic]['vel'], spec[ic]['var'], axis=2, kind=method, bounds_error=False, fill_value=fill_value)
+            f = interp1d(spec[ic][varname]['vel'], spec[ic][varname]['var'], axis=2, kind=method, bounds_error=False, fill_value=fill_value)
             spectra_interp = f(np.linspace(-V_Dbins_max, V_Dbins_max, N_Dbins_max))
             varstack = np.concatenate((varstack, spectra_interp), axis=1)
 
@@ -465,18 +465,29 @@ def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     fill_value = kwargs['fill_value'] if 'fill_value' in kwargs else -999.0
 
     t0 = time.time()
-    radar_spectra = build_extended_container(larda, 'VSpec', begin_dt, end_dt,
-                                             rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d,
-                                             estimate_noise=est_noise, noise_factor=NF)
+
+    time_span = [begin_dt, end_dt]
+
+    """old reader
+    from larda.pyLARDA.spec2mom_limrad94 import spectra2moments, build_extended_container
+
+    radar_spectra = build_extended_container(larda, 'VSpec', time_span,
+                                             rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d, estimate_noise=est_noise, noise_factor=NF)
 
     radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'],
                                     despeckle=dspckl, main_peak=main_peak, filter_ghost_C1=rm_crtn_ghst)
+    """
+
+    from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
+    radar_spectra = load_spectra_rpgfmcw94(larda, time_span, rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d, estimate_noise=est_noise, noise_factor=NF)
+    radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'], despeckle=dspckl, main_peak=main_peak,
+                                    filter_ghost_C1=rm_crtn_ghst)
 
     # radar_spectra = remove_noise_from_spectra(radar_spectra)
 
     # replace NaN values with fill_value
-    for ic in range(len(radar_spectra)):
-        radar_spectra[ic]['var'][np.isnan(radar_spectra[ic]['var'])] = fill_value
+    #for ic in range(len(radar_spectra)):
+    #    radar_spectra[ic]['var'][np.isnan(radar_spectra[ic]['var'])] = fill_value
 
     Plot.print_elapsed_time(t0, f'Reading spectra + moment calculation, elapsed time = ')
     return {'spectra': radar_spectra, 'moments': radar_moments}

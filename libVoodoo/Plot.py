@@ -27,6 +27,7 @@ import pyLARDA.helpers as h
 import pyLARDA.VIS_Colormaps as VIS_Colormaps
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 __author__      = "Willi Schimmel"
 __copyright__   = "Copyright 2019, The Voodoo Project"
@@ -255,7 +256,7 @@ def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
 
 
 def lidar_profile_range_spectra(lidar, spec, **kwargs):
-    fig_size    = kwargs['fig_size']    if 'fig_size'    in kwargs else [15, 8]
+    fig_size    = kwargs['fig_size']    if 'fig_size'    in kwargs else [13, 8]
     font_size   = kwargs['font_size']   if 'font_size'   in kwargs else 14
     font_weight = kwargs['font_weight'] if 'font_weight' in kwargs else 'semibold'
     path        = kwargs['path']        if 'path'        in kwargs else ''
@@ -293,7 +294,7 @@ def lidar_profile_range_spectra(lidar, spec, **kwargs):
         iT_lidar = h.argnearest(dpl['ts'], ts_list[iT])
 
         fig, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_slice, z_converter='lin2z',
-                                                                         fig_size=fig_size, v_lims=[-7, 7], grid='both',  cbar=False)
+                                                                         fig_size=fig_size, v_lims=[-4, 2], grid='both',  cbar=False)
         # additional spectrogram settings
         axspec.patch.set_facecolor('#E0E0E0')
         axspec.patch.set_alpha(0.7)

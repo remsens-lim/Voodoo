@@ -59,7 +59,7 @@ __status__ = "Prototype"
 ########################################################################################################################################################
 ########################################################################################################################################################
 if __name__ == '__main__':
-    plot_bsc_dpl_rangespec = False
+    plot_bsc_dpl_rangespec = True
     predict_model = False
     lidar_list = [key for key in target_info.keys() if target_info[key]['used']]
 
@@ -81,6 +81,7 @@ if __name__ == '__main__':
 
         begin_dt = datetime.datetime.strptime(case['begin_dt'], '%Y%m%d-%H%M%S')
         end_dt = datetime.datetime.strptime(case['end_dt'], '%Y%m%d-%H%M%S')
+        plot_range = case['plot_range']
 
         # create directory for plots
         h.change_dir(os.path.join(PLOTS_PATH + f'trainingdata-QL-{begin_dt:%Y%m%d-%H%M%S}/'))
@@ -103,7 +104,7 @@ if __name__ == '__main__':
         n_chirp = len(radar_container['spectra'])
         n_time_LR = radar_container['moments']['Ze']['ts'].size
         n_range_LR = radar_container['moments']['Ze']['rg'].size
-        n_velocity_LR = radar_container['spectra'][0]['vel'].size
+        n_velocity_LR = radar_container['spectra'][0]['VHSpec']['vel'].size
         ts_radar = radar_container['moments']['Ze']['ts']
         rg_radar = radar_container['moments']['Ze']['rg']
 
@@ -137,9 +138,10 @@ if __name__ == '__main__':
         #  |_____] |      |     |    |         |_____/ |  ____ ___ |______ |_____] |______ |            ___ ___      |        |   |     \ |_____| |_____/
         #  |       |_____ |_____|    |         |    \_ |_____|     ______| |       |______ |_____                    |_____ __|__ |_____/ |     | |    \_
         #                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    _
-        new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'])
+        new_spec = Loader.equalize_rpg_radar_chirps(radar_container['spectra'], 'VHSpec')
         if plot_bsc_dpl_rangespec:
             Plot.lidar_profile_range_spectra(lidar_container, new_spec, plot_range=plot_range, colormap='cloudnet_jet')
+            sys.exit(0)
 
         if plot_spectra_cwt:
             time_height_mask = Loader.get_mask(new_spec, lidar_container, task='predict')
