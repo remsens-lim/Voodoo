@@ -91,11 +91,63 @@ def replace_fill_value(data, newfill):
     return var
 
 
-def load_trainingset(spectra, classes, masked, **feature_info):
+def load_data(spectra, classes, status, task='', **feature_info):
+    """
+     For orientation
+
+    " status
+    \nValue 0: Clear sky.
+    \nValue 1: Good radar and lidar echos.
+    \nValue 2: Good radar echo only.
+    \nValue 3: Radar echo, corrected for liquid attenuation.
+    \nValue 4: Lidar echo only.
+    \nValue 5: Radar echo, uncorrected for liquid attenuation.
+    \nValue 6: Radar ground clutter.
+    \nValue 7: Lidar clear-air molecular scattering.";
+
+    " classes
+    \nValue 0: Clear sky.
+    \nValue 1: Cloud liquid droplets only.
+    \nValue 2: Drizzle or rain.
+    \nValue 3: Drizzle or rain coexisting with cloud liquid droplets.
+    \nValue 4: Ice particles.
+    \nValue 5: Ice coexisting with supercooled liquid droplets.
+    \nValue 6: Melting ice particles.
+    \nValue 7: Melting ice particles coexisting with cloud liquid droplets.
+    \nValue 8: Aerosol particles, no cloud or precipitation.
+    \nValue 9: Insects, no cloud or precipitation.
+    \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
+    """
     t0 = time.time()
 
+    assert len(task)>0, ValueError('Tha task kwarg has to match "train" or "predict"!')
+
+    # use only good radar & lidar echos
+    if task == 'train':
+        masked_cloudnet = np.squeeze(status['var']) != 2
+        masked_radar_ip = np.squeeze(np.all(spectra['mask'], axis=2))
+        masked_scl_class = np.squeeze(status['var']) != 5
+        masked_cdrop_class = np.squeeze(classes['var']) != 1
+        masked = masked_cloudnet + masked_radar_ip
+
+        masked[~masked_scl_class] = False  # add mixed-phase pixel to the non-masked values
+        masked[~masked_cdrop_class] = False  # add cloud droplets pixel to the non-masked values
+
+        # extract the target labels
+        # cloud droplets and mixed-phase --> label = 1,
+        # all other classes --> label = 0
+        labels = np.full(classes['var'].shape, False)
+        labels[~masked_scl_class + ~masked_cdrop_class] = True
+
+    if task == 'predict':
+        masked_radar_ip = np.squeeze(np.all(spectra['mask'], axis=2))
+        masked = masked_radar_ip # + masked_cloudnet
+
+        labels = np.zeros(classes['var'].shape, dtype=np.float32)
+        labels[~masked] = 1.0
+
+
     n_time, n_range, n_Dbins = spectra['var'].shape
-    spectra_unit = spectra['var_unit']
     spectra_3d = spectra['var'].astype('float32')
     ts_list = spectra['ts']
     rg_list = spectra['rg']
@@ -111,7 +163,7 @@ def load_trainingset(spectra, classes, masked, **feature_info):
     quick_check = False
     if quick_check:
         ZE = np.sum(spectra_3d, axis=2)
-        ZE = h.put_in_container(ZE, cwt_params['SLv'])#, **kwargs)
+        ZE = h.put_in_container(ZE, classes)#, **kwargs)
         ZE['dimlabel'] = ['time', 'range']
         ZE['name'] = ZE['name'][0]
         ZE['joints'] = ZE['joints'][0]
@@ -152,7 +204,7 @@ def load_trainingset(spectra, classes, masked, **feature_info):
 
             cwt_list.append(np.reshape(cwtmatr, (n_Dbins, n_cwt_scales, 1)))
             # one hot encodeing
-            if classes[iT, iR]:
+            if labels[iT, iR]:
                 target_labels.append([0, 1])    # "contains liquid droplets"
             else:
                 target_labels.append([1, 0])    # "non-droplet class"
@@ -169,7 +221,7 @@ def load_trainingset(spectra, classes, masked, **feature_info):
                                                         x_lims=velocity_lims,
                                                         v_lims=cwt_params['var_lims'],
                                                         scales=scales,
-                                                        hydroclass=classes[iT, iR],
+                                                        hydroclass=labels[iT, iR],
                                                         fig_size=[7, 4]
                                                         )
                 # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
@@ -177,7 +229,13 @@ def load_trainingset(spectra, classes, masked, **feature_info):
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
-    return np.array(cwt_list, dtype=np.float32), np.array(target_labels, dtype=np.float32)
+    FEATURES = np.array(cwt_list, dtype=np.float32)
+    LABELS = np.array(target_labels, dtype=np.float32)
+
+    print(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
+    print(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
+
+    return FEATURES, LABELS, masked
 
 def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     """ This routine loads the radar spectra from an RPG cloud radar and caluclates the radar moments.

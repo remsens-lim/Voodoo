@@ -130,29 +130,23 @@ class XTensorBoard(TensorBoard):
         super().on_epoch_end(epoch, logs)
 
 def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
-    CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
-    DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
-    DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
-    NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
-    KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
-    POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else ValueError('POOL_SIZE missing!')
-    ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
-    ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
-    LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
-    OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
-    BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
-    DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
-    beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
-    beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
-    learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
-    decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
-    momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
 
     if os.path.exists(MODEL_PATH):
         # load model
         model = keras.models.load_model(MODEL_PATH)
         print(f'Loaded model from disk {MODEL_PATH}')
     else:
+        CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
+        DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
+        DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
+        NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
+        KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
+        POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else ValueError('POOL_SIZE missing!')
+        ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
+        ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
+        BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
+        DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
+
         # create the model and add the input layer
         initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
         model = Sequential()
@@ -175,6 +169,14 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
 
         model.add(Dense(n_output[0], activation=ACTIVATION_OL))
         print(f"Created model {MODEL_PATH}")
+
+    LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
+    OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
+    beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
+    beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
+    learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
+    decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
+    momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
 
     if OPTIMIZER == 'sgd':
         opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)

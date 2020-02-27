@@ -17,16 +17,16 @@ Long description:
     An earlier approach was developed by Ed Luke et al. 2010
 """
 
+import datetime
+import itertools
 import logging
 import os
-import pprint
-import numpy as np
 import sys
-import datetime
-
-import itertools
 import time
+
+import numpy as np
 import toml
+from scipy.io import loadmat
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
@@ -44,7 +44,7 @@ __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
 __credits__ = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
 __license__ = "MIT"
-__version__ = "0.1.1"
+__version__ = "1.0.0"
 __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
@@ -74,6 +74,25 @@ def log_dimensions(spec_dim, cn_dim, *args):
     if len(args) > 0:
         loggers[0].info(f'Target-Input :: PollyNET\n'
                         f'      (n_ts, n_rg)        = ({args[0]["n_ts"]}, {args[0]["n_rg"]})')
+
+
+def create_filename(modelname, **kwargs):
+    if not TRAINED_MODEL:
+        name = f'{kwargs["CONV_LAYERS"]}-cl--' \
+               f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}-ks--' \
+               f'{kwargs["ACTIVATIONS"]}-af--' \
+               f'{kwargs["OPTIMIZER"]}-opt--' \
+               f'{kwargs["LOSS_FCNS"]}-loss--' \
+               f'{kwargs["BATCH_SIZE"]}-bs--' \
+               f'{kwargs["EPOCHS"]}-ep--' \
+               f'{kwargs["LEARNING_RATE"]}-lr--' \
+               f'{kwargs["DECAY_RATE"]}-dr--' \
+               f'{kwargs["DENSE_LAYERS"]}-dl--' \
+               f'{kwargs["DENSE_NODES"]}-dn--' \
+               f'{time_str}.h5'
+        return {'MODEL_PATH': MODELS_PATH + name, 'LOG_PATH': LOGS_PATH + name}
+    else:
+        return {'MODEL_PATH': MODELS_PATH + modelname, 'LOG_PATH': LOGS_PATH + modelname}
 
 
 ########################################################################################################################################################
@@ -130,26 +149,29 @@ if __name__ == '__main__':
         # case_string = '20190904-01'  # best trainingset !!!
         # case_string = '20190801-03'
 
+    if 'task' in kwargs:
+        TASK = kwargs['task']
+    else:
+        TASK = 'train'
+
     # get all loggers
     loggers = get_logger(['libVoodoo'])
 
-
+    # gather time interval, etc.
     case = Loader.load_case_list(CASE_LIST, case_string)
-
     dt_interval = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
     begin_dt, end_dt = dt_interval
     dt_string = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}'
 
     ########################################################################################################################################################
-    #   ______ _______ ______  _______  ______      _____ __   _  _____  _     _ _______
-    #  |_____/ |_____| |     \ |_____| |_____/        |   | \  | |_____] |     |    |
-    #  |    \_ |     | |_____/ |     | |    \_      __|__ |  \_| |       |_____|    |
+    #   _    ____ ____ ___     ____ ____ ___  ____ ____    ___  ____ ___ ____
+    #   |    |  | |__| |  \    |__/ |__| |  \ |__| |__/    |  \ |__|  |  |__|
+    #   |___ |__| |  | |__/    |  \ |  | |__/ |  | |  \    |__/ |  |  |  |  |
     #
-
+    #
     radar_input_setting = config_global_model['feature']['info']['VSpec']
     tfp = config_global_model['tensorflow']
 
-    from scipy.io import loadmat
 
     h.change_dir(NCPATH)
 
@@ -172,11 +194,11 @@ if __name__ == '__main__':
     rg_radar = radar_container['VSpec']['rg'].reshape(dim_input['spectra']['n_rg'])
 
     ########################################################################################################################################################
-    #  _______ _______  ______  ______ _______ _______      _____ __   _  _____  _     _ _______
-    #     |    |_____| |_____/ |  ____ |______    |           |   | \  | |_____] |     |    |   
-    #     |    |     | |    \_ |_____| |______    |         __|__ |  \_| |       |_____|    |   
+    #   _    ____ ____ ___     ____ _    ____ _  _ ___  _  _ ____ ___    ___  ____ ___ ____
+    #   |    |  | |__| |  \    |    |    |  | |  | |  \ |\ | |___  |     |  \ |__|  |  |__|
+    #   |___ |__| |  | |__/    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
+    #
     #                                                                                           
-
     target_container = {
 
         'cn_class': loadmat(f'{dt_string}_cloudnetpy94_class.mat'),
@@ -207,95 +229,34 @@ if __name__ == '__main__':
     print('cloudnet - first/last dt :: ', dt_cn, [target_container['cn_class']['rg'][0, 0], target_container['cn_class']['rg'][0, -1]])
     # print('pollynet - first/last dt :: ', dt_pn, [target_container['pn_class']['rg'][0, 0], target_container['pn_class']['rg'][0, -1]])
 
+    ############################################################################################################################################################
+    #   _    ____ ____ ___     ___ ____ ____ _ _  _ _ _  _ ____ ____ ____ ___
+    #   |    |  | |__| |  \     |  |__/ |__| | |\ | | |\ | | __ [__  |___  |
+    #   |___ |__| |  | |__/     |  |  \ |  | | | \| | | \| |__] ___] |___  |
+    #
+
+    feature_set, target_labels, masked = Loader.load_data(
+
+        radar_container['VSpec'],
+
+        target_container['cn_class'],
+
+        target_container['cn_status'],
+
+        task = TASK,
+
+        **config_global_model['feature']['info']
+
+    )
+
     ########################################################################################################################################################
-    #  _______  ______ _______ _____ __   _      _______ __   _ __   _
-    #     |    |_____/ |_____|   |   | \  |      |_____| | \  | | \  |
-    #     |    |    \_ |     | __|__ |  \_|      |     | |  \_| |  \_|
+    #   ___ ____ ____ _ _  _ _ _  _ ____
+    #    |  |__/ |__| | |\ | | |\ | | __
+    #    |  |  \ |  | | | \| | | \| |__]
     #
-    """
-    This is just for orientation
-    
-    " status
-    \nValue 0: Clear sky.
-    \nValue 1: Good radar and lidar echos.
-    \nValue 2: Good radar echo only.
-    \nValue 3: Radar echo, corrected for liquid attenuation.
-    \nValue 4: Lidar echo only.
-    \nValue 5: Radar echo, uncorrected for liquid attenuation.
-    \nValue 6: Radar ground clutter.
-    \nValue 7: Lidar clear-air molecular scattering.";
-
-    " classes
-    \nValue 0: Clear sky.
-    \nValue 1: Cloud liquid droplets only.
-    \nValue 2: Drizzle or rain.
-    \nValue 3: Drizzle or rain coexisting with cloud liquid droplets.
-    \nValue 4: Ice particles.
-    \nValue 5: Ice coexisting with supercooled liquid droplets.
-    \nValue 6: Melting ice particles.
-    \nValue 7: Melting ice particles coexisting with cloud liquid droplets.
-    \nValue 8: Aerosol particles, no cloud or precipitation.
-    \nValue 9: Insects, no cloud or precipitation.
-    \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
-    """
-    # use only good radar & lidar echos
-    masked_cloudnet = np.squeeze(target_container['cn_status']['var']) != 2
-    masked_radar_ip = np.squeeze(np.all(radar_container['VSpec']['mask'], axis=2))
-    masked_scl_class = np.squeeze(target_container['cn_class']['var']) != 5
-    masked_cdrop_class = np.squeeze(target_container['cn_class']['var']) != 1
-    masked = masked_cloudnet + masked_radar_ip
-
-    masked[~masked_scl_class] = False  # add mixed-phase pixel to the non-masked values
-    masked[~masked_cdrop_class] = False  # add cloud droplets pixel to the non-masked values
-
-    quick_check = False
-    if quick_check:
-        ZE = np.sum(radar_container['VSpec']['var'], axis=2)
-        ZE = h.put_in_container(ZE, radar_container['SLv'])  # , **kwargs)
-        ZE['dimlabel'] = ['time', 'range']
-        ZE['name'] = ZE['name'][0]
-        ZE['joints'] = ZE['joints'][0]
-        ZE['rg_unit'] = ZE['rg_unit'][0]
-        ZE['colormap'] = ZE['colormap'][0]
-        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
-        ZE['system'] = ZE['system'][0]
-        ZE['ts'] = np.squeeze(ZE['ts'])
-        ZE['rg'] = np.squeeze(ZE['rg'])
-        ZE['var_lims'] = [-60, 20]
-        ZE['var_unit'] = 'dBZ'
-        ZE['mask'] = masked
-        # create directory for plots
-        h.change_dir(f'{PLOTS_PATH}/training/{begin_dt:%Y%m%d-%H%M}-{end_dt:%H%M}/')
-
-        fig, _ = tr.plot_timeheight(ZE, z_converter='lin2z', title='bla')  # , **plot_settings)
-        Plot.save_figure(fig, name=f'mitscllimrad_ZeLV0_{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}.png', dpi=200)
-
-    # extract the target labels
-    # cloud droplets and mixed-phase --> label = 1,
-    # all other classes --> label = 0
-    valtarget = np.full(target_container['cn_class']['var'].shape, False)
-    valtarget[~masked_scl_class + ~masked_cdrop_class] = True
-    feature_set, target_labels = Loader.load_trainingset(radar_container['VSpec'], valtarget, masked,
-                                                         SLv=radar_container['SLv'], **config_global_model['feature']['info'])
-
-    # get dimensionality of the feature and target space
-    n_samples, n_input = feature_set.shape[0], feature_set.shape[1:]
-    n_output = target_labels.shape[1:]
-
-    print(f'min/max value in features = {np.min(feature_set)},  maximum = {np.max(feature_set)}')
-    print(f'min/max value in targets  = {np.min(target_labels)},  maximum = {np.max(target_labels)}')
-
-    ####################################################################################################################################
-    #  ___  ____ ____ _ _  _ ____    ____ ____ _  _ _  _ ____ _    _  _ ___ _ ____ _  _ ____ _
-    #  |  \ |___ |___ | |\ | |___    |    |  | |\ | |  | |  | |    |  |  |  | |  | |\ | |__| |
-    #  |__/ |___ |    | | \| |___    |___ |__| | \|  \/  |__| |___ |__|  |  | |__| | \| |  | |___ classifier
     #
-
-    use_cnn_classfier_model = True
-
-    if use_cnn_classfier_model:
+    if TASK == 'train':
         # loop through hyperparameter space
-
         for cl, dl, af, il, op in itertools.product(tfp['CONV_LAYERS'], tfp['DENSE_LAYERS'], tfp['ACTIVATIONS'], tfp['LOSS_FCNS'], tfp['OPTIMIZERS']):
 
             hyper_params = {
@@ -325,15 +286,13 @@ if __name__ == '__main__':
                 'DEVICE': 0
             }
 
-            if not TRAINED_MODEL:
-                new_model_name = f'{cl}-conv-{tfp["KERNEL_SIZE"][0]}_{tfp["KERNEL_SIZE"][1]}-kernelsize-{af}--{time_str}.h5'
-                hyper_params.update({'MODEL_PATH': MODELS_PATH + new_model_name,
-                                     'LOG_PATH': LOGS_PATH + new_model_name})
-            else:
-                hyper_params.update({'MODEL_PATH': MODELS_PATH + TRAINED_MODEL,
-                                     'LOG_PATH': LOGS_PATH + TRAINED_MODEL})
+            # create file name and add MODEL_PATH and LOGS_PATH to hyper_parameter dict
+            hyper_params.update(create_filename(TRAINED_MODEL, **hyper_params))
 
-            cnn_model = Model.define_cnn(n_input, n_output, **hyper_params)
+            # define a new model or load an existing one
+            cnn_model = Model.define_cnn(feature_set.shape[1:], target_labels.shape[1:], **hyper_params)
+
+            # parse the training set to the optimizer
             history = Model.training(cnn_model, feature_set, target_labels, **hyper_params)
 
             # create directory for plots
@@ -342,11 +301,68 @@ if __name__ == '__main__':
             fig, _ = Plot.History(history)
             Plot.save_figure(fig, name=f'histo_loss-acc_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=300)
 
-            #            fig, _ = Plot.LearningRate(history)
-            #            Plot.save_figure(fig, name=f'histo_learningrate_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=300)
-
             if TRAINED_MODEL:
                 break  # if a trained model was given, jump out of hyperparameter loop
+
+    ############################################################################################################################################################
+    #   ___  ____ ____ ___  _ ____ ___ _ ____ _  _
+    #   |__] |__/ |___ |  \ | |     |  | |  | |\ |
+    #   |    |  \ |___ |__/ | |___  |  | |__| | \|
+    #
+    #
+    if TASK == 'predict':
+
+        hyper_params = {
+
+            # Objective measures
+            'LOSS_FCNS': tfp['LOSS_FCNS'][0],
+            'OPTIMIZERS': tfp['OPTIMIZERS'],
+
+            # traning settings
+            'BATCH_SIZE': tfp['BATCH_SIZE'],
+            'EPOCHS': tfp['EPOCHS'],
+
+            'DEVICE': 1
+
+        }
+
+        # define a new model or load an existing one
+        cnn_model = Model.define_cnn(feature_set.shape[1:], target_labels.shape[1:], MODEL_PATH=MODELS_PATH + TRAINED_MODEL, **hyper_params)
+
+        # make predictions
+        cnn_pred = Model.predict_liquid(cnn_model, feature_set)
+
+        ts_rg_dim = (dim_target['cn_class']['n_ts'], dim_target['cn_class']['n_rg'])
+        prediction2D = np.zeros(ts_rg_dim, dtype=np.float32)
+        prediction2D_classes = np.full(ts_rg_dim, False)
+
+        cnt = 0
+        for iT in range(dim_target["cn_class"]["n_ts"]):
+            for iR in range(dim_target["cn_class"]["n_rg"]):
+                if masked[iT, iR]: continue
+                # [np.where(r == 1)[0][0] for r in a]
+                if cnn_pred[cnt, 1] > 0.5: prediction2D_classes[iT, iR] = True
+                prediction2D[iT, iR] = cnn_pred[cnt, 1]
+                cnt += 1
+
+        prediction_container = h.put_in_container(prediction2D, target_container['cn_class'])  # , **kwargs)
+        prediction_container['dimlabel'] = ['time', 'range']
+        prediction_container['name'] = 'prediction'
+        prediction_container['joints'] = ''
+        prediction_container['rg_unit'] = 'm'
+        prediction_container['colormap'] = 'coolwarm'
+        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
+        prediction_container['system'] = 'ANN'
+        prediction_container['ts'] = np.squeeze(prediction_container['ts'])
+        prediction_container['rg'] = np.squeeze(prediction_container['rg'])
+        prediction_container['var_lims'] = [prediction_container['var'].min(), prediction_container['var'].max()]
+        prediction_container['var_unit'] = 'likelihood'
+        prediction_container['mask'] = masked
+
+        # create directory for plots
+        h.change_dir(f'{PLOTS_PATH}/training/{dt_string}/')
+        fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {dt_string}')  # , **plot_settings)
+        Plot.save_figure(fig, name=f'prediction_{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}.png', dpi=200)
 
     ####################################################################################################################################
     Plot.print_elapsed_time(start_time, '\nDone, elapsed time = ')
