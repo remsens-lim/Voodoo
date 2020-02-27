@@ -11,13 +11,20 @@ import numpy as np
 # neural network imports
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras.activations import softmax, relu, sigmoid
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.losses import BinaryCrossentropy, SparseCategoricalCrossentropy, CategoricalCrossentropy
 from tensorflow.keras.models import Model as kmodel
 from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU, ReLU, Input
-from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop, Nadam
+
 from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras import backend as K
 
+from tensorflow.python import debug as tf_debug
 
+tf.compat.v1.keras.backend.set_session(
+    tf_debug.TensorBoardDebugWrapperSession(tf.compat.v1.Session(), "sdig-workstation:6006"))
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
@@ -108,134 +115,99 @@ def define_autoencoder(n_input, hyper_params):
 
     return model
 
-def add_activation(model, ACTIVATION):
-    """
-    Adds an activatin layer to a keras model.
-    Args:
-        -   ACTIVATION (string) : name of the activation function
+class XTensorBoard(TensorBoard):
+    def on_epoch_begin(self, epoch, logs=None):
+        # get values
+        lr = float(K.get_value(self.model.optimizer.lr))
+        decay = float(K.get_value(self.model.optimizer.decay))
+        # computer lr
+        lr = lr * (1. / (1 + decay * epoch))
+        K.set_value(self.model.optimizer.lr, lr)
 
-    Return:
-        -   model (tensorflow object) : the model
-    """
-    if ACTIVATION == 'leakyrelu':
-        model.add(LeakyReLU(alpha=.001))
-    elif ACTIVATION == 'relu':
-        model.add(ReLU())
-    else:
-        model.add(Activation=ACTIVATION)
-    return model
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr'] = K.get_value(self.model.optimizer.lr)
+        super().on_epoch_end(epoch, logs)
 
-def define_dense(n_input, n_output, hyper_params):
-    DENSE_LAYERS = hyper_params['DENSE_LAYERS']
-    LAYER_SIZE = hyper_params['LAYER_SIZES']
-    ACTIVATION = hyper_params['ACTIVATIONS']
-    LOSSES = hyper_params['LOSS_FCNS']
-    model_path = hyper_params['MODEL_PATH']
-    OPTIMIZER = hyper_params['OPTIMIZER']
+def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
+    CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
+    DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
+    DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
+    NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
+    KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
+    POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else ValueError('POOL_SIZE missing!')
+    ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
+    ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
+    LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
+    OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
+    BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
+    DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
+    beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
+    beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
+    learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
+    decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
+    momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
 
-    if os.path.exists(model_path):
+    if os.path.exists(MODEL_PATH):
         # load model
-        model = keras.models.load_model(model_path)
-        print(f'Loaded model from disk {model_path}')
+        model = keras.models.load_model(MODEL_PATH)
+        print(f'Loaded model from disk {MODEL_PATH}')
     else:
         # create the model and add the input layer
+        initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
         model = Sequential()
-        #model.add(LSTM(LAYER_SIZE, input_shape=(n_input,), return_sequences=True))
-        model.add(Dense(LAYER_SIZE, input_shape=(n_input,)))
-        model.add(BatchNormalization())
-        model = add_activation(model, ACTIVATION)
-
-        # add more dense layers
-        for idl in range(DENSE_LAYERS - 1):
-            #model.add(LSTM(LAYER_SIZE))
-            model.add(Dense(LAYER_SIZE))
-            model.add(BatchNormalization())
-            model = add_activation(model, ACTIVATION)
-
-        # define output layer containing 2 nodes (backscatter and depolarization)
-        model.add(Dense(n_output, activation='linear'))
-        print(f"Created model {model_path}")
-
-    if OPTIMIZER == 'sgd':
-        opt = SGD(lr=1e-2, momentum=0.5, decay=1.e-5)
-    else:
-        opt = Adam(lr=1e-4, decay=1.e-6)
-
-    model.compile(optimizer=opt,
-                  loss=LOSSES,
-                  metrics=['mae', 'mse', 'msle']
-                  )
-
-    model.summary()
-
-    return model
-
-
-
-def define_cnn(n_input, n_output, hyper_params):
-    CONV_LAYERS = hyper_params['CONV_LAYERS']
-    DENSE_LAYERS = hyper_params['DENSE_LAYERS']
-    DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else 0
-    NFILTERS = hyper_params['NFILTERS']
-    KERNEL_SIZE = hyper_params['KERNEL_SIZE']
-    POOL_SIZE = hyper_params['POOL_SIZE']
-    ACTIVATION = hyper_params['ACTIVATIONS']
-    ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'linear'
-    LOSSES = hyper_params['LOSS_FCNS']
-    model_path = hyper_params['MODEL_PATH']
-    OPTIMIZER = hyper_params['OPTIMIZER']
-    learning_rate = 1.e-3
-    decay_rate = learning_rate * 1.e-3
-    momentum = 0.9
-
-    if os.path.exists(model_path):
-        # load model
-        model = keras.models.load_model(model_path)
-        print(f'Loaded model from disk {model_path}')
-    else:
-        # create the model and add the input layer
-        model = Sequential()
-        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, input_shape=n_input, padding="same"))
-        model = add_activation(model, ACTIVATION)
+        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same", kernel_initializer=initializer))
+        if BATCH_NORM: model.add(BatchNormalization())
         model.add(MaxPool2D(pool_size=POOL_SIZE))
 
         # add more conv layers
         for idl in range(CONV_LAYERS - 1):
-            model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, padding="same"))
-            model = add_activation(model, ACTIVATION)
+            model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, activation=ACTIVATION, padding="same"))
             model.add(MaxPool2D(pool_size=POOL_SIZE))
+            if BATCH_NORM: model.add(BatchNormalization())
 
-        # define output layer containing 2 nodes (backscatter and depolarization)
         model.add(Flatten())
 
         for idense in range(DENSE_LAYERS):
-            model.add(Dense(DENSE_NODES[idense]))
-            model = add_activation(model, ACTIVATION)
+            model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION))
+            if BATCH_NORM:    model.add(BatchNormalization())
+            if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
         model.add(Dense(n_output[0], activation=ACTIVATION_OL))
-        print(f"Created model {model_path}")
-
+        print(f"Created model {MODEL_PATH}")
 
     if OPTIMIZER == 'sgd':
         opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
+    elif OPTIMIZER == 'Nadam':
+        opt = Nadam(learning_rate=learning_rate, beta_1=beta_1, beta_2=beta_2)
+    elif OPTIMIZER == 'rmsprop':
+        opt = RMSprop(learning_rate=learning_rate, rho=momentum)
     else:
         opt = Adam(lr=learning_rate, decay=decay_rate)
 
-    model.compile(optimizer=opt, loss=LOSSES, metrics=['mae', 'mse'])
+    if LOSSES == 'BinaryCrossentropy':
+        loss = BinaryCrossentropy()
+    elif LOSSES == 'CategoricalCrossentropy':
+        loss = CategoricalCrossentropy()
+    elif LOSSES == 'SparseCategoricalCrossentropy':
+        loss = SparseCategoricalCrossentropy()
+    else:
+        raise ValueError('Unknown LOSS_FCNS!', LOSSES)
 
+    model.compile(optimizer=opt, loss=loss, metrics=['CategoricalCrossentropy', 'CategoricalAccuracy'])
     model.summary()
 
     return model
 
 
-def training(model, train_set, train_label, hyper_params):
+def training(model, train_set, train_label, **hyper_params):
     #from tensorflow.python.client import device_lib
     #print(device_lib.list_local_devices())
 
-    BATCH_SIZE = hyper_params['BATCH_SIZE']
-    EPOCHS     = hyper_params['EPOCHS']
-    LOG_PATH   = hyper_params['LOG_PATH']
-    MODEL_PATH = hyper_params['MODEL_PATH']
+    BATCH_SIZE = hyper_params['BATCH_SIZE'] if 'BATCH_SIZE' in hyper_params else ValueError('BATCH_SIZE missing!')
+    EPOCHS     = hyper_params['EPOCHS'] if 'EPOCHS' in hyper_params else ValueError('EPOCHS missing!')
+    LOG_PATH   = hyper_params['LOG_PATH'] if 'LOG_PATH' in hyper_params else ValueError('LOG_PATH missing!')
+    MODEL_PATH = hyper_params['MODEL_PATH'] if 'MODEL_PATH' in hyper_params else ValueError('MODEL_PATH missing!')
     DEVICE     = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
 
     # log model training to tensorboard callback
@@ -244,14 +216,15 @@ def training(model, train_set, train_label, hyper_params):
                                        write_graph=True,
                                        write_images=True)
 
-    #with tf.device(f'/gpu:0'):
+    lr_callback = XTensorBoard(LOG_PATH)
+
     with tf.device(f'/gpu:{DEVICE}'):
         history = model.fit(train_set, train_label,
                             batch_size=BATCH_SIZE,
                             epochs=EPOCHS,
                             shuffle=True,
-                            callbacks=[tensorboard_callback],
-                            validation_split=0.0,
+                            callbacks=[tensorboard_callback],#, lr_callback],
+                            validation_split=0.1,
                             #callbacks=[PrintDot()],
                             verbose=1
                             )
@@ -260,9 +233,12 @@ def training(model, train_set, train_label, hyper_params):
         model.save(MODEL_PATH)
         print(f"Saved model to disk :: {MODEL_PATH}")
 
-    return model, history
+    return history
 
 def predict_lidar(loaded_model, test_set):
+    return loaded_model.predict(test_set, verbose=1)
+
+def predict_liquid(loaded_model, test_set):
     return loaded_model.predict(test_set, verbose=1)
 
 #
