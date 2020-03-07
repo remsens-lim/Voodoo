@@ -3,26 +3,21 @@ This module contains routines for loading and preprocessing cloud radar and lida
 
 """
 
-import sys
-from copy import deepcopy
-
-import datetime
-import toml
-import libVoodoo.Plot as Plot
-import numpy as np
-import pyLARDA.helpers as h
-import pyLARDA.Transformations as tr
-import time
-from numba import jit
-from scipy import signal
-from scipy.interpolate import interp1d
-from itertools import product
-
 import logging
+import time
+import toml
+from scipy import signal
+import numpy as np
+from tqdm.auto import tqdm
+
+from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
+import pyLARDA.Transformations as tr
+import pyLARDA.helpers as h
+
+import libVoodoo.Plot as Plot
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -40,14 +35,19 @@ def load_case_list(path, case_name):
     return config_case_studies['case'][case_name]
 
 
-def scaling(data, strat='none', **kwargs):
-    if 'var_lims' in kwargs:
-        assert len(kwargs['var_lims']) == 2, 'Error while loading data, wrong number of var_lims set for scaling!'
+def scaling(strat='none'):
+    def ident(x):
+        return x
+
+    def norm(x, min_, max_):
+        x[x < min_] = min_
+        x[x > max_] = max_
+        return (x - min_) / max(1.e-15, max_ - max_)
+
     if strat == 'normalize':
-        output = norm(data, kwargs['var_lims'][0], kwargs['var_lims'][1])
+        return norm
     else:
-        output = data * 1.0
-    return output
+        return ident
 
 
 def ldr2cdr(ldr):
@@ -58,13 +58,6 @@ def ldr2cdr(ldr):
 def cdr2ldr(cdr):
     cdr = np.array(cdr)
     return np.power(10.0, cdr) / (2 + np.power(10.0, cdr))
-
-
-# @jit(nopython=True, fastmath=True)
-def norm(x, mini, maxi):
-    x[x < mini] = mini
-    x[x > maxi] = maxi
-    return (x - mini) / max(1.e-15, maxi - mini)
 
 
 def replace_fill_value(data, newfill):
@@ -120,38 +113,34 @@ def load_data(spectra, classes, status, task='', **feature_info):
     """
     t0 = time.time()
 
-    assert len(task)>0, ValueError('Tha task kwarg has to match "train" or "predict"!')
-
-    # use only good radar & lidar echos
+    # create mask
     if task == 'train':
-        masked_cloudnet = np.squeeze(status['var']) != 2
-        masked_radar_ip = np.squeeze(np.all(spectra['mask'], axis=2))
-        masked_scl_class = np.squeeze(status['var']) != 5
-        masked_cdrop_class = np.squeeze(classes['var']) != 1
-        masked = masked_cloudnet + masked_radar_ip
+        valid_samples = np.full(np.squeeze(status['var'].shape), False)
+        valid_samples[np.squeeze(status['var']) == 1] = True  # add good radar radar & lidar
+        # valid_samples[np.squeeze(status['var']) == 2]  = True   # add good radar only
+        valid_samples[np.squeeze(classes['var']) == 5] = True  # add mixed-phase class pixel
+        # valid_samples[np.squeeze(classes['var']) == 6] = True   # add melting layer class pixel
+        # valid_samples[np.squeeze(classes['var']) == 7] = True   # add melting layer + SCL class pixel
+        valid_samples[np.squeeze(classes['var']) == 1] = True  # add cloud droplets only class
 
-        masked[~masked_scl_class] = False  # add mixed-phase pixel to the non-masked values
-        masked[~masked_cdrop_class] = False  # add cloud droplets pixel to the non-masked values
+        # at last, remove lidar only pixel caused by adding cloud droplets only class
+        valid_samples[np.squeeze(status['var']) == 3] = False
+        masked = ~valid_samples
 
-        # extract the target labels
-        # cloud droplets and mixed-phase --> label = 1,
-        # all other classes --> label = 0
-        labels = np.full(classes['var'].shape, False)
-        labels[~masked_scl_class + ~masked_cdrop_class] = True
+    elif task == 'predict':
+        masked = np.squeeze(np.all(spectra['mask'], axis=2))
 
-    if task == 'predict':
-        masked_radar_ip = np.squeeze(np.all(spectra['mask'], axis=2))
-        masked = masked_radar_ip # + masked_cloudnet
+    else:
+        raise ValueError('Unknown task given!', task)
 
-        labels = np.zeros(classes['var'].shape, dtype=np.float32)
-        labels[~masked] = 1.0
-
-
-    n_time, n_range, n_Dbins = spectra['var'].shape
-    spectra_3d = spectra['var'].astype('float32')
-    ts_list = spectra['ts']
-    rg_list = spectra['rg']
-    vel_list = spectra['vel']
+    if len(spectra['var'].shape) == 3:
+        (n_time, n_range, n_Dbins), n_chan = spectra['var'].shape, 1
+        spectra_3d = spectra['var'].reshape((n_time, n_range, n_Dbins, n_chan)).astype('float32')
+    elif len(spectra['var'].shape) == 4:
+        n_time, n_range, n_Dbins, n_chan = spectra['var'].shape
+        spectra_3d = spectra['var'].astype('float32')
+    else:
+        raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
@@ -160,26 +149,26 @@ def load_data(spectra, classes, status, task='', **feature_info):
     n_cwt_scales = int(cwt_params['scales'][2])
     scales = np.linspace(cwt_params['scales'][0], cwt_params['scales'][1], n_cwt_scales)
 
-    quick_check = False
+    quick_check = feature_info['quick_check'] if 'quick_check' in feature_info else False
     if quick_check:
-        ZE = np.sum(spectra_3d, axis=2)
-        ZE = h.put_in_container(ZE, classes)#, **kwargs)
+        ZE = np.sum(np.mean(spectra_3d, axis=3), axis=2)
+        ZE = h.put_in_container(ZE, classes)  # , **kwargs)
         ZE['dimlabel'] = ['time', 'range']
-        ZE['name'] = ZE['name'][0]
-        ZE['joints'] = ZE['joints'][0]
-        ZE['rg_unit'] = ZE['rg_unit'][0]
-        ZE['colormap'] = ZE['colormap'][0]
-        #ZE['paraminfo'] = dict(ZE['paraminfo'][0])
-        ZE['system'] = ZE['system'][0]
+        ZE['name'] = 'pseudoZe'
+        ZE['joints'] = ''
+        ZE['rg_unit'] = ''
+        ZE['colormap'] = 'jet'
+        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
+        ZE['system'] = 'LIMRAD94'
         ZE['ts'] = np.squeeze(ZE['ts'])
         ZE['rg'] = np.squeeze(ZE['rg'])
-        #ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
+        # ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
         ZE['var_lims'] = [-60, 20]
         ZE['var_unit'] = 'dBZ'
         ZE['mask'] = masked
 
-        fig, _ = tr.plot_timeheight(ZE, var_converter='lin2z', title='bla inside wavelett')#, **plot_settings)
-        Plot.save_figure(fig, name=f'limrad_cwtest.png', dpi=200)
+        fig, _ = tr.plot_timeheight(ZE, var_converter='lin2z', title='bla inside wavelett')  # , **plot_settings)
+        Plot.save_figure(fig, name=f'limrad_pseudoZe.png', dpi=200)
 
     spectra_lims = np.array(spec_params['var_lims'])
     # convert to logarithmic units
@@ -188,54 +177,88 @@ def load_data(spectra, classes, status, task='', **feature_info):
         spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
         spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
 
+    class_names = {
+        '0': 'Clear sky.',
+        '1': 'Cloud liquid droplets only.',
+        '2': 'Drizzle or rain.',
+        '3': 'Drizzle or rain coexisting with cloud liquid droplets.',
+        '4': 'Ice particles.',
+        '5': 'Ice coexisting with supercooled liquid droplets.',
+        '6': 'Melting ice particles.',
+        '7': 'Melting ice particles coexisting with cloud liquid droplets.',
+        '8': 'Insects or ground clutter',
+    }
+    classes_var = classes['var'].astype(np.int8)
 
+    # load scaling functions
+    spectra_scaler = scaling(strat='normalize')
+    cwt_scaler = scaling(strat='normalize')
     cnt = 0
-    cwt_list = []
+    feature_list = []
     target_labels = []
-    for iT in range(n_time):
-        print(f'Timestep cwt added :: {iT + 1:5d} of {n_time}')
+    print('\nFeature Extraction...:')
+    for iT in tqdm(range(n_time)):
         for iR in range(n_range):
-            if masked[iT, iR]: continue
-            spcij_scaled = scaling(spectra_3d[iT, iR, :], strat=spec_params['scaling'], var_lims=spectra_lims)
-            cwtmatr = signal.cwt(spcij_scaled, signal.ricker, scales)
+            if masked[iT, iR]: continue  # skip masked values
 
-            if 'chsgn' in cwt_params['var_converter']: cwtmatr *= -1.0
-            if 'normalize' in cwt_params['scaling']: cwtmatr = scaling(cwtmatr, strat='normalize', var_lims=cwt_params['var_lims'])
+            spc_matrix = np.empty((n_Dbins, n_chan))
+            cwt_matrix = np.empty((n_Dbins, n_cwt_scales, n_chan))
+            for iCh in range(n_chan):
+                spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
+                cwtmatr = signal.cwt(spc_matrix[:, iCh], signal.ricker, scales)
+                cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 
-            cwt_list.append(np.reshape(cwtmatr, (n_Dbins, n_cwt_scales, 1)))
-            # one hot encodeing
-            if labels[iT, iR]:
-                target_labels.append([0, 1])    # "contains liquid droplets"
+            feature_list.append(cwt_matrix)
+
+            # one hot encoding
+            if classes['var'][iT, iR] in [8, 9, 10]:
+                target_labels.append([0, 0, 0, 0, 0, 0, 0, 0, 1])  # Insects or ground clutter.
+            elif classes['var'][iT, iR] == 7:
+                target_labels.append([0, 0, 0, 0, 0, 0, 0, 1, 0])  # Melting ice particles coexisting with cloud liquid droplets.
+            elif classes['var'][iT, iR] == 6:
+                target_labels.append([0, 0, 0, 0, 0, 0, 1, 0, 0])  # Melting ice particles.
+            elif classes['var'][iT, iR] == 5:
+                target_labels.append([0, 0, 0, 0, 0, 1, 0, 0, 0])  # Ice coexisting with supercooled liquid droplets.
+            elif classes['var'][iT, iR] == 4:
+                target_labels.append([0, 0, 0, 0, 1, 0, 0, 0, 0])  # Ice particles.
+            elif classes['var'][iT, iR] == 3:
+                target_labels.append([0, 0, 0, 1, 0, 0, 0, 0, 0])  # Drizzle or rain coexisting with cloud liquid droplets.
+            elif classes['var'][iT, iR] == 2:
+                target_labels.append([0, 0, 1, 0, 0, 0, 0, 0, 0])  # Drizzle or rain.
+            elif classes['var'][iT, iR] == 1:
+                target_labels.append([0, 1, 0, 0, 0, 0, 0, 0, 0])  # Cloud liquid droplets only
             else:
-                target_labels.append([1, 0])    # "non-droplet class"
+                target_labels.append([1, 0, 0, 0, 0, 0, 0, 0, 0])  # Clear-sky
             cnt += 1
 
             if 'plot' in cwt_params and cwt_params['plot']:
                 velocity_lims = [-6, 6]
-
-                # show spectra, normalized spectra and wavlet transformation
-                fig, ax = Plot.spectra_wavelettransform(vel_list[0], spcij_scaled, cwtmatr,
-                                                        ts=ts_list[0, iT],
-                                                        rg=rg_list[0, iR],
-                                                        colormap='cloudnet_jet',
-                                                        x_lims=velocity_lims,
-                                                        v_lims=cwt_params['var_lims'],
-                                                        scales=scales,
-                                                        hydroclass=labels[iT, iR],
-                                                        fig_size=[7, 4]
-                                                        )
-                # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
-                Plot.save_figure(fig, name=f'limrad_cwt_{str(cnt).zfill(4)}_iT-iR_{str(iT).zfill(4)}-{str(iR).zfill(4)}.png', dpi=300)
+                for iCh in range(n_chan):
+                    # show spectra, normalized spectra and wavlet transformation
+                    fig, ax = Plot.spectra_wavelettransform(
+                        spectra['vel'][0], spc_matrix[:, iCh], cwt_matrix[:, :, iCh],
+                        ts=spectra['ts'][0, iT],
+                        rg=spectra['rg'][0, iR],
+                        colormap='cloudnet_jet',
+                        x_lims=velocity_lims,
+                        v_lims=cwt_params['var_lims'],
+                        scales=scales,
+                        hydroclass=class_names[classes_var[iT, iR]],
+                        fig_size=[7, 4]
+                    )
+                    # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
+                    Plot.save_figure(fig, name=f'limrad_cwt_{str(cnt).zfill(4)}_iT-iR-iCh_{str(iT).zfill(4)}-{str(iR).zfill(4)}-{iCh}.png', dpi=300)
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
-    FEATURES = np.array(cwt_list, dtype=np.float32)
+    FEATURES = np.array(feature_list, dtype=np.float32)
     LABELS = np.array(target_labels, dtype=np.float32)
 
     print(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
     print(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
 
     return FEATURES, LABELS, masked
+
 
 def load_radar_data(larda, begin_dt, end_dt, **kwargs):
     """ This routine loads the radar spectra from an RPG cloud radar and caluclates the radar moments.
@@ -276,27 +299,21 @@ def load_radar_data(larda, begin_dt, end_dt, **kwargs):
 
     time_span = [begin_dt, end_dt]
 
-    """old reader
-    from larda.pyLARDA.spec2mom_limrad94 import spectra2moments, build_extended_container
+    radar_spectra = load_spectra_rpgfmcw94(
+        larda,
+        time_span,
+        rm_precip_ghost=rm_prcp_ghst,
+        do_despeckle3d=dspckl3d,
+        estimate_noise=est_noise,
+        noise_factor=NF)
 
-    radar_spectra = build_extended_container(larda, 'VSpec', time_span,
-                                             rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d, estimate_noise=est_noise, noise_factor=NF)
-
-    radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'],
-                                    despeckle=dspckl, main_peak=main_peak, filter_ghost_C1=rm_crtn_ghst)
-    """
-
-    from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
-    radar_spectra = load_spectra_rpgfmcw94(larda, time_span, rm_precip_ghost=rm_prcp_ghst, do_despeckle3d=dspckl3d, estimate_noise=est_noise, noise_factor=NF)
-    radar_moments = spectra2moments(radar_spectra, larda.connectors['LIMRAD94'].system_info['params'], despeckle=dspckl, main_peak=main_peak,
-                                    filter_ghost_C1=rm_crtn_ghst)
-
-    # radar_spectra = remove_noise_from_spectra(radar_spectra)
-
-    # replace NaN values with fill_value
-    #for ic in range(len(radar_spectra)):
-    #    radar_spectra[ic]['var'][np.isnan(radar_spectra[ic]['var'])] = fill_value
+    radar_moments = spectra2moments(
+        radar_spectra,
+        larda.connectors['LIMRAD94'].system_info['params'],
+        despeckle=dspckl,
+        main_peak=main_peak,
+        filter_ghost_C1=rm_crtn_ghst
+    )
 
     Plot.print_elapsed_time(t0, f'Reading spectra + moment calculation, elapsed time = ')
     return {'spectra': radar_spectra, 'moments': radar_moments}
-

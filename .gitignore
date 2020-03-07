@@ -1,10 +1,13 @@
 # ignore folders
-logs/**/*
-models/**/*
-plots/**/*
-libVoodoo/plots/**/*
+/logs/**/*
+/deprecated/**/*
+/models/**/*
+/plots/**/*
+/libVoodoo/plots/**/*
 
 # ignore files
 training*
 nohup*
+
+
 

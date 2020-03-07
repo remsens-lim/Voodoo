@@ -34,18 +34,19 @@
 [tensorflow]
     window_dimension = [3, 3]
 
-    BATCH_SIZE   = 16
+    BATCH_SIZE   = 64
     BATCH_NORM   = true
-    EPOCHS       = 100
+    EPOCHS       = 25
 
     DENSE_LAYERS = [1]
     DENSE_NODES  = [64]
-    DROPOUT      = 0.1
+    DROPOUT      = 0.35
 
-    CONV_LAYERS  = [3]
-    KERNEL_SIZE  = [4, 4]
-    POOL_SIZE    = [2, 2]
-    NFILTERS     = [32, 64, 128]
+    CONV_LAYERS  = [4]
+    KERNEL_SIZE  = [2, 2]
+    #STRIDE_SIZE  = [2, 1]
+    POOL_SIZE    = [3, 2]
+    NFILTERS     = [64, 128, 256, 512]
 
     # binary classifier
     OPTIMIZERS   = ['adam']
@@ -53,8 +54,8 @@
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = ['CategoricalCrossentropy']
 
-    LEARNING_RATE = 1.0e-4
-    DECAY_RATE = 1.0e-4
+    LEARNING_RATE = [1.0e-3]
+    DECAY_RATE = 1.0e-5
     MOMENTUM = 0.9
 
     # define paths
@@ -68,6 +69,8 @@
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 [feature.info]
+    quick_check = false
+
     [feature.info.generic]
         scaling = '-'
         use = false

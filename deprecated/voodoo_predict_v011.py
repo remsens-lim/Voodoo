@@ -106,7 +106,7 @@ if __name__ == '__main__':
         # TRAINED_MODEL = '3-conv-3_3-kernelsize-relu--20200227-004401.h5'
         # TRAINED_MODEL = '3-conv-3_3-kernelsize-relu--20200227-013838.h5'
 
-    if 'case' in kwargs:
+    if 'case' in kwargs or 'date' in kwargs:
         case_string = kwargs['case']
     else:
         # load the case
@@ -292,20 +292,17 @@ if __name__ == '__main__':
                         'EPOCHS': tfp['EPOCHS'],
                         'DEVICE': 1}
 
-
         cnn_model = Model.define_cnn(n_input, n_output, MODEL_PATH=MODELS_PATH + TRAINED_MODEL, **hyper_params)
         cnn_pred = Model.predict_liquid(cnn_model, feature_set)
 
         prediction2D = np.zeros(masked.shape, dtype=np.float32)
-        prediction2D_classes = np.full(masked.shape, False)
 
         cnt = 0
         for iT in range(dim_target["cn_class"]["n_ts"]):
             for iR in range(dim_target["cn_class"]["n_rg"]):
                 if masked[iT, iR]: continue
-                #[np.where(r == 1)[0][0] for r in a]
-                if cnn_pred[cnt, 1] > 0.5: prediction2D_classes[iT, iR] = True
-                prediction2D[iT, iR] = cnn_pred[cnt, 1]
+                print([np.where(r == 1)[cnt][0] for r in cnn_pred])
+                #prediction2D[iT, iR] = [np.where(r == 1)[cnt][0] for r in cnn_pred]
                 cnt += 1
 
         prediction_container = h.put_in_container(prediction2D, target_container['cn_class'])  # , **kwargs)
@@ -313,7 +310,7 @@ if __name__ == '__main__':
         prediction_container['name'] = 'prediction'
         prediction_container['joints'] = ''
         prediction_container['rg_unit'] = 'm'
-        prediction_container['colormap'] = 'coolwarm'
+        prediction_container['colormap'] = 'ann_target'
         #ZE['paraminfo'] = dict(ZE['paraminfo'][0])
         prediction_container['system'] = 'ANN'
         prediction_container['ts'] = np.squeeze(prediction_container['ts'])

@@ -3,28 +3,25 @@ This module contains functions for generating deep learning models with Tensorfl
 
 """
 
-import copy
 import os
-import sys
-import numpy as np
+from itertools import product
 
+import numpy as np
 # neural network imports
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow import keras
-from tensorflow.keras.activations import softmax, relu, sigmoid
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Conv2D, MaxPool2D, Flatten, Input
 from tensorflow.keras.losses import BinaryCrossentropy, SparseCategoricalCrossentropy, CategoricalCrossentropy
 from tensorflow.keras.models import Model as kmodel
-from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization, LSTM, Conv2D, MaxPool2D, Flatten, LeakyReLU, ReLU, Input
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam, SGD, RMSprop, Nadam
-
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras import backend as K
-
 from tensorflow.python import debug as tf_debug
 
 tf.compat.v1.keras.backend.set_session(
     tf_debug.TensorBoardDebugWrapperSession(tf.compat.v1.Session(), "sdig-workstation:6006"))
+
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
@@ -39,7 +36,7 @@ os.environ['KMP_WARNINGS'] = 'off'
 3 = INFO, WARNING, and ERROR messages are not printed
 """
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.get_logger().setLevel('INFO')
+tf.get_logger().setLevel('ERROR')
 
 __author__      = "Willi Schimmel"
 __copyright__   = "Copyright 2019, The Voodoo Project"
@@ -62,74 +59,36 @@ __status__      = "Prototype"
 #
 ########################################################################################################################
 ########################################################################################################################
-class LogEpochScores(tf.keras.callbacks.Callback):
-    def __init__(self):
-        super(LogEpochScores, self).__init__()
-
-    def on_train_begin(self, logs=None):
-        self.model.epoch_log = []
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.model.epoch_log.append(logs)
-
-
-def define_autoencoder(n_input, hyper_params):
-    ACTIVATION = hyper_params['activations']
-    LOSSES = hyper_params['loss_fcns']
-    model_path = hyper_params['model_path']
-
-    if os.path.exists(model_path):
-        # load model
-        model = keras.models.load_model(model_path)
-        print(f'Loaded model from disk {model_path}')
-    else:
-        # create the model and add the input layer
-        model = Sequential()
-        model.add(Dense(128, input_shape=(n_input,)))
-        # model.add(BatchNormalization())
-        model.add(Activation(ACTIVATION))
-        # model.add(CuDNNLSTM(layer_size, input_shape=(n_input,), return_sequences=True))
-
-        model.add(Dense(56))
-        model.add(Activation(ACTIVATION))
-        model.add(Dropout(0.1))
-
-        model.add(Dense(128))
-        model.add(Activation(ACTIVATION))
-        model.add(Dropout(0.1))
-
-        # define output layer containing 2 nodes (backscatter and depolarization)
-        model.add(Dense(256, activation='linear'))
-        print(f"Created model {model_path}")
-
-    opt = Adam(lr=1e-3, decay=1.e-4)
-
-    model.compile(optimizer=opt,
-                  loss=LOSSES,
-                  metrics=['mae', 'mse', 'mape', 'msle']
-                  # loss='mean_squared_error',
-                  # metrics=['mean_absolute_error', 'mean_squared_error']
-                  )
-
-    model.summary()
-
-    return model
-
-class XTensorBoard(TensorBoard):
-    def on_epoch_begin(self, epoch, logs=None):
-        # get values
-        lr = float(K.get_value(self.model.optimizer.lr))
-        decay = float(K.get_value(self.model.optimizer.decay))
-        # computer lr
-        lr = lr * (1. / (1 + decay * epoch))
-        K.set_value(self.model.optimizer.lr, lr)
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        logs['lr'] = K.get_value(self.model.optimizer.lr)
-        super().on_epoch_end(epoch, logs)
 
 def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
+    """Defining/loading a Tensorflow model.
+
+    Args:
+        n_input (tuple): shape of the input tensor
+        n_output (tuple): shape of the output tensor
+
+    Keyword Args:
+        **MODEL_PATH (string): path where Tensorflow models are stored, needs to be provided when loading an existing model
+        **CONV_LAYERS (int): number of convolutional layers
+        **DENSE_LAYERS (int): number of dense layers
+        **DENSE_NODES (list): list containing the number of nodes per dense layer
+        **NFILTERS (list): list containing the number of nodes per conv layer
+        **KERNEL_SIZE (list): list containing the 2D kernel
+        **POOL_SIZE (list): dimensions of the pooling layers
+        **ACTIVATIONS (string): name of the activation functions for the convolutional layers
+        **ACTIVATION_OL (string): name of the activation functions for the dense output layer
+        **BATCH_NORM (boolean): normalize the input layer by adjusting and scaling the activations
+        **LOSS_FCNS (string): name of the loss function, default: 'CategoricalCrossentropy'
+        **OPTIMIZER (string): name of the optimizer method, default: 'adam'
+        **beta_1 (float): additional parameter for nadam optimizer, default: 0.9
+        **beta_2 (float): additional parameter for nadam optimizer, default: 0.999
+        **LEARNING_RATE (float): controls the speed of the training process, default: 1.e-4
+        **DECAY_RATE (float): controls the decay of the learning rate, default: 1.e-3
+        **MOMENTUM (float): additional parameter for optimizers, default: 0.9
+
+    Returns:
+        model (Tensorflow object): definded/loaded Tensorflow model
+    """
 
     if os.path.exists(MODEL_PATH):
         # load model
@@ -141,76 +100,109 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
         NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
         KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
-        POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else ValueError('POOL_SIZE missing!')
+        POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else False
         ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
         ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
         BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
         DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
 
         # create the model and add the input layer
-        initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+        #initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+        #regularizers = tf.keras.regularizers.l2(l=0.01)
+
         model = Sequential()
-        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same", kernel_initializer=initializer))
+
+        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
+                         #kernel_initializer=initializer,
+                         #kernel_regularizer=regularizers
+                         ))
         if BATCH_NORM: model.add(BatchNormalization())
-        model.add(MaxPool2D(pool_size=POOL_SIZE))
+        if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
 
         # add more conv layers
         for idl in range(CONV_LAYERS - 1):
-            model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, activation=ACTIVATION, padding="same"))
-            model.add(MaxPool2D(pool_size=POOL_SIZE))
+            model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, activation=ACTIVATION, padding="same",
+                             #kernel_initializer=initializer,
+                             #kernel_regularizer=regularizers
+                             ))
             if BATCH_NORM: model.add(BatchNormalization())
+            if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
 
         model.add(Flatten())
 
         for idense in range(DENSE_LAYERS):
-            model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION))
+            model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
+                            #kernel_initializer=initializer,
+                            #kernel_regularizer=regularizers
+                            ))
             if BATCH_NORM:    model.add(BatchNormalization())
             if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
         model.add(Dense(n_output[0], activation=ACTIVATION_OL))
         print(f"Created model {MODEL_PATH}")
 
-    LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
-    OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
-    beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
-    beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
-    learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
-    decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
-    momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
+        LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
+        OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
+        beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
+        beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
+        learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
+        decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
+        momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
 
-    if OPTIMIZER == 'sgd':
-        opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
-    elif OPTIMIZER == 'Nadam':
-        opt = Nadam(learning_rate=learning_rate, beta_1=beta_1, beta_2=beta_2)
-    elif OPTIMIZER == 'rmsprop':
-        opt = RMSprop(learning_rate=learning_rate, rho=momentum)
-    else:
-        opt = Adam(lr=learning_rate, decay=decay_rate)
+        if OPTIMIZER == 'sgd':
+            opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
+        elif OPTIMIZER == 'Nadam':
+            opt = Nadam(learning_rate=learning_rate, beta_1=beta_1, beta_2=beta_2)
+        elif OPTIMIZER == 'rmsprop':
+            opt = RMSprop(learning_rate=learning_rate, rho=momentum)
+        elif OPTIMIZER == 'adam':
+            opt = Adam(lr=learning_rate, decay=decay_rate)
+        else:
+            raise ValueError('Unknown OPTIMIZER!', OPTIMIZER)
 
-    if LOSSES == 'BinaryCrossentropy':
-        loss = BinaryCrossentropy()
-    elif LOSSES == 'CategoricalCrossentropy':
-        loss = CategoricalCrossentropy()
-    elif LOSSES == 'SparseCategoricalCrossentropy':
-        loss = SparseCategoricalCrossentropy()
-    else:
-        raise ValueError('Unknown LOSS_FCNS!', LOSSES)
+        if LOSSES == 'BinaryCrossentropy':
+            loss = BinaryCrossentropy()
+        elif LOSSES == 'CategoricalCrossentropy':
+            loss = CategoricalCrossentropy()
+        elif LOSSES == 'SparseCategoricalCrossentropy':
+            loss = SparseCategoricalCrossentropy()
+        else:
+            raise ValueError('Unknown LOSS_FCNS!', LOSSES)
 
-    model.compile(optimizer=opt, loss=loss, metrics=['CategoricalCrossentropy', 'CategoricalAccuracy'])
+        model.compile(optimizer=opt, loss=loss, metrics=['CategoricalCrossentropy', 'CategoricalAccuracy'])
     model.summary()
 
     return model
 
 
 def training(model, train_set, train_label, **hyper_params):
-    #from tensorflow.python.client import device_lib
-    #print(device_lib.list_local_devices())
+    """Training a Tensorflow model.
+
+    Args:
+        model (Tensorflow object): loaded Tensorflow model
+        train_set (numpy array): the training dataset (num_samples, x_dim, y_dim, 1)
+        train_label(numpy array):  the training labels (num_samples, 9)
+
+    Keyword Args: self explanatory
+        **BATCH_SIZE:
+        **EPOCHS:
+        **LOG_PATH: path for keeping the training log files
+        **MODEL_PATH: path for keeping the tensorflow optimized weights/biases
+        **DEVICE (int): GPU used, default: 0
+        **validation: [features, labels] validation dataset
+
+    Returns:
+        model (Tensorflow object): Tensorflow object stored into a file
+        history (dict): contains history of trained Tensorflow model
+
+    """
 
     BATCH_SIZE = hyper_params['BATCH_SIZE'] if 'BATCH_SIZE' in hyper_params else ValueError('BATCH_SIZE missing!')
     EPOCHS     = hyper_params['EPOCHS'] if 'EPOCHS' in hyper_params else ValueError('EPOCHS missing!')
     LOG_PATH   = hyper_params['LOG_PATH'] if 'LOG_PATH' in hyper_params else ValueError('LOG_PATH missing!')
     MODEL_PATH = hyper_params['MODEL_PATH'] if 'MODEL_PATH' in hyper_params else ValueError('MODEL_PATH missing!')
     DEVICE     = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
+    VALID_SET  = hyper_params['validation'] if 'validation' in hyper_params else ()
 
     # log model training to tensorboard callback
     tensorboard_callback = TensorBoard(log_dir=LOG_PATH,
@@ -218,17 +210,19 @@ def training(model, train_set, train_label, **hyper_params):
                                        write_graph=True,
                                        write_images=True)
 
-    lr_callback = XTensorBoard(LOG_PATH)
+    # initialize tqdm callback with default parameters
+    tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
     with tf.device(f'/gpu:{DEVICE}'):
         history = model.fit(train_set, train_label,
                             batch_size=BATCH_SIZE,
                             epochs=EPOCHS,
                             shuffle=True,
-                            callbacks=[tensorboard_callback],#, lr_callback],
-                            validation_split=0.1,
+                            callbacks=[tensorboard_callback, tqdm_callback],#, lr_callback],
+                            #validation_split=0.1,
+                            validation_data=VALID_SET,
                             #callbacks=[PrintDot()],
-                            verbose=1
+                            verbose=0
                             )
 
         # serialize model to HDF5
@@ -237,57 +231,39 @@ def training(model, train_set, train_label, **hyper_params):
 
     return history
 
-def predict_lidar(loaded_model, test_set):
-    return loaded_model.predict(test_set, verbose=1)
 
-def predict_liquid(loaded_model, test_set):
-    return loaded_model.predict(test_set, verbose=1)
+def predict_classes(model, test_set):
+    """Prediction of classes with a Tensorflow model.
 
-#
-def predict_spectra(loaded_model, test_set, dimensions):
+    Args:
+        model (Tensorflow object):  loaded Tensorflow model
+        test_set (numpy.array): the training dataset (num_samples, x_dim, y_dim, 1)
 
-    list_ts = dimensions['list_ts']
-    list_rg = dimensions['list_rg']
-    ts_radar = dimensions['ts_radar']
-    rg_radar = dimensions['rg_radar']
-    vel_radar = dimensions['rg_radar']
-    spec_orig = dimensions['spec_container']
-    system_info = dimensions['system_info']
+    Returns:
+        predicted_classes (Tensorflow object): trained Tensorflow model
+
+    """
+    return model.predict(test_set, verbose=1)
 
 
-    pred = loaded_model.predict(test_set) #, verbose=1)
+def one_hot_to_classes(cnn_pred, mask):
+    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
 
+    Args:
+        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
+        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
+
+    Returns:
+        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
+    """
+    predicted_classes = np.zeros(mask.shape, dtype=np.float32)
     cnt = 0
-    container = []
-    for ic in range(len(spec_orig)):
-        paraminfo = system_info
-        pred_var = np.full((ts_radar.size, spec_orig[ic]['rg'].size, spec_orig[ic]['vel'].size), fill_value=-999.0)
-        for iT, iR in zip(list_ts, list_rg):
-            iT, iR = int(iT), int(iR)
-            pred_var[iT, iR, :] = pred[cnt, :]
-            # print(iT, iR, pred_list[cnt], pred_var[iT, iR])
-            cnt += 1
+    for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
+        if mask[iT, iR]: continue
+        predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
+        cnt += 1
 
-        mask = np.full((ts_radar.size, spec_orig[ic]['rg'].size, spec_orig[ic]['vel'].size), fill_value=False)
-        mask[pred_var <= -999.0] = True
-        pred_var = np.ma.masked_less_equal(pred_var, -999.0)
-
-        container.append({'dimlabel': ['time', 'range', 'vel'],
-                          'filename': [],
-                          'paraminfo': copy.deepcopy(paraminfo),
-                          'rg_unit': paraminfo['rg_unit'],
-                          'colormap': paraminfo['colormap'],
-                          'var_unit': paraminfo['var_unit'],
-                          'var_lims': paraminfo['var_lims'],
-                          'system': 'autoencoder_output',
-                          'name': paraminfo['paramkey'],
-                          'rg': rg_radar.copy(),
-                          'ts': ts_radar.copy(),
-                          'vel': vel_radar.copy(),
-                          'mask': mask,
-                          'var': pred_var})
-
-    return pred
+    return predicted_classes
 
 
 # copy from https://github.com/jg-fisher/autoencoder/blob/master/ffae.py

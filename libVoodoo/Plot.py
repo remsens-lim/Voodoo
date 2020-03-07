@@ -213,14 +213,7 @@ def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
     fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [10, 5.625]
     font_size = kwargs['font_size'] if 'font_size' in kwargs else 10
     font_weight = kwargs['font_weight'] if 'font_weight' in kwargs else 'semibold'
-    hydroclass = kwargs['hydroclass'] if 'hydroclass' in kwargs else -1.
-
-    if hydroclass == 1.0:
-        class_ = 'mixed-phase'
-    elif hydroclass == 0.0:
-        class_ = 'non-liquid'
-    else:
-        class_ = 'unknown'
+    hydroclass = kwargs['hydroclass'] if 'hydroclass' in kwargs else 'non-typed'
 
     n_bins_signal = spectrum.size - np.ma.count_masked(spectrum)
 
@@ -243,7 +236,7 @@ def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
     ax[0].text(x_lims[1] - 5.0, 10, f'nnz = {n_bins_signal}', fontweight=font_weight, fontsize=font_size)
     ax[0].tick_params(axis='both', which='both', right=False, left=True, top=True)
     ax[0].tick_params(axis='both', which='major', labelsize=font_size, width=2, length=5.5)
-    ax[0].text(2.2, 0.875, f'class: {class_}',
+    ax[0].text(2.2, 0.875, f'class: {hydroclass}',
                {
                    'color': 'black', 'ha': 'left', 'va': 'center',
                    'bbox': dict(boxstyle="round", fc="white", ec="black", pad=0.2)
@@ -517,10 +510,27 @@ def print_elapsed_time(t0, string='time = '):
 
 
 def save_figure(fig, **kwargs):
+    """
+    Creates at folder and saves a matplotlib figure.
+
+    Args:
+        fig (matplotlib figure): figure to save as png
+
+    Keyword Args:
+        dpi (int): dots per inch
+        name (string): name of the png
+        path (string): path where the png is stored
+
+    Returns:    0
+
+    """
     dotsperinch = kwargs['dpi'] if 'dpi' in kwargs else 200
     name = kwargs['name'] if 'name' in kwargs else 'no-name.png'
+    path = kwargs['path'] if 'path' in kwargs else ''
+    if len(path) > 0: h.change_dir(path)
     fig.savefig(name, dpi=dotsperinch)
     logger.info(f'Save figure :: {name}')
+    return 0
 
 
 def Histogram(data, **kwargs):
