@@ -42,7 +42,7 @@ def scaling(strat='none'):
     def norm(x, min_, max_):
         x[x < min_] = min_
         x[x > max_] = max_
-        return (x - min_) / max(1.e-15, max_ - max_)
+        return (x - min_) / max(1.e-15, max_ - min_)
 
     if strat == 'normalize':
         return norm
@@ -84,7 +84,21 @@ def replace_fill_value(data, newfill):
     return var
 
 
-def load_data(spectra, classes, status, task='', **feature_info):
+def load_training_mask(classes, status):
+    # create mask
+    valid_samples = np.full(status['var'].shape, False)
+    valid_samples[status['var'] == 1] = True  # add good radar radar & lidar
+    # valid_samples[status['var'] == 2]  = True   # add good radar only
+    valid_samples[classes['var'] == 5] = True  # add mixed-phase class pixel
+    # valid_samples[classes['var'] == 6] = True   # add melting layer class pixel
+    # valid_samples[classes['var'] == 7] = True   # add melting layer + SCL class pixel
+    valid_samples[classes['var'] == 1] = True  # add cloud droplets only class
+
+    # at last, remove lidar only pixel caused by adding cloud droplets only class
+    valid_samples[status['var'] == 3] = False
+    return ~valid_samples
+
+def load_data(spectra, classes, **feature_info):
     """
      For orientation
 
@@ -113,35 +127,18 @@ def load_data(spectra, classes, status, task='', **feature_info):
     """
     t0 = time.time()
 
-    # create mask
-    if task == 'train':
-        valid_samples = np.full(np.squeeze(status['var'].shape), False)
-        valid_samples[np.squeeze(status['var']) == 1] = True  # add good radar radar & lidar
-        # valid_samples[np.squeeze(status['var']) == 2]  = True   # add good radar only
-        valid_samples[np.squeeze(classes['var']) == 5] = True  # add mixed-phase class pixel
-        # valid_samples[np.squeeze(classes['var']) == 6] = True   # add melting layer class pixel
-        # valid_samples[np.squeeze(classes['var']) == 7] = True   # add melting layer + SCL class pixel
-        valid_samples[np.squeeze(classes['var']) == 1] = True  # add cloud droplets only class
-
-        # at last, remove lidar only pixel caused by adding cloud droplets only class
-        valid_samples[np.squeeze(status['var']) == 3] = False
-        masked = ~valid_samples
-
-    elif task == 'predict':
-        masked = np.squeeze(np.all(spectra['mask'], axis=2))
-
-    else:
-        raise ValueError('Unknown task given!', task)
-
     if len(spectra['var'].shape) == 3:
         (n_time, n_range, n_Dbins), n_chan = spectra['var'].shape, 1
         spectra_3d = spectra['var'].reshape((n_time, n_range, n_Dbins, n_chan)).astype('float32')
+        spectra_mask = spectra['mask'].reshape((n_time, n_range, n_Dbins, n_chan))
     elif len(spectra['var'].shape) == 4:
         n_time, n_range, n_Dbins, n_chan = spectra['var'].shape
         spectra_3d = spectra['var'].astype('float32')
+        spectra_mask = spectra['mask']
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
+    masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
 
@@ -160,8 +157,6 @@ def load_data(spectra, classes, status, task='', **feature_info):
         ZE['colormap'] = 'jet'
         # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
         ZE['system'] = 'LIMRAD94'
-        ZE['ts'] = np.squeeze(ZE['ts'])
-        ZE['rg'] = np.squeeze(ZE['rg'])
         # ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
         ZE['var_lims'] = [-60, 20]
         ZE['var_unit'] = 'dBZ'
@@ -173,7 +168,6 @@ def load_data(spectra, classes, status, task='', **feature_info):
     spectra_lims = np.array(spec_params['var_lims'])
     # convert to logarithmic units
     if 'var_converter' in spec_params and 'lin2z' in spec_params['var_converter']:
-        spectra_unit = 'dBZ'
         spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
         spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
 
@@ -196,13 +190,13 @@ def load_data(spectra, classes, status, task='', **feature_info):
     cnt = 0
     feature_list = []
     target_labels = []
-    print('\nFeature Extraction...:')
+    print('\nFeature Extraction......')
     for iT in tqdm(range(n_time)):
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
 
-            spc_matrix = np.empty((n_Dbins, n_chan))
-            cwt_matrix = np.empty((n_Dbins, n_cwt_scales, n_chan))
+            spc_matrix = np.zeros((n_Dbins, n_chan))
+            cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan))
             for iCh in range(n_chan):
                 spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
                 cwtmatr = signal.cwt(spc_matrix[:, iCh], signal.ricker, scales)
@@ -236,14 +230,14 @@ def load_data(spectra, classes, status, task='', **feature_info):
                 for iCh in range(n_chan):
                     # show spectra, normalized spectra and wavlet transformation
                     fig, ax = Plot.spectra_wavelettransform(
-                        spectra['vel'][0], spc_matrix[:, iCh], cwt_matrix[:, :, iCh],
-                        ts=spectra['ts'][0, iT],
-                        rg=spectra['rg'][0, iR],
+                        spectra['vel'], spc_matrix[:, iCh], cwt_matrix[:, :, iCh].T,
+                        ts=spectra['ts'][iT],
+                        rg=spectra['rg'][iR],
                         colormap='cloudnet_jet',
                         x_lims=velocity_lims,
                         v_lims=cwt_params['var_lims'],
                         scales=scales,
-                        hydroclass=class_names[classes_var[iT, iR]],
+                        hydroclass=class_names[str(classes_var[iT, iR])],
                         fig_size=[7, 4]
                     )
                     # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
@@ -251,8 +245,8 @@ def load_data(spectra, classes, status, task='', **feature_info):
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
-    FEATURES = np.array(feature_list, dtype=np.float32)
-    LABELS = np.array(target_labels, dtype=np.float32)
+    FEATURES = np.array(feature_list, dtype=np.float16)
+    LABELS = np.array(target_labels, dtype=np.float16)
 
     print(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
     print(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')

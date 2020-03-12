@@ -36,7 +36,7 @@ import pyLARDA.helpers as h
 import voodoo.libVoodoo.Loader as Loader
 import voodoo.libVoodoo.Plot   as Plot
 import voodoo.libVoodoo.Model  as Model
-from voodoo.model_ini import *
+from voodoo.deprecated.model_ini import *
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"

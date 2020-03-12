@@ -34,13 +34,13 @@
 [tensorflow]
     window_dimension = [3, 3]
 
-    BATCH_SIZE   = 64
+    BATCH_SIZE   = 32
     BATCH_NORM   = true
-    EPOCHS       = 25
+    EPOCHS       =100
 
     DENSE_LAYERS = [1]
-    DENSE_NODES  = [64]
-    DROPOUT      = 0.35
+    DENSE_NODES  = [256]
+    DROPOUT      = 0.80
 
     CONV_LAYERS  = [4]
     KERNEL_SIZE  = [2, 2]
@@ -51,10 +51,10 @@
     # binary classifier
     OPTIMIZERS   = ['adam']
     ACTIVATIONS  = ['relu']
-    ACTIVATIONS_OL  = 'softmax'
+    ACTIVATIONS_OL  = 'log_softmax'
     LOSS_FCNS    = ['CategoricalCrossentropy']
 
-    LEARNING_RATE = [1.0e-3]
+    LEARNING_RATE = [1.0e-4]
     DECAY_RATE = 1.0e-5
     MOMENTUM = 0.9
 
@@ -77,7 +77,7 @@
 
     [feature.info.VSpec]
         use = true
-        var_lims = [1.0e-6, 1.0e2]
+        var_lims = [1.0e-7, 1.0e2]
         var_converter= 'lin2z'
         scaling = 'normalize'
         despeckle2D = true          # 2D convolution (5x5 window), removes single non-zero values,

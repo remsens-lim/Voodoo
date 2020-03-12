@@ -18,27 +18,30 @@ Long description:
 """
 
 import datetime
-import itertools
 import logging
 import os
 import sys
 import time
+import traceback
 
 import numpy as np
 import toml
 from scipy.io import loadmat
+from itertools import product
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
 sys.path.append('../larda/')
 
 import pyLARDA.helpers as h
-
 import pyLARDA.Transformations as tr
+import pyLARDA.SpectraProcessing as sp
 
 import voodoo.libVoodoo.Loader_v2 as Loader
 import voodoo.libVoodoo.Plot   as Plot
 import voodoo.libVoodoo.Model  as Model
+
+from generate_trainingset import load_features_from_nc
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -78,7 +81,8 @@ def log_dimensions(spec_dim, cn_dim, *args):
 
 def create_filename(modelname, **kwargs):
     if not TRAINED_MODEL:
-        name = f'{kwargs["CONV_LAYERS"]}-cl--' \
+        name = \
+               f'{kwargs["CONV_LAYERS"]}-cl--' \
                f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}-ks--' \
                f'{kwargs["ACTIVATIONS"]}-af--' \
                f'{kwargs["OPTIMIZER"]}-opt--' \
@@ -89,11 +93,44 @@ def create_filename(modelname, **kwargs):
                f'{kwargs["DECAY_RATE"]}-dr--' \
                f'{kwargs["DENSE_LAYERS"]}-dl--' \
                f'{kwargs["DENSE_NODES"]}-dn--' \
+               f'{kwargs["KIND"]}--' \
+               f'{kwargs["INPUT_DIMENSION"]}--Fdim' \
+               f'{kwargs["OUTPUT_DIMENSION"]}--Tdim' \
                f'{time_str}.h5'
         return {'MODEL_PATH': MODELS_PATH + name, 'LOG_PATH': LOGS_PATH + name}
     else:
         return {'MODEL_PATH': MODELS_PATH + modelname, 'LOG_PATH': LOGS_PATH + modelname}
 
+def intersection(lst1, lst2):
+    lst3 = [value for value in lst1 if value in lst2]
+    return np.array(lst3)
+
+
+def set_intersection(mask0, mask1):
+    mask_flt = np.where(~mask0.astype(np.bool).flatten())
+    mask1_flt = np.where(~mask1.flatten())
+    maskX_flt = intersection(mask_flt[0], mask1_flt[0])
+    len_flt = len(maskX_flt)
+    idx_list = []
+    cnt = 0
+    for iter, idx in enumerate(mask_flt[0]):
+        if cnt >= len_flt: break
+        if idx == maskX_flt[cnt]:
+            idx_list.append(iter)
+            cnt += 1
+
+    return idx_list, masked
+
+def load_matv5(path, file):
+    h.change_dir(path)
+    try:
+        data = loadmat(file)
+    except Exception as e:
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_tb)
+        raise ValueError(f'Check ~/{file}')
+
+    return data
 
 ########################################################################################################################################################
 ########################################################################################################################################################
@@ -107,147 +144,132 @@ def create_filename(modelname, **kwargs):
 ########################################################################################################################################################
 ########################################################################################################################################################
 if __name__ == '__main__':
+
     start_time = time.time()
+    load_from_nc = True
+
+    # trainingset_case = 'Multiday-01-training'
+    testingset_case = '20190801-01'
+    trainingset_case = '20190904-03'
+    validtest_case =  '' # '20190801-03'
 
     CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
-    NCPATH = '/home/sdig/code/larda3/voodoo/nc-files/spectra/'
     VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
+
+    DATA_PATH = f'{VOODOO_PATH}/data/'
+    LOGS_PATH = f'{VOODOO_PATH}/logs/'
+    MODELS_PATH = f'{VOODOO_PATH}/models/'
+    PLOTS_PATH = f'{VOODOO_PATH}/plots/'
+
+    SYSTEM = 'limrad94'
+
+    # gather command line arguments
+    method_name, args, kwargs = h._method_info_from_argv(sys.argv)
+    TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
+    TASK = kwargs['task'] if 'task' in kwargs else 'train'
+    KIND = kwargs['kind'] if 'kind' in kwargs else 'multispectra'
+
+    n_channels_ = 4 if KIND == 'multispectra' else 1
+
+    if 'case' in kwargs:
+        case_string_list = [kwargs['case']]
+    else:
+        # multiple cases
+        case_string_list = [
+            #'20190318-02',
+            #'20190102-02',
+            '20190318-99',
+        ]
 
     # gather todays date
     t0_voodoo = datetime.datetime.today()
     time_str = f'{t0_voodoo:%Y%m%d-%H%M%S}'
 
-    # load ann model parameter and other global values
-    config_global_model = toml.load(VOODOO_PATH + 'ann_model_setting.toml')
-
-    # BOARD_NAME = f'voodoo-board-{time_str}_{BATCH_SIZE}-bachsize-{EPOCHS}-epochs'
-    LOGS_PATH = f'{VOODOO_PATH}logs/'
-    MODELS_PATH = f'{VOODOO_PATH}models/'
-    PLOTS_PATH = f'{VOODOO_PATH}plots/'
-
-    # gather command line arguments
-    method_name, args, kwargs = h._method_info_from_argv(sys.argv)
-
-    if 'model' in kwargs:
-        TRAINED_MODEL = kwargs['model']
-    else:
-        # TRAINED_MODEL = '3-conv-4_4-kernelsize-relu--20200227-030455.h5'
-        # TRAINED_MODEL = '3-conv-3_3-kernelsize-relu--20200227-004401.h5'
-        # TRAINED_MODEL = '3-conv-3_3-kernelsize-relu--20200227-013838.h5'
-        TRAINED_MODEL = ''
-
-    if 'case' in kwargs:
-        case_string = kwargs['case']
-    else:
-        # load the case
-        # case_string = '20190801-01'
-        case_string = '20190410-02'
-        # case_string = '20190208-01'
-
-        # case_string = '20190304-02' # good trainingset
-        # case_string = '20190904-03'  # best trainingset !!!
-        # case_string = '20190904-01'  # best trainingset !!!
-        # case_string = '20190801-03'
-
-    if 'task' in kwargs:
-        TASK = kwargs['task']
-    else:
-        TASK = 'train'
-
     # get all loggers
     loggers = get_logger(['libVoodoo'])
 
-    # gather time interval, etc.
-    case = Loader.load_case_list(CASE_LIST, case_string)
-    dt_interval = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
-    begin_dt, end_dt = dt_interval
-    dt_string = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}'
-
-    ########################################################################################################################################################
-    #   _    ____ ____ ___     ____ ____ ___  ____ ____    ___  ____ ___ ____
-    #   |    |  | |__| |  \    |__/ |__| |  \ |__| |__/    |  \ |__|  |  |__|
-    #   |___ |__| |  | |__/    |  \ |  | |__/ |  | |  \    |__/ |  |  |  |  |
-    #
-    #
+    # load ann model parameter and other global values
+    config_global_model = toml.load(VOODOO_PATH + 'ann_model_setting.toml')
     radar_input_setting = config_global_model['feature']['info']['VSpec']
-    tfp = config_global_model['tensorflow']
+    tensorflow_settings = config_global_model['tensorflow']
 
+    feature_set = np.empty((0, 256, 32, n_channels_), dtype=np.float32)
+    target_labels = np.empty((0, 9), dtype=np.float32)
 
-    h.change_dir(NCPATH)
+    for icase, case_str in enumerate(case_string_list):
 
-    radar_container = {'VSpec': loadmat(f'{dt_string}_limrad94_spectra.mat')}
-    radar_container.update({'SLv': loadmat(f'{dt_string}_limrad94_spectra_SLv.mat')})
-    radar_container.update(loadmat(f'{dt_string}_limrad94_spectra_extra.mat'))
+        # gather time interval, etc.
+        case = Loader.load_case_list(CASE_LIST, case_str)
+        TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
+        dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
 
-    print(f'loading spectra done :: {dt_string}_limrad94_spectra.mat')
+        # check if a mat files is available
+        #mat_file_avlb = os.path.isfile(f'{DATA_PATH}/features/{KIND}/{dt_str}_{SYSTEM}_features_{KIND}.mat')
 
-    dim_input = {
+        if load_from_nc: # and not mat_file_avlb:
 
-        'spectra':
-            {'n_ts': int(radar_container['n_ts']),
-             'n_rg': int(radar_container['n_rg']),
-             'n_ch': int(radar_container['n_ch']),
-             'n_vel': int(radar_container['n_vel'])
-             }
-    }
-    ts_radar = radar_container['VSpec']['ts'].reshape(dim_input['spectra']['n_ts'])
-    rg_radar = radar_container['VSpec']['rg'].reshape(dim_input['spectra']['n_rg'])
+            feature, target, masked, _class, _status = load_features_from_nc(
+                case_str,
+                voodoo_path=VOODOO_PATH,    # NONSENSE PATH
+                data_path=DATA_PATH,
+                case_list_path=CASE_LIST,
+                kind=KIND,
+                system=SYSTEM,
+                save=True,
+                n_channels=n_channels_
+            )
 
-    ########################################################################################################################################################
-    #   _    ____ ____ ___     ____ _    ____ _  _ ___  _  _ ____ ___    ___  ____ ___ ____
-    #   |    |  | |__| |  \    |    |    |  | |  | |  \ |\ | |___  |     |  \ |__|  |  |__|
-    #   |___ |__| |  | |__/    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
-    #
-    #                                                                                           
-    target_container = {
+        else:
 
-        'cn_class': loadmat(f'{dt_string}_cloudnetpy94_class.mat'),
+            _class  = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat')
+            _status = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat')
+            feature = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')['features']
+            target = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')['labels']
+            masked = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat')['masked']
 
-        'cn_status': loadmat(f'{dt_string}_cloudnetpy94_status.mat'),
+        if icase == 0:
+            masked_set = np.empty(((0,) + masked.shape[1:]), dtype=np.bool)
+            masked_flt = np.empty((0,), dtype=np.bool)
 
-    }
+        if TASK == 'train':
 
-    dim_target = {
+            mask1 = Loader.load_training_mask(_class, _status)
+            valid_samples, masked = set_intersection(masked, mask1)
 
-        'cn_class':
-            {'n_ts': int(target_container['cn_class']['n_ts']),
-             'n_rg': int(target_container['cn_class']['n_rg'])},
+            feature_set = np.append(feature_set, feature[valid_samples, :, :, :], axis=0)
+            target_labels = np.append(target_labels, target[valid_samples, :], axis=0)
 
-        # 'pn_class':
-        #    {'n_ts': int(target_container['pn_class']['n_ts']),
-        #     'n_rg': int(target_container['pn_class']['n_rg'])}
-    }
+        elif TASK == 'predict':
 
-    # log the input dimensions (quick check for errors)
-    log_dimensions(dim_input["spectra"], dim_target["cn_class"])
+            feature_set = np.append(feature_set, feature, axis=0)
+            target_labels = np.append(target_labels, target, axis=0)
 
-    dt_radar = h.ts_to_dt(radar_container['VSpec']['ts'][0, 0]), h.ts_to_dt(radar_container['VSpec']['ts'][0, -1])
-    dt_cn = h.ts_to_dt(target_container['cn_class']['ts'][0, 0]), h.ts_to_dt(target_container['cn_class']['ts'][0, -1])
-    # dt_pn = h.ts_to_dt(target_container['pn_class']['ts'][0, 0]), h.ts_to_dt(target_container['pn_class']['ts'][0, -1])
+        else:
+            raise ValueError(f'Unknown TASK: {TASK}.')
 
-    print('radar    - first/last dt :: ', dt_radar, [radar_container['VSpec']['rg'][0, 0], radar_container['VSpec']['rg'][0, -1]])
-    print('cloudnet - first/last dt :: ', dt_cn, [target_container['cn_class']['rg'][0, 0], target_container['cn_class']['rg'][0, -1]])
-    # print('pollynet - first/last dt :: ', dt_pn, [target_container['pn_class']['rg'][0, 0], target_container['pn_class']['rg'][0, -1]])
+        masked_set = np.append(masked_set, masked, axis=0)
+        masked_flt = np.append(masked_flt, masked)
 
-    ############################################################################################################################################################
-    #   _    ____ ____ ___     ___ ____ ____ _ _  _ _ _  _ ____ ____ ____ ___
-    #   |    |  | |__| |  \     |  |__/ |__| | |\ | | |\ | | __ [__  |___  |
-    #   |___ |__| |  | |__/     |  |  \ |  | | | \| | | \| |__] ___] |___  |
-    #
+    # load validation and/or testing data
+    if len(validtest_case) > 0:
 
-    feature_set, target_labels, masked = Loader.load_data(
+        case_valid = Loader.load_case_list(CASE_LIST, validtest_case)
+        TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case_valid['time_interval']]
+        case_valid_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
+        loggers[0].info(f'\nloading... {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} of {SYSTEM} validation data')
 
-        radar_container['VSpec'],
+        # load validation feature set
+        h.change_dir(f'{DATA_PATH}/features/{KIND}/')
+        valid_f = loadmat(f'{case_valid_str}_{SYSTEM}_features_{KIND}.mat')['features']
 
-        target_container['cn_class'],
+        # load validation labels
+        h.change_dir(f'{DATA_PATH}/labels/')
+        valid_l = loadmat(f'{case_valid_str}_{SYSTEM}_labels.mat')['labels']
 
-        target_container['cn_status'],
-
-        task = TASK,
-
-        **config_global_model['feature']['info']
-
-    )
+        validation_masked = loadmat(f'{case_valid_str}_{SYSTEM}_masked.mat')['masked']
+        validation_set = (valid_f, valid_l)
+    else:
+        validation_set = ()
 
     ########################################################################################################################################################
     #   ___ ____ ____ _ _  _ _ _  _ ____
@@ -256,31 +278,43 @@ if __name__ == '__main__':
     #
     #
     if TASK == 'train':
-        # loop through hyperparameter space
-        for cl, dl, af, il, op in itertools.product(tfp['CONV_LAYERS'], tfp['DENSE_LAYERS'], tfp['ACTIVATIONS'], tfp['LOSS_FCNS'], tfp['OPTIMIZERS']):
+        model_list = []
 
+        # loop through hyperparameter space
+        for cl, dl, af, il, op, lr in product(tensorflow_settings['CONV_LAYERS'],
+                                              tensorflow_settings['DENSE_LAYERS'],
+                                              tensorflow_settings['ACTIVATIONS'],
+                                              tensorflow_settings['LOSS_FCNS'],
+                                              tensorflow_settings['OPTIMIZERS'],
+                                              tensorflow_settings['LEARNING_RATE']):
             hyper_params = {
 
                 # Convolutional part of the model
+                'KIND': KIND,
+                'INPUT_DIMENSION': str(feature_set.shape).replace(', ', '-'),
+                'OUTPUT_DIMENSION': str(target_labels.shape).replace(', ', '-'),
                 'CONV_LAYERS': cl,
-                'NFILTERS': tfp['NFILTERS'],
-                'KERNEL_SIZE': tfp['KERNEL_SIZE'],
-                'POOL_SIZE': tfp['POOL_SIZE'],
+                'NFILTERS': tensorflow_settings['NFILTERS'],
+                'KERNEL_SIZE': tensorflow_settings['KERNEL_SIZE'],
+                'POOL_SIZE': tensorflow_settings['POOL_SIZE'],
                 'ACTIVATIONS': af,
 
                 # fully connected layers
                 'DENSE_LAYERS': dl,
-                'DENSE_NODES': tfp['DENSE_NODES'],
-                'ACTIVATIONS_OL': tfp['ACTIVATIONS_OL'],
+                'DENSE_NODES': tensorflow_settings['DENSE_NODES'],
+                'ACTIVATIONS_OL': tensorflow_settings['ACTIVATIONS_OL'],
                 'LOSS_FCNS': il,
                 'OPTIMIZER': op,
 
-                # traning settings
-                'BATCH_SIZE': tfp['BATCH_SIZE'],
-                'EPOCHS': tfp['EPOCHS'],
-                'LEARNING_RATE': tfp['LEARNING_RATE'],
-                'DECAY_RATE': tfp['DECAY_RATE'],
-                'MOMENTUM': tfp['MOMENTUM'],
+                # training settings
+                'BATCH_SIZE': tensorflow_settings['BATCH_SIZE'],
+                'EPOCHS': tensorflow_settings['EPOCHS'],
+                'LEARNING_RATE': lr,
+                'DECAY_RATE': tensorflow_settings['DECAY_RATE'],
+                'MOMENTUM': tensorflow_settings['MOMENTUM'],
+
+                # validation data
+                'validation': validation_set,
 
                 # GPU
                 'DEVICE': 0
@@ -296,13 +330,18 @@ if __name__ == '__main__':
             history = Model.training(cnn_model, feature_set, target_labels, **hyper_params)
 
             # create directory for plots
-            h.change_dir(f'{PLOTS_PATH}/training/{begin_dt:%Y%m%d-%H%M}-{end_dt:%H%M}/')
-
             fig, _ = Plot.History(history)
-            Plot.save_figure(fig, name=f'histo_loss-acc_{begin_dt:%Y%m%d_%H%M%S}_{end_dt:%H%M%S}.png', dpi=300)
+            idx = hyper_params["MODEL_PATH"].rfind('/')
+            Plot.save_figure(fig,
+                             path=f'{PLOTS_PATH}/training/',
+                             name=f'histo_loss-acc_{dt_str}__{hyper_params["MODEL_PATH"][idx + 1:-3]}.png',
+                             dpi=300
+                             )
 
-            if TRAINED_MODEL:
-                break  # if a trained model was given, jump out of hyperparameter loop
+            model_list.append(hyper_params["MODEL_PATH"][idx + 1:-3])
+
+        for model in model_list:
+            loggers[0].info(f"'{model}.h5',")
 
     ############################################################################################################################################################
     #   ___  ____ ____ ___  _ ____ ___ _ ____ _  _
@@ -312,57 +351,55 @@ if __name__ == '__main__':
     #
     if TASK == 'predict':
 
+        if TRAINED_MODEL:
+            model_list = [TRAINED_MODEL]
+        else:
+            model_list = [
+                '3-cl--3_3-ks--tanh-af--adam-opt--CategoricalCrossentropy-loss--4-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64, 32]-dn--20200227-203634.h5',
+            ]
+
         hyper_params = {
-
-            # Objective measures
-            'LOSS_FCNS': tfp['LOSS_FCNS'][0],
-            'OPTIMIZERS': tfp['OPTIMIZERS'],
-
-            # traning settings
-            'BATCH_SIZE': tfp['BATCH_SIZE'],
-            'EPOCHS': tfp['EPOCHS'],
-
-            'DEVICE': 1
-
+            'DEVICE': 0
         }
 
-        # define a new model or load an existing one
-        cnn_model = Model.define_cnn(feature_set.shape[1:], target_labels.shape[1:], MODEL_PATH=MODELS_PATH + TRAINED_MODEL, **hyper_params)
+        for model_name in model_list:
+            # define a new model or load an existing one
+            cnn_model = Model.define_cnn(
+                feature_set.shape[1:], target_labels.shape[1:],
+                MODEL_PATH=MODELS_PATH + model_name,
+                **hyper_params
+            )
 
-        # make predictions
-        cnn_pred = Model.predict_liquid(cnn_model, feature_set)
+            # make predictions
+            cnn_pred = Model.predict_classes(cnn_model, feature_set)
+            prediction2D_classes = Model.one_hot_to_classes(cnn_pred, masked)
 
-        ts_rg_dim = (dim_target['cn_class']['n_ts'], dim_target['cn_class']['n_rg'])
-        prediction2D = np.zeros(ts_rg_dim, dtype=np.float32)
-        prediction2D_classes = np.full(ts_rg_dim, False)
+            # dspkl_mask = sp.despeckle2D(prediction2D_classes)
+            # prediction2D_classes[dspkl_mask] = 0.0
 
-        cnt = 0
-        for iT in range(dim_target["cn_class"]["n_ts"]):
-            for iR in range(dim_target["cn_class"]["n_rg"]):
-                if masked[iT, iR]: continue
-                # [np.where(r == 1)[0][0] for r in a]
-                if cnn_pred[cnt, 1] > 0.5: prediction2D_classes[iT, iR] = True
-                prediction2D[iT, iR] = cnn_pred[cnt, 1]
-                cnt += 1
+            prediction_container = {}
+            prediction_container['dimlabel'] = ['time', 'range']
+            prediction_container['name'] = 'CLASS'
+            prediction_container['joints'] = ''
+            prediction_container['rg_unit'] = 'm'
+            prediction_container['colormap'] = 'ann_target'
+            prediction_container['system'] = 'Voodoo'
+            prediction_container['ts'] = np.squeeze(_class['ts'])
+            prediction_container['rg'] = np.squeeze(_class['rg'])
+            prediction_container['var_lims'] = [0, 8]
+            prediction_container['var_unit'] = ''
+            prediction_container['mask'] = masked
+            prediction_container['var'] = prediction2D_classes
 
-        prediction_container = h.put_in_container(prediction2D, target_container['cn_class'])  # , **kwargs)
-        prediction_container['dimlabel'] = ['time', 'range']
-        prediction_container['name'] = 'prediction'
-        prediction_container['joints'] = ''
-        prediction_container['rg_unit'] = 'm'
-        prediction_container['colormap'] = 'coolwarm'
-        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
-        prediction_container['system'] = 'ANN'
-        prediction_container['ts'] = np.squeeze(prediction_container['ts'])
-        prediction_container['rg'] = np.squeeze(prediction_container['rg'])
-        prediction_container['var_lims'] = [prediction_container['var'].min(), prediction_container['var'].max()]
-        prediction_container['var_unit'] = 'likelihood'
-        prediction_container['mask'] = masked
+            # create directory for plots
+            fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {dt_str}',
+                                        range_interval=case['range_interval'])  # , **plot_settings)
 
-        # create directory for plots
-        h.change_dir(f'{PLOTS_PATH}/training/{dt_string}/')
-        fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {dt_string}')  # , **plot_settings)
-        Plot.save_figure(fig, name=f'prediction_{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}.png', dpi=200)
+            Plot.save_figure(fig,
+                             path=f'{PLOTS_PATH}/training/{dt_str}/',
+                             name=f'prediction_{dt_str}__{model_name}.png',
+                             dpi=200
+                             )
 
     ####################################################################################################################################
     Plot.print_elapsed_time(start_time, '\nDone, elapsed time = ')

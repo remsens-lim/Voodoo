@@ -22,12 +22,11 @@ from tensorflow.python import debug as tf_debug
 tf.compat.v1.keras.backend.set_session(
     tf_debug.TensorBoardDebugWrapperSession(tf.compat.v1.Session(), "sdig-workstation:6006"))
 
-
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
 
-#sys.path.append('../../larda/')
-#sys.path.append('.')
+# sys.path.append('../../larda/')
+# sys.path.append('.')
 
 """
 0 = all messages are logged (default behavior)
@@ -35,17 +34,17 @@ os.environ['KMP_WARNINGS'] = 'off'
 2 = INFO and WARNING messages are not printed
 3 = INFO, WARNING, and ERROR messages are not printed
 """
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.get_logger().setLevel('ERROR')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# tf.get_logger().setLevel('ERROR')
 
-__author__      = "Willi Schimmel"
-__copyright__   = "Copyright 2019, The Voodoo Project"
-__credits__     = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
-__license__     = "MIT"
-__version__     = "0.0.1"
-__maintainer__  = "Willi Schimmel"
-__email__       = "willi.schimmel@uni-leipzig.de"
-__status__      = "Prototype"
+__author__ = "Willi Schimmel"
+__copyright__ = "Copyright 2019, The Voodoo Project"
+__credits__ = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
+__license__ = "MIT"
+__version__ = "0.0.1"
+__maintainer__ = "Willi Schimmel"
+__email__ = "willi.schimmel@uni-leipzig.de"
+__status__ = "Prototype"
 
 
 ########################################################################################################################
@@ -93,7 +92,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
     if os.path.exists(MODEL_PATH):
         # load model
         model = keras.models.load_model(MODEL_PATH)
-        print(f'Loaded model from disk {MODEL_PATH}')
+        print(f'Loaded model from disk:\n{MODEL_PATH}')
     else:
         CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
         DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
@@ -107,23 +106,23 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
 
         # create the model and add the input layer
-        #initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
-        #regularizers = tf.keras.regularizers.l2(l=0.01)
+        # initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+        # regularizers = tf.keras.regularizers.l2(l=0.01)
 
         model = Sequential()
 
         model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
-                         #kernel_initializer=initializer,
-                         #kernel_regularizer=regularizers
+                         # kernel_initializer=initializer,
+                         # kernel_regularizer=regularizers
                          ))
         if BATCH_NORM: model.add(BatchNormalization())
         if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
 
         # add more conv layers
         for idl in range(CONV_LAYERS - 1):
-            model.add(Conv2D(NFILTERS[idl+1], KERNEL_SIZE, activation=ACTIVATION, padding="same",
-                             #kernel_initializer=initializer,
-                             #kernel_regularizer=regularizers
+            model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, activation=ACTIVATION, padding="same",
+                             # kernel_initializer=initializer,
+                             # kernel_regularizer=regularizers
                              ))
             if BATCH_NORM: model.add(BatchNormalization())
             if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
@@ -132,8 +131,8 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
 
         for idense in range(DENSE_LAYERS):
             model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
-                            #kernel_initializer=initializer,
-                            #kernel_regularizer=regularizers
+                            # kernel_initializer=initializer,
+                            # kernel_regularizer=regularizers
                             ))
             if BATCH_NORM:    model.add(BatchNormalization())
             if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
@@ -198,11 +197,11 @@ def training(model, train_set, train_label, **hyper_params):
     """
 
     BATCH_SIZE = hyper_params['BATCH_SIZE'] if 'BATCH_SIZE' in hyper_params else ValueError('BATCH_SIZE missing!')
-    EPOCHS     = hyper_params['EPOCHS'] if 'EPOCHS' in hyper_params else ValueError('EPOCHS missing!')
-    LOG_PATH   = hyper_params['LOG_PATH'] if 'LOG_PATH' in hyper_params else ValueError('LOG_PATH missing!')
+    EPOCHS = hyper_params['EPOCHS'] if 'EPOCHS' in hyper_params else ValueError('EPOCHS missing!')
+    LOG_PATH = hyper_params['LOG_PATH'] if 'LOG_PATH' in hyper_params else ValueError('LOG_PATH missing!')
     MODEL_PATH = hyper_params['MODEL_PATH'] if 'MODEL_PATH' in hyper_params else ValueError('MODEL_PATH missing!')
-    DEVICE     = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
-    VALID_SET  = hyper_params['validation'] if 'validation' in hyper_params else ()
+    DEVICE = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
+    VALID_SET = hyper_params['validation'] if 'validation' in hyper_params else ()
 
     # log model training to tensorboard callback
     tensorboard_callback = TensorBoard(log_dir=LOG_PATH,
@@ -214,16 +213,17 @@ def training(model, train_set, train_label, **hyper_params):
     tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
     with tf.device(f'/gpu:{DEVICE}'):
-        history = model.fit(train_set, train_label,
-                            batch_size=BATCH_SIZE,
-                            epochs=EPOCHS,
-                            shuffle=True,
-                            callbacks=[tensorboard_callback, tqdm_callback],#, lr_callback],
-                            #validation_split=0.1,
-                            validation_data=VALID_SET,
-                            #callbacks=[PrintDot()],
-                            verbose=0
-                            )
+        history = model.fit(
+            train_set, train_label,
+            batch_size=BATCH_SIZE,
+            epochs=EPOCHS,
+            shuffle=True,
+            callbacks=[tensorboard_callback, tqdm_callback],  # , lr_callback],
+            # validation_split=0.1,
+            validation_data=VALID_SET,
+            # callbacks=[PrintDot()],
+            verbose=0
+        )
 
         # serialize model to HDF5
         model.save(MODEL_PATH)
