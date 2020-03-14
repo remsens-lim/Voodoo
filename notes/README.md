@@ -59,7 +59,7 @@ The new approach further exteds the ideas of [Luke et al. 2010](https://www.esrl
 
 The following three data sources are used for the training period of the neural net:
 
--   **cloud radar Doppler spectra**  <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/5bff1259645cc74d1fd3e1bc97bc8f5c.svg?invert_in_darkmode" align=middle width=112.16893214999997pt height=26.76175259999998pt/> in 3D array shape with the dimensions <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/4845884305e2f00ba8b855e5d1146d85.svg?invert_in_darkmode" align=middle width=151.1625819pt height=24.65753399999998pt/>, where <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/68fe97fb12f1d5c27154af2b2f7a25d9.svg?invert_in_darkmode" align=middle width=14.832668399999989pt height=14.15524440000002pt/> is the number sampling times (depends time span and temporal resolution of the radar), <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/2023f5dfd78a4063d5b4fa31be81f828.svg?invert_in_darkmode" align=middle width=16.324324499999992pt height=14.15524440000002pt/> the number of range gates (depending on the vertial range resolution) and <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/da6bcff3e68efc4ff1c088e75a8eb2ac.svg?invert_in_darkmode" align=middle width=16.85513774999999pt height=14.15524440000002pt/> the number of velocity bins (depending on the chirp table settings)
+-   **cloud radar Doppler spectra**  $\mathcal{S}\in[10^{-7}, 10^{2}]^3$ in 3D array shape with the dimensions $\dim(\mathcal{S})=(n_t, n_r, n_v)$, where $n_t$ is the number sampling times (depends time span and temporal resolution of the radar), $n_r$ the number of range gates (depending on the vertial range resolution) and $n_v$ the number of velocity bins (depending on the chirp table settings)
 
     <p>
       <img src="0096_20190110_130006_UTC_4770m.png" width="405" height="280"/>
@@ -74,7 +74,7 @@ The following three data sources are used for the training period of the neural 
 
     
 
--   **Cloudnet target classification**  <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/5d445ddd10a3a72bf7626ac32e9ca354.svg?invert_in_darkmode" align=middle width=77.35386614999999pt height=26.76175259999998pt/> in 2D array shape with  dimensions <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/63e571d50dbdf40fea366357cf1307fa.svg?invert_in_darkmode" align=middle width=124.60670805pt height=24.65753399999998pt/> contains the different classes the range of integer values from 0 to 10
+-   **Cloudnet target classification**  $\mathcal{C}\in[0, 10]^2$ in 2D array shape with  dimensions $\dim(\mathcal{C})=(n_t, n_r)$ contains the different classes the range of integer values from 0 to 10
     
     0.  Clear sky
     1.  Cloud liquid droplets only.
@@ -88,7 +88,7 @@ The following three data sources are used for the training period of the neural 
     9.   Insects, no cloud or precipitation.
 10.  Aerosol coexisting with insects, no cloud or precipitation.
     
--   **Cloudnet detection status** <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/0cba8b49860c002264e0ae9b00504ff2.svg?invert_in_darkmode" align=middle width=72.65749919999999pt height=26.76175259999998pt/> in 2D array shape with dimensions <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/37273028a281d750c73b2132e6b54448.svg?invert_in_darkmode" align=middle width=128.12955044999998pt height=24.65753399999998pt/> contains the detection status in the range of integer values from 0 to 7
+-   **Cloudnet detection status** $\mathcal{D}\in[0, 7]^2$ in 2D array shape with dimensions $\dim(\mathcal{D})=(n_t, n_r)$ contains the detection status in the range of integer values from 0 to 7
 
      0. Clear sky.
      1. Good radar and lidar echos.
@@ -118,19 +118,31 @@ Assuming a Gaussian distribution of the radar signal, similar to  [Luke et al. 2
 
 Since the temporal resolution of Cloudnet products is ~30 [sec] we try to increase the information content per sample by applying different technquies to create the input tensor for the neural network:
 
-1.  For each Cloudnet timestep <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/02ab12d0013b89c8edc7f0f2662fa7a9.svg?invert_in_darkmode" align=middle width=10.58699729999999pt height=20.221802699999984pt/>, average <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/2f048efc7b6b4b114215955c0be34c1b.svg?invert_in_darkmode" align=middle width=95.86134359999998pt height=37.80850590000001pt/> spectra: <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/0d9bd83ee3fe58b01a7ff901ac371bc2.svg?invert_in_darkmode" align=middle width=150.94482479999996pt height=44.26512749999999pt/>, 
+1.  For each Cloudnet timestep $t_i$, average $n_{t’}=\left\lfloor{\frac{\bigtriangleup t_{\mathrm{cn}}}{\bigtriangleup t_{\mathrm{rdr}}}}\right\rfloor$ spectra: $\left\langle \mathcal{S}(t_i) \right\rangle = \tfrac{1}{n_{t’}} \sum\limits_{i}^{n_{t’}}\mathcal{S}(t_i)$, 
 
     where $\bigtriangleup t_{\mathrm{cn}}=30$ [sec] is the temporal resolution of Cloudnet products, and $\bigtriangleup t_{\mathrm{rdr}}$ the cloud radar resolution respectivley. The CWT is then performed with the averaged spectrum $\left\langle \mathcal{S} \right\rangle$. Using $n_s=32$ scales for the CWT feauture extraction, the resulting input Tensor is a _greyscale_ image with the overall resulting tensor dimension of  $\mathrm{N}=(n_{\mathrm{smpl}},\, n_{v},\, n_{s}, 1)$.
 
-2.  For each Cloudnet timestep <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/02ab12d0013b89c8edc7f0f2662fa7a9.svg?invert_in_darkmode" align=middle width=10.58699729999999pt height=20.221802699999984pt/>, concatinate <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/fb667b7f1eb46e651c97ee7e803fc9a0.svg?invert_in_darkmode" align=middle width=15.74152799999999pt height=14.15524440000002pt/> channels of CWT into one sample, which leads to an increase in the resulting tensor dimension as follows <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/094477bb65bd5e3ebb4a7a4118a93a49.svg?invert_in_darkmode" align=middle width=163.23999944999997pt height=24.65753399999998pt/>.
+2.  For each Cloudnet timestep $t_i$, concatinate $n_{c}$ channels of CWT into one sample, which leads to an increase in the resulting tensor dimension as follows $\mathrm{N}=(n_{\mathrm{smpl}},\, n_{v},\, n_{s}, n_{c})$.
 
-The automatic selection of _trustworthy_ samples from all possible radar returns is done using the Cloudnet target classification and the detection status <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/eaf85f2b753a4c7585def4cc7ecade43.svg?invert_in_darkmode" align=middle width=13.13706569999999pt height=22.465723500000017pt/>. The training set is selected as follows:
+The automatic selection of _trustworthy_ samples from all possible radar returns is done using the Cloudnet target classification and the detection status $\mathcal{D}$. The training set is selected as follows:
 
-<img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/0bb8989e2ead9edeb67fff1d65705d87.svg?invert_in_darkmode" align=middle width=213.78864374999998pt height=24.986421900000003pt/>,
+$
+\begin{aligned}
+ 		\{\mathcal{S}, \mathcal{C}\}_{\mathrm{train}} = \mathbb{E}_{\mathcal{S}, \mathcal{C}\sim\hat{p}_{\mathrm{data}}}[\mathcal{I}_\mathrm{train}]
+\end{aligned}
+$,
 
-where <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/ad05d0352850a20590980df056379539.svg?invert_in_darkmode" align=middle width=70.337685pt height=22.648391699999998pt/> represent the dataset (featue samples and labels) for the group of indices <img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/e667fb494c3e4abd608aa9ec6112bb8b.svg?invert_in_darkmode" align=middle width=36.759318749999984pt height=22.465723500000017pt/> that obey the following equation
+where $\mathbb{E}_{\mathcal{S}, \mathcal{C}\sim\hat{p}_{\mathrm{data}}}$ represent the dataset (featue samples and labels) for the group of indices $\mathcal{I}_\mathrm{train}$ that obey the following equation
 
-<img src="https://rawgit.com/KarlJohnsonnn/Voodoo/master/svgs/29827de7d002fe4f56425b3f0270456f.svg?invert_in_darkmode" align=middle width=385.84111005pt height=24.986421900000003pt/>.
+$
+\begin{aligned}
+ 		\mathcal{I}_\mathrm{train} = \{
+ 		\mathcal{I}(\mathcal{D}=0)
+ 		\cup\mathcal{I}(\mathcal{C}=1)
+ 		\cup\mathcal{I}(\mathcal{C}=4)\}
+ 		\setminus\mathcal{I}(\mathcal{D}=3)
+\end{aligned}
+$.
 
 ### 1.4 Artificial Neural Network
 
@@ -154,16 +166,18 @@ The date used is the 1. August 2019 in Punta Arenas, Chile. This day was not use
 
 Shown below are predictions of hydrometor classes for different hyperparameter configurations and training sets.
 
-![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--multispectra--20200311-161425.h5](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--multispectra--20200311-161425.h5.png)
 
-![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-213906.h5_wibn](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-213906.h5_wibn.png)
 
-![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--42-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-180520.h5](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--42-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-180520.h5.png)
+![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--multispectra--20200311-161425.h5](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--multispectra--20200311-161425.h5.png)
 
-![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--32-bs--20-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200306-173000.h5](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--32-bs--20-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200306-173000.h5.png)
+![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-213906.h5_wibn](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-213906.h5_wibn.png)
 
-![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--20-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-171252.h5](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--20-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-171252.h5.png)
+![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--42-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-180520.h5](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--42-bs--25-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-180520.h5.png)
 
-![prediction_20190801_0459-0901__3-cl--3_3-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--16-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200301-152259.h5](/Users/willi/code/python/larda3/voodoo/plots/training/20190313_1001-1559/prediction_20190801_0459-0901__3-cl--3_3-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--16-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200301-152259.h5.png)
+![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--32-bs--20-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200306-173000.h5](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--32-bs--20-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200306-173000.h5.png)
+
+![prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--20-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-171252.h5](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__4-cl--2_2-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--64-bs--20-ep--0.001-lr--1e-05-dr--1-dl--[64]-dn--20200306-171252.h5.png)
+
+![prediction_20190801_0459-0901__3-cl--3_3-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--16-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200301-152259.h5](/Users/willi/code/python/larda3/voodoo/notes/prediction_20190801_0459-0901__3-cl--3_3-ks--relu-af--adam-opt--CategoricalCrossentropy-loss--16-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64]-dn--20200301-152259.h5.png)
 
 It clear that all combinations of hyperparameter produce a different classification. Nevertheless, the mixed-phase area between 6 UTC and 7 UTC between 2 and 3 km altitude is clearly visible in all of the models. This is a visible prove that the ANN was able to generalize well, to a certain degree.
