@@ -7,7 +7,7 @@ Short description:
 import sys
 from datetime import timedelta, datetime
 
-sys.path.append('../larda_connected/')
+sys.path.append('../larda/')
 sys.path.append('.')
 
 from time import time
@@ -23,11 +23,10 @@ from tqdm.auto import tqdm
 
 import pyLARDA
 import pyLARDA.SpectraProcessing as sp
-from larda.pyLARDA.Transformations import plot_timeheight
-
-from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
 import pyLARDA.Transformations as tr
 import pyLARDA.helpers as h
+from larda.pyLARDA.Transformations import plot_timeheight
+from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
 
 import voodoo.libVoodoo.Plot   as Plot
 import libVoodoo.Plot as Plot
@@ -211,8 +210,8 @@ def load_features_and_labels(spectra, classes, **feature_info):
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
 
-            spc_matrix = np.zeros((n_Dbins, n_chan))
-            cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan))
+            spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
+            cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
             for iCh in range(n_chan):
                 spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
                 cwtmatr = signal.cwt(spc_matrix[:, iCh], signal.ricker, scales)
@@ -500,15 +499,13 @@ def interpolate3d(data, mask_thres=0.1, **kwargs):
 
 
 def load_features_from_nc(
-        case_string,
+        time_span,
         voodoo_path='',
         data_path='',
-        case_list_path='',
-        kind='3spectra',
+        kind='1HSI',
         system='limra94',
         interp='rectbivar',
         save=True,
-        task='predict',
         **kwargs
 ):
     def quick_check(dummy_container, name_str):
@@ -544,13 +541,11 @@ def load_features_from_nc(
     # Load LARDA
     larda_connected = pyLARDA.LARDA().connect('lacros_dacapo_gpu')
 
-    # load case information
-    case = load_case_list(case_list_path, case_string)
+    TIME_SPAN_ = time_span
 
-    TIME_SPAN_ = [datetime.strptime(case['time_interval'][0], '%Y%m%d-%H%M'),
-                  datetime.strptime(case['time_interval'][1], '%Y%m%d-%H%M')]
-    TIME_SPAN_2 = [datetime.strptime(case['time_interval'][0], '%Y%m%d-%H%M') - timedelta(seconds=100.0),
-                   datetime.strptime(case['time_interval'][1], '%Y%m%d-%H%M') + timedelta(seconds=100.0)]
+    TIME_SPAN_2 = [TIME_SPAN_[0] - timedelta(seconds=35.0),
+                   TIME_SPAN_[1] + timedelta(seconds=35.0)]
+
     begin_dt, end_dt = TIME_SPAN_
     dt_string = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}'
 
@@ -714,27 +709,37 @@ if __name__ == '__main__':
     import traceback
     start_time = time()
 
-    VOODOO_PATH = '/home/sdig/code/larda_connected3/voodoo/'
-    DATA_PATH = '/home/sdig/code/larda_connected3/voodoo/data/'
-    CASE_LIST = '/home/sdig/code/larda_connected3/case2html/dacapo_case_studies.toml'
+    VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
+    DATA_PATH = '/home/sdig/code/larda3/voodoo/data/'
+    CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
 
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
     SYSTEM = kwargs['system'] if 'system' in kwargs else 'limrad94'
-    KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'       # avg30sec or HSI
-    case_string = kwargs['case'] if 'case' in kwargs else '20190801-03'
-    case = load_case_list(CASE_LIST, case_string)
-    n_channels_ = 6 if KIND == 'HSI' else 1
+    KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
+    case_string = kwargs['case'] if 'case' in kwargs else '20190801-01'
+    n_channels_ = 6 if 'HSI' in KIND else 1
+    load_from_toml = True if 'case' in kwargs else False
 
-    TIME_SPAN_ = [datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
-    dt_string = f'{case["time_interval"][0][:-5]}_{case["time_interval"][0][-4:]}-{case["time_interval"][1][-4:]}'
+    # load case information
+    if load_from_toml:
+        case = load_case_list(CASE_LIST, case_string)
+        TIME_SPAN_ = [datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
+    else:
+        if 'dt_start' in kwargs and 't_train' in kwargs:
+            dt_begin = datetime.strptime(f'{kwargs["dt_start"]}', '%Y%m%d-%H%M')
+            dt_end   = dt_begin + timedelta(minutes=float(kwargs['t_train']))
+            TIME_SPAN_ = [dt_begin, dt_end]
+        else:
+            raise ValueError('Wrong dt_begin or dt_end')
+
+    dt_string = f'{TIME_SPAN_[0]:%Y%m%d}_{TIME_SPAN_[0]:%H%M}-{TIME_SPAN_[1]:%H%M}'
 
     try:
         features, targets, masked, cn_class, cn_status = load_features_from_nc(
-            case_string,
+            time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,
-            case_list_path=CASE_LIST,
             kind=KIND,
             system=SYSTEM,
             save=True,
