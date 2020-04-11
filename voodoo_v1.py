@@ -51,6 +51,34 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
+CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
+VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
+SYSTEM = 'limrad94'
+
+DATA_PATH = f'{VOODOO_PATH}/data/'
+LOGS_PATH = f'{VOODOO_PATH}/logs/'
+MODELS_PATH = f'{VOODOO_PATH}/models/'
+PLOTS_PATH = f'{VOODOO_PATH}/plots/'
+
+
+
+def check_mat_file_availability(data_path, kind, dt_str, system):
+    if not os.path.isfile(f'{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'):
+        print(f"{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{SYSTEM}_labels.mat'):
+        print(f"'{data_path}/labels/{dt_str}_{SYSTEM}_labels.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{SYSTEM}_masked.mat'):
+        print(f"'{data_path}/labels/{dt_str}_{SYSTEM}_masked.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_cloudnetpy94_class.mat'):
+        print(f"'{data_path}/cloudnet/{dt_str}_cloudnetpy94_class.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_cloudnetpy94_status.mat'):
+        print(f"'{data_path}/cloudnet/{dt_str}_cloudnetpy94_status.mat'  not found!")
+        return False
+    return True
 
 def get_logger(logger_list, status='info'):
     log = []
@@ -77,25 +105,24 @@ def log_dimensions(spec_dim, cn_dim, *args):
         loggers[0].info(f'Target-Input :: PollyNET\n'
                         f'      (n_ts, n_rg)        = ({args[0]["n_ts"]}, {args[0]["n_rg"]})')
 
-
 def create_filename(modelname, **kwargs):
     if not TRAINED_MODEL:
         name = \
-               f'{kwargs["CONV_LAYERS"]}-cl--' \
-               f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}-ks--' \
-               f'{kwargs["ACTIVATIONS"]}-af--' \
-               f'{kwargs["OPTIMIZER"]}-opt--' \
-               f'{kwargs["LOSS_FCNS"]}-loss--' \
-               f'{kwargs["BATCH_SIZE"]}-bs--' \
-               f'{kwargs["EPOCHS"]}-ep--' \
-               f'{kwargs["LEARNING_RATE"]}-lr--' \
-               f'{kwargs["DECAY_RATE"]}-dr--' \
-               f'{kwargs["DENSE_LAYERS"]}-dl--' \
-               f'{kwargs["DENSE_NODES"]}-dn--' \
-               f'{kwargs["KIND"]}--' \
-               f'{kwargs["INPUT_DIMENSION"]}--Fdim' \
-               f'{kwargs["OUTPUT_DIMENSION"]}--Tdim' \
-               f'{time_str}.h5'
+            f'{kwargs["CONV_LAYERS"]}-cl--' \
+            f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}-ks--' \
+            f'{kwargs["ACTIVATIONS"]}-af--' \
+            f'{kwargs["OPTIMIZER"]}-opt--' \
+            f'{kwargs["LOSS_FCNS"]}-loss--' \
+            f'{kwargs["BATCH_SIZE"]}-bs--' \
+            f'{kwargs["EPOCHS"]}-ep--' \
+            f'{kwargs["LEARNING_RATE"]:.1e}-lr--' \
+            f'{kwargs["DECAY_RATE"]:.1e}-dr--' \
+            f'{kwargs["DENSE_LAYERS"]}-dl--' \
+            f'{str(kwargs["DENSE_NODES"])[1:-1].replace(", ", "-")}-dn--' \
+            f'{kwargs["KIND"]}--' \
+            f'{str(kwargs["INPUT_DIMENSION"])[1:-1].replace(", ", "-")}-dIN--' \
+            f'{str(kwargs["OUTPUT_DIMENSION"])[1:-1].replace(", ", "-")}-dOUT--' \
+            f'{time_str}.h5'
         return {'MODEL_PATH': MODELS_PATH + name, 'LOG_PATH': LOGS_PATH + name}
     else:
         return {'MODEL_PATH': MODELS_PATH + modelname, 'LOG_PATH': LOGS_PATH + modelname}
@@ -119,7 +146,6 @@ def set_intersection(mask0, mask1):
             cnt += 1
 
     return idx_list, masked
-
 def load_matv5(path, file):
     h.change_dir(path)
     try:
@@ -127,9 +153,34 @@ def load_matv5(path, file):
     except Exception as e:
         exc_type, exc_value, exc_tb = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_tb)
-        raise ValueError(f'Check ~/{file}')
+        print(f'FileNotFound Error: Check ~/{file}')
+        return [], True
 
-    return data
+    return data, False
+
+
+def load_mat_files_list(case_string_list, kind):
+    mat_files_list = []
+    for icase, case_str in enumerate(case_string_list):
+
+        # gather time interval, etc.
+        case = Loader.load_case_list(CASE_LIST, case_str)
+        time_span = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
+        dt_str = f'{time_span[0]:%Y%m%d_%H%M}-{time_span[1]:%H%M}'
+
+        # check if a mat files is available
+        if check_mat_file_availability(DATA_PATH, kind, dt_str, SYSTEM):
+            mat_files_list.append([
+                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat'],
+                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat'],
+                [f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat'],
+                [f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat'],
+                [f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat'],
+            ])
+
+    if not mat_files_list: raise ValueError('Empty mat file list!')
+    return mat_files_list
+
 
 ########################################################################################################################################################
 ########################################################################################################################################################
@@ -145,38 +196,33 @@ def load_matv5(path, file):
 if __name__ == '__main__':
 
     start_time = time.time()
-    load_from_nc = True
-
-    # trainingset_case = 'Multiday-01-training'
-    testingset_case = '20190801-01'
-    trainingset_case = '20190904-03'
-    validtest_case =  '' # '20190801-03'
-
-    CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
-    VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
-
-    DATA_PATH = f'{VOODOO_PATH}/data/'
-    LOGS_PATH = f'{VOODOO_PATH}/logs/'
-    MODELS_PATH = f'{VOODOO_PATH}/models/'
-    PLOTS_PATH = f'{VOODOO_PATH}/plots/'
-
-    SYSTEM = 'limrad94'
 
     # gather command line arguments
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
+
     TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
     TASK = kwargs['task'] if 'task' in kwargs else 'train'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
 
-    n_channels_ = 6 if KIND == 'HSI' else 1
+    use_only_given = True if TASK == 'train' else False
+
+    n_channels_ = 6 if 'HSI' in KIND else 1
+
+    if TASK == 'predict' and not os.path.isfile(f'{MODELS_PATH}/{TRAINED_MODEL}'):
+        raise FileNotFoundError(f'Trained model not found! {TRAINED_MODEL}')
 
     if 'case' in kwargs:
-        case_string_list = [kwargs['case']]
+        if len(kwargs['case']) == 17:
+            use_only_given = True
+            CASE_LIST = VOODOO_PATH + f'/tomls/auto-trainingset-{kwargs["case"]}.toml'
+            case_string_list = [case for case in Loader.load_case_file(CASE_LIST).keys()]
+        else:
+            case_string_list = [kwargs['case']]
     else:
         # multiple cases
         case_string_list = [
-            #'20190318-02',
-            #'20190102-02',
+            # '20190318-02',
+            # '20190102-02',
             '20190318-99',
         ]
 
@@ -190,10 +236,9 @@ if __name__ == '__main__':
     # load ann model parameter and other global values
     config_global_model = toml.load(VOODOO_PATH + 'ann_model_setting.toml')
     radar_input_setting = config_global_model['feature']['info']['VSpec']
-    tensorflow_settings = config_global_model['tensorflow']
+    tf_settings = config_global_model['tensorflow']
 
-    feature_set = np.empty((0, 256, 32, n_channels_), dtype=np.float32)
-    target_labels = np.empty((0, 9), dtype=np.float32)
+    feature_set, target_labels = [], []
 
     for icase, case_str in enumerate(case_string_list):
 
@@ -203,72 +248,98 @@ if __name__ == '__main__':
         dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
 
         # check if a mat files is available
-        #mat_file_avlb = os.path.isfile(f'{DATA_PATH}/features/{KIND}/{dt_str}_{SYSTEM}_features_{KIND}.mat')
+        mat_file_avlb = check_mat_file_availability(DATA_PATH, KIND, dt_str, SYSTEM)
+        #mat_file_avlb = False
 
-        if load_from_nc: # and not mat_file_avlb:
+        if mat_file_avlb:# and use_only_given:
+
+            _class, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat')
+            if flag: continue
+            _status, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat')
+            if flag: continue
+            feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
+            if flag: continue
+            target, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')
+            if flag: continue
+            masked, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat')
+            if flag: continue
+
+            feature = feature['features']
+            target = target['labels']
+            masked = masked['masked']
+
+            print(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files\n')
+
+        else:
+
+            if use_only_given: continue
 
             feature, target, masked, _class, _status = Loader.load_features_from_nc(
-                case_str,
-                voodoo_path=VOODOO_PATH,    # NONSENSE PATH
+                time_span=TIME_SPAN,
+                voodoo_path=VOODOO_PATH,  # NONSENSE PATH
                 data_path=DATA_PATH,
-                case_list_path=CASE_LIST,
                 kind=KIND,
                 system=SYSTEM,
                 save=False,
                 n_channels=n_channels_
             )
 
-        else:
+            if masked.all(): continue  # if there are no datapoints
 
-            _class  = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat')
-            _status = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat')
-            feature = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')['features']
-            target = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')['labels']
-            masked = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat')['masked']
-
-        if icase == 0:
-            masked_set = np.empty(((0,) + masked.shape[1:]), dtype=np.bool)
-            masked_flt = np.empty((0,), dtype=np.bool)
+            loggers[0].info(f'min/max value in features = {np.min(feature)},  maximum = {np.max(feature)}')
+            loggers[0].info(f'min/max value in targets  = {np.min(target)},  maximum = {np.max(target)}')
 
         if TASK == 'train':
 
             mask1 = Loader.load_training_mask(_class, _status)
             valid_samples, masked = set_intersection(masked, mask1)
 
-            feature_set = np.append(feature_set, feature[valid_samples, :, :, :], axis=0)
-            target_labels = np.append(target_labels, target[valid_samples, :], axis=0)
+            if len(valid_samples) < 1: continue
+
+            if len(feature.shape) == 3: feature = feature[:, :, :, np.newaxis]
+            feature_set.append(feature[valid_samples, :, :, :])
+            target_labels.append(target[valid_samples, :])
 
         elif TASK == 'predict':
-
-            feature_set = np.append(feature_set, feature, axis=0)
-            target_labels = np.append(target_labels, target, axis=0)
+            if len(feature.shape) == 3: feature = feature[:, :, :, np.newaxis]
+            feature_set.append(feature)
+            target_labels.append(target)
 
         else:
             raise ValueError(f'Unknown TASK: {TASK}.')
 
-        masked_set = np.append(masked_set, masked, axis=0)
-        masked_flt = np.append(masked_flt, masked)
+    feature_set = np.concatenate(feature_set, axis=0)
+    target_labels = np.concatenate(target_labels, axis=0)
 
-    # load validation and/or testing data
-    if len(validtest_case) > 0:
-
-        case_valid = Loader.load_case_list(CASE_LIST, validtest_case)
-        TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case_valid['time_interval']]
-        case_valid_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
-        loggers[0].info(f'\nloading... {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} of {SYSTEM} validation data')
-
-        # load validation feature set
-        h.change_dir(f'{DATA_PATH}/features/{KIND}/')
-        valid_f = loadmat(f'{case_valid_str}_{SYSTEM}_features_{KIND}.mat')['features']
-
-        # load validation labels
-        h.change_dir(f'{DATA_PATH}/labels/')
-        valid_l = loadmat(f'{case_valid_str}_{SYSTEM}_labels.mat')['labels']
-
-        validation_masked = loadmat(f'{case_valid_str}_{SYSTEM}_masked.mat')['masked']
-        validation_set = (valid_f, valid_l)
+    if TASK == 'train':
+        # take every nth element from the trainingset for validation
+        n = 10
+        validation_set = (feature_set[::n], target_labels[::n])
+        feature_set = np.array([item for index, item in enumerate(feature_set) if (index + 1) % n != 0])
+        target_labels = np.array([item for index, item in enumerate(target_labels) if (index + 1) % n != 0])
     else:
         validation_set = ()
+
+    names = [
+        'Cloud liquid droplets only',
+        'Drizzle or rain.',
+        "Drizzle/rain & cloud droplets",
+        'Ice particles.',
+        'Ice coexisting with supercooled liquid droplets.',
+        'Melting ice particles',
+        "Melting ice & cloud droplets",
+        'Insects or ground clutter.',
+    ]
+    n_samples_totall = np.count_nonzero(target_labels, axis=0)
+
+    print('samples per class')
+    print(f'{feature_set.shape[0]:12d}   total')
+    for name, n_smp in zip(names, n_samples_totall):
+        print(f'{n_smp:12d}   {name}')
+
+    print(f'min max val features = {feature_set.min():.2f},  {feature_set.max():.2f}')
+    print(f'min max val targets  = {target_labels.min():.2f},  {target_labels.max():.2f}')
+
 
     ########################################################################################################################################################
     #   ___ ____ ____ _ _  _ _ _  _ ____
@@ -280,37 +351,37 @@ if __name__ == '__main__':
         model_list = []
 
         # loop through hyperparameter space
-        for cl, dl, af, il, op, lr in product(tensorflow_settings['CONV_LAYERS'],
-                                              tensorflow_settings['DENSE_LAYERS'],
-                                              tensorflow_settings['ACTIVATIONS'],
-                                              tensorflow_settings['LOSS_FCNS'],
-                                              tensorflow_settings['OPTIMIZERS'],
-                                              tensorflow_settings['LEARNING_RATE']):
+        for cl, dl, af, il, op, lr in product(tf_settings['CONV_LAYERS'],
+                                              tf_settings['DENSE_LAYERS'],
+                                              tf_settings['ACTIVATIONS'],
+                                              tf_settings['LOSS_FCNS'],
+                                              tf_settings['OPTIMIZERS'],
+                                              tf_settings['LEARNING_RATE']):
             hyper_params = {
 
                 # Convolutional part of the model
                 'KIND': KIND,
-                'INPUT_DIMENSION': str(feature_set.shape).replace(', ', '-'),
-                'OUTPUT_DIMENSION': str(target_labels.shape).replace(', ', '-'),
+                'INPUT_DIMENSION': feature_set.shape,
+                'OUTPUT_DIMENSION': target_labels.shape,
                 'CONV_LAYERS': cl,
-                'NFILTERS': tensorflow_settings['NFILTERS'],
-                'KERNEL_SIZE': tensorflow_settings['KERNEL_SIZE'],
-                'POOL_SIZE': tensorflow_settings['POOL_SIZE'],
+                'NFILTERS': tf_settings['NFILTERS'],
+                'KERNEL_SIZE': tf_settings['KERNEL_SIZE'],
+                'POOL_SIZE': tf_settings['POOL_SIZE'],
                 'ACTIVATIONS': af,
 
                 # fully connected layers
                 'DENSE_LAYERS': dl,
-                'DENSE_NODES': tensorflow_settings['DENSE_NODES'],
-                'ACTIVATIONS_OL': tensorflow_settings['ACTIVATIONS_OL'],
+                'DENSE_NODES': tf_settings['DENSE_NODES'],
+                'ACTIVATIONS_OL': tf_settings['ACTIVATIONS_OL'],
                 'LOSS_FCNS': il,
                 'OPTIMIZER': op,
 
                 # training settings
-                'BATCH_SIZE': tensorflow_settings['BATCH_SIZE'],
-                'EPOCHS': tensorflow_settings['EPOCHS'],
+                'BATCH_SIZE': tf_settings['BATCH_SIZE'],
+                'EPOCHS': tf_settings['EPOCHS'],
                 'LEARNING_RATE': lr,
-                'DECAY_RATE': tensorflow_settings['DECAY_RATE'],
-                'MOMENTUM': tensorflow_settings['MOMENTUM'],
+                'DECAY_RATE': tf_settings['DECAY_RATE'],
+                'MOMENTUM': tf_settings['MOMENTUM'],
 
                 # validation data
                 'validation': validation_set,

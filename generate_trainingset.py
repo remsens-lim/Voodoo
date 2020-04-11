@@ -38,7 +38,7 @@ __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
 __credits__ = ["Willi Schimmel", "Teresa Vogl", "Martin Radenz"]
 __license__ = "MIT"
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
@@ -48,6 +48,13 @@ def load_case_list(path, case_name):
     # gather command line arguments
     config_case_studies = toml.load(path)
     return config_case_studies['case'][case_name]
+
+
+def load_case_file(path):
+    # gather command line arguments
+    config_case_studies = toml.load(path)
+    return config_case_studies['case']
+
 
 
 def scaling(strat='none'):
@@ -156,6 +163,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
+    fft_params = feature_info['fft']
 
     assert len(cwt_params['scales']) == 3, 'The list of scaling parameters 3 values!'
     n_cwt_scales = int(cwt_params['scales'][2])
@@ -202,36 +210,36 @@ def load_features_and_labels(spectra, classes, **feature_info):
     # load scaling functions
     spectra_scaler = scaling(strat='normalize')
     cwt_scaler = scaling(strat='normalize')
+    fft_scaler = scaling(strat='normalize')
     cnt = 0
     feature_list = []
     target_labels = []
+    cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
     print('\nFeature Extraction......')
     for iT in tqdm(range(n_time)):
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
 
-            spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
-            cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
             for iCh in range(n_chan):
-                spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
-                cwtmatr = signal.cwt(spc_matrix[:, iCh], signal.ricker, scales)
+                spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
+                cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
                 cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 
-            feature_list.append(cwt_matrix)
+#            feature_list.append(cwt_matrix)
 
 #            # new feautre extraction start April 2020
 #            for iCh in range(n_chan):
 #                spc_matrix = spectra_scaler(h.lin2z(spectra_3d[iT, iR, :, iCh]), spectra_lims[0], spectra_lims[1]) #* window_fcn
 #                cwt_matrix[:, :, iCh] = cwt_scaler(signal.cwt(spc_matrix, signal.ricker, scales), cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 #
-#            cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+            cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
 #
 #            # TRY THIS IF CWT WITH MINIMUM; MAXIMUM; MEAN; STD FAILS
 #            # cut of second half because the real part is symmetric
-#            # fft_tensor = [fft_scaler(np.abs(np.fft.fft(spc)[:n_Dbins // 2]).T, fft_params[0], fft_params[1]) for spc in spc_tensor]
-#            # cwtfft_tensor = [fft_scaler(np.abs(np.fft.fft2(cwt)[:, :]), fft_lims[0], fft_lims[1]) for cwt in cwt_tensor]
-#
-#            feature_list.append(np.stack(cwt_tensor, axis=2))
+#            fft_tensor = [fft_scaler(np.abs(np.fft.fft(spc)[:n_Dbins // 2]).T, fft_params[0], fft_params[1]) for spc in spc_tensor]
+            cwtfft_tensor = [fft_scaler(np.abs(np.fft.fft2(cwt)), fft_params['var_lims'][0], fft_params['var_lims'][1]) for cwt in cwt_tensor]
+
+            feature_list.append(np.stack(cwtfft_tensor, axis=2))
 
             # one hot encoding
             if classes['var'][iT, iR] in [8, 9, 10]:
@@ -253,24 +261,6 @@ def load_features_and_labels(spectra, classes, **feature_info):
             else:
                 target_labels.append([1, 0, 0, 0, 0, 0, 0, 0, 0])  # Clear-sky
             cnt += 1
-
-            if 'plot' in cwt_params and cwt_params['plot']:
-                velocity_lims = [-6, 6]
-                for iCh in range(n_chan):
-                    # show spectra, normalized spectra and wavlet transformation
-                    fig, ax = Plot.spectra_wavelettransform(
-                        spectra['vel'], spc_matrix[:, iCh], cwt_matrix[:, :, iCh].T,
-                        ts=spectra['ts'][iT],
-                        rg=spectra['rg'][iR],
-                        colormap='cloudnet_jet',
-                        x_lims=velocity_lims,
-                        v_lims=cwt_params['var_lims'],
-                        scales=scales,
-                        hydroclass=class_names[str(classes_var[iT, iR])],
-                        fig_size=[7, 4]
-                    )
-                    # fig, (top_ax, bottom_left_ax, bottom_right_ax) = Plot.spectra_wavelettransform2(vel_list, spcij_scaled, cwt_params['scales'])
-                    Plot.save_figure(fig, name=f'limrad_cwt_{str(cnt).zfill(4)}_iT-iR-iCh_{str(iT).zfill(4)}-{str(iR).zfill(4)}-{iCh}.png', dpi=300)
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 

@@ -35,11 +35,11 @@
     window_dimension = [3, 3]
 
     BATCH_SIZE   = 32
-    BATCH_NORM   = true
+    BATCH_NORM   = false
     EPOCHS       = 20
 
     DENSE_LAYERS = [1]
-    DENSE_NODES  = [256]
+    DENSE_NODES  = [128]
     DROPOUT      = 0.80
 
     CONV_LAYERS  = [3]
@@ -110,6 +110,13 @@
         var_lims = [0.0, 1.0]
         var_converter = []
         scales = [1.25, 10.0, 32.0]
+        scaling = 'normalize'
+        plot = false
+
+    [feature.info.fft]
+        use = true
+        var_lims = [0.0, 10.0]
+        var_converter = []
         scaling = 'normalize'
         plot = false
 
