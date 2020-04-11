@@ -1,13 +1,18 @@
 # ignore folders
-/logs/**/*
+/logs*/**/*
 /deprecated/**/*
 /models/**/*
 /plots/**/*
 /libVoodoo/plots/**/*
+__pycache__/**/*
+build/**/*
+data/**/*
+nc-files/**/*
 
 # ignore files
 training*
 nohup*
+*png*
 
 
 

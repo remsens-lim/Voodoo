@@ -37,11 +37,10 @@ import pyLARDA.helpers as h
 import pyLARDA.Transformations as tr
 import pyLARDA.SpectraProcessing as sp
 
-import voodoo.libVoodoo.Loader_v2 as Loader
 import voodoo.libVoodoo.Plot   as Plot
 import voodoo.libVoodoo.Model  as Model
 
-from generate_trainingset import load_features_from_nc
+import generate_trainingset as Loader
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -167,9 +166,9 @@ if __name__ == '__main__':
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
     TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
     TASK = kwargs['task'] if 'task' in kwargs else 'train'
-    KIND = kwargs['kind'] if 'kind' in kwargs else 'multispectra'
+    KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
 
-    n_channels_ = 4 if KIND == 'multispectra' else 1
+    n_channels_ = 6 if KIND == 'HSI' else 1
 
     if 'case' in kwargs:
         case_string_list = [kwargs['case']]
@@ -208,14 +207,14 @@ if __name__ == '__main__':
 
         if load_from_nc: # and not mat_file_avlb:
 
-            feature, target, masked, _class, _status = load_features_from_nc(
+            feature, target, masked, _class, _status = Loader.load_features_from_nc(
                 case_str,
                 voodoo_path=VOODOO_PATH,    # NONSENSE PATH
                 data_path=DATA_PATH,
                 case_list_path=CASE_LIST,
                 kind=KIND,
                 system=SYSTEM,
-                save=True,
+                save=False,
                 n_channels=n_channels_
             )
 
@@ -382,7 +381,7 @@ if __name__ == '__main__':
             prediction_container['name'] = 'CLASS'
             prediction_container['joints'] = ''
             prediction_container['rg_unit'] = 'm'
-            prediction_container['colormap'] = 'ann_target'
+            prediction_container['colormap'] = 'ann_target_7class'
             prediction_container['system'] = 'Voodoo'
             prediction_container['ts'] = np.squeeze(_class['ts'])
             prediction_container['rg'] = np.squeeze(_class['rg'])

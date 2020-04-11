@@ -34,7 +34,7 @@ os.environ['KMP_WARNINGS'] = 'off'
 2 = INFO and WARNING messages are not printed
 3 = INFO, WARNING, and ERROR messages are not printed
 """
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 # tf.get_logger().setLevel('ERROR')
 
 __author__ = "Willi Schimmel"
@@ -168,7 +168,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         else:
             raise ValueError('Unknown LOSS_FCNS!', LOSSES)
 
-        model.compile(optimizer=opt, loss=loss, metrics=['CategoricalCrossentropy', 'CategoricalAccuracy'])
+        model.compile(optimizer=opt, loss=loss, metrics=['CategoricalAccuracy'])
     model.summary()
 
     return model

@@ -36,17 +36,17 @@
 
     BATCH_SIZE   = 32
     BATCH_NORM   = true
-    EPOCHS       =100
+    EPOCHS       = 20
 
     DENSE_LAYERS = [1]
     DENSE_NODES  = [256]
     DROPOUT      = 0.80
 
-    CONV_LAYERS  = [4]
-    KERNEL_SIZE  = [2, 2]
+    CONV_LAYERS  = [3]
+    KERNEL_SIZE  = [3, 3]
     #STRIDE_SIZE  = [2, 1]
-    POOL_SIZE    = [3, 2]
-    NFILTERS     = [64, 128, 256, 512]
+    POOL_SIZE    = [4, 2]
+    NFILTERS     = [64, 128, 256]
 
     # binary classifier
     OPTIMIZERS   = ['adam']
