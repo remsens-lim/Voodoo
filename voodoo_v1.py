@@ -145,7 +145,8 @@ def set_intersection(mask0, mask1):
             idx_list.append(iter)
             cnt += 1
 
-    return idx_list, masked
+    return idx_list
+
 def load_matv5(path, file):
     h.change_dir(path)
     try:
@@ -238,7 +239,8 @@ if __name__ == '__main__':
     radar_input_setting = config_global_model['feature']['info']['VSpec']
     tf_settings = config_global_model['tensorflow']
 
-    feature_set, target_labels = [], []
+    feature_set, target_labels, masked_total = [], [], []
+    cloudnet_class, cloudnet_status = [], []
 
     for icase, case_str in enumerate(case_string_list):
 
@@ -249,32 +251,31 @@ if __name__ == '__main__':
 
         # check if a mat files is available
         mat_file_avlb = check_mat_file_availability(DATA_PATH, KIND, dt_str, SYSTEM)
-        #mat_file_avlb = False
 
-        if mat_file_avlb:# and use_only_given:
+        if mat_file_avlb:
 
             _class, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat')
             if flag: continue
             _status, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat')
             if flag: continue
-            feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
+            _feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
             if flag: continue
-            target, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')
+            _target, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')
             if flag: continue
-            masked, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat')
+            _masked, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat')
             if flag: continue
 
-            feature = feature['features']
-            target = target['labels']
-            masked = masked['masked']
+            _feature = _feature['features']
+            _target = _target['labels']
+            _masked = _masked['masked']
 
-            print(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files\n')
+            print(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files')
 
         else:
 
             if use_only_given: continue
 
-            feature, target, masked, _class, _status = Loader.load_features_from_nc(
+            _feature, _target, _masked, _class, _status = Loader.load_features_from_nc(
                 time_span=TIME_SPAN,
                 voodoo_path=VOODOO_PATH,  # NONSENSE PATH
                 data_path=DATA_PATH,
@@ -284,35 +285,36 @@ if __name__ == '__main__':
                 n_channels=n_channels_
             )
 
-            if masked.all(): continue  # if there are no datapoints
+            if _masked.all(): continue  # if there are no datapoints
 
-            loggers[0].info(f'min/max value in features = {np.min(feature)},  maximum = {np.max(feature)}')
-            loggers[0].info(f'min/max value in targets  = {np.min(target)},  maximum = {np.max(target)}')
+            loggers[0].debug(f'min/max value in features = {np.min(_feature)},  maximum = {np.max(_feature)}')
+            loggers[0].debug(f'min/max value in targets  = {np.min(_target)},  maximum = {np.max(_target)}')
+
+        if len(_feature.shape) == 3: _feature = _feature[:, :, :, np.newaxis]
 
         if TASK == 'train':
+            training_mask = Loader.load_training_mask(_class, _status)
+            idx_valid_samples = set_intersection(_masked, training_mask)
 
-            mask1 = Loader.load_training_mask(_class, _status)
-            valid_samples, masked = set_intersection(masked, mask1)
+            if len(idx_valid_samples) < 1: continue
 
-            if len(valid_samples) < 1: continue
+            _feature = _feature[idx_valid_samples, :, :, :]
+            _target = _target[idx_valid_samples, :]
 
-            if len(feature.shape) == 3: feature = feature[:, :, :, np.newaxis]
-            feature_set.append(feature[valid_samples, :, :, :])
-            target_labels.append(target[valid_samples, :])
-
-        elif TASK == 'predict':
-            if len(feature.shape) == 3: feature = feature[:, :, :, np.newaxis]
-            feature_set.append(feature)
-            target_labels.append(target)
-
-        else:
-            raise ValueError(f'Unknown TASK: {TASK}.')
+        feature_set.append(_feature)
+        target_labels.append(_target)
+        cloudnet_class.append(_class)
+        cloudnet_status.append(_status)
+        masked_total.append(_masked)
 
     feature_set = np.concatenate(feature_set, axis=0)
     target_labels = np.concatenate(target_labels, axis=0)
+    masked_total = np.concatenate(masked_total, axis=0)
+    #cloudnet_class = np.concatenate(cloudnet_class, axis=0)
+    #cloudnet_status = np.concatenate(cloudnet_status, axis=0)
 
     if TASK == 'train':
-        # take every nth element from the trainingset for validation
+        # take every nth element from the training set for validation
         n = 10
         validation_set = (feature_set[::n], target_labels[::n])
         feature_set = np.array([item for index, item in enumerate(feature_set) if (index + 1) % n != 0])
@@ -321,6 +323,7 @@ if __name__ == '__main__':
         validation_set = ()
 
     names = [
+        'Clear sky',
         'Cloud liquid droplets only',
         'Drizzle or rain.',
         "Drizzle/rain & cloud droplets",
@@ -336,10 +339,6 @@ if __name__ == '__main__':
     print(f'{feature_set.shape[0]:12d}   total')
     for name, n_smp in zip(names, n_samples_totall):
         print(f'{n_smp:12d}   {name}')
-
-    print(f'min max val features = {feature_set.min():.2f},  {feature_set.max():.2f}')
-    print(f'min max val targets  = {target_labels.min():.2f},  {target_labels.max():.2f}')
-
 
     ########################################################################################################################################################
     #   ___ ____ ____ _ _  _ _ _  _ ____
@@ -442,10 +441,7 @@ if __name__ == '__main__':
 
             # make predictions
             cnn_pred = Model.predict_classes(cnn_model, feature_set)
-            prediction2D_classes = Model.one_hot_to_classes(cnn_pred, masked)
-
-            # dspkl_mask = sp.despeckle2D(prediction2D_classes)
-            # prediction2D_classes[dspkl_mask] = 0.0
+            prediction2D_classes = Model.one_hot_to_classes(cnn_pred, masked_total)
 
             prediction_container = {}
             prediction_container['dimlabel'] = ['time', 'range']
@@ -454,11 +450,11 @@ if __name__ == '__main__':
             prediction_container['rg_unit'] = 'm'
             prediction_container['colormap'] = 'ann_target_7class'
             prediction_container['system'] = 'Voodoo'
-            prediction_container['ts'] = np.squeeze(_class['ts'])
-            prediction_container['rg'] = np.squeeze(_class['rg'])
+            prediction_container['ts'] = np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0)
+            prediction_container['rg'] = np.squeeze(cloudnet_class[0]['rg'])
             prediction_container['var_lims'] = [0, 8]
             prediction_container['var_unit'] = ''
-            prediction_container['mask'] = masked
+            prediction_container['mask'] = masked_total
             prediction_container['var'] = prediction2D_classes
 
             # create directory for plots

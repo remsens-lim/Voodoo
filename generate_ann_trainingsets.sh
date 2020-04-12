@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-start_str="20190318"
-end_str="20190318"
+
+start_str="20190801"
+end_str="20190801"
+
+start_hour="0500"
+end_hour="0900"
+
 t_trn="15.0"
 t_skp="15.0" # change in loop
+
 kind="HSI"
 
-dt_start=$(date -d "$start_str 0000" +"%Y%m%d %H%M")
-dt_end=$(date -d "$end_str 2359" +"%Y%m%d %H%M")
+dt_start=$(date -d "$start_str $start_hour" +"%Y%m%d %H%M")
+dt_end=$(date -d "$end_str $end_hour" +"%Y%m%d %H%M")
 echo "dt_begin = " $dt_start
 echo "dt_end = " $dt_end
 
-#python generate_toml.py dt_start=$start_str dt_end=$end_str t_train=$t_trn t_skip=$t_skp
+python generate_toml.py dt_start="$start_str" dt_end="$end_str" t_train="$t_trn" t_skip="$t_skp"
 
 runList=''
 

@@ -34,8 +34,8 @@
 [tensorflow]
     window_dimension = [3, 3]
 
-    BATCH_SIZE   = 32
-    BATCH_NORM   = false
+    BATCH_SIZE   = 16
+    BATCH_NORM   = true
     EPOCHS       = 20
 
     DENSE_LAYERS = [1]

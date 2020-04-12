@@ -160,7 +160,8 @@ def load_features_and_labels(spectra, classes, **feature_info):
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
-    masked = np.all(np.any(spectra_mask, axis=3), axis=2)
+    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
+    #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
     fft_params = feature_info['fft']
@@ -194,19 +195,6 @@ def load_features_and_labels(spectra, classes, **feature_info):
         spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
         spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
 
-    class_names = {
-        '0': 'Clear sky.',
-        '1': 'Cloud liquid droplets only.',
-        '2': 'Drizzle or rain.',
-        '3': 'Drizzle or rain coexisting with cloud liquid droplets.',
-        '4': 'Ice particles.',
-        '5': 'Ice coexisting with supercooled liquid droplets.',
-        '6': 'Melting ice particles.',
-        '7': 'Melting ice particles coexisting with cloud liquid droplets.',
-        '8': 'Insects or ground clutter',
-    }
-    classes_var = classes['var'].astype(np.int8)
-
     # load scaling functions
     spectra_scaler = scaling(strat='normalize')
     cwt_scaler = scaling(strat='normalize')
@@ -227,19 +215,14 @@ def load_features_and_labels(spectra, classes, **feature_info):
 
 #            feature_list.append(cwt_matrix)
 
-#            # new feautre extraction start April 2020
-#            for iCh in range(n_chan):
-#                spc_matrix = spectra_scaler(h.lin2z(spectra_3d[iT, iR, :, iCh]), spectra_lims[0], spectra_lims[1]) #* window_fcn
-#                cwt_matrix[:, :, iCh] = cwt_scaler(signal.cwt(spc_matrix, signal.ricker, scales), cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
-#
             cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+            feature_list.append(np.stack(cwt_tensor, axis=2))
 #
 #            # TRY THIS IF CWT WITH MINIMUM; MAXIMUM; MEAN; STD FAILS
 #            # cut of second half because the real part is symmetric
 #            fft_tensor = [fft_scaler(np.abs(np.fft.fft(spc)[:n_Dbins // 2]).T, fft_params[0], fft_params[1]) for spc in spc_tensor]
-            cwtfft_tensor = [fft_scaler(np.abs(np.fft.fft2(cwt)), fft_params['var_lims'][0], fft_params['var_lims'][1]) for cwt in cwt_tensor]
+#            cwtfft_tensor = [fft_scaler(np.abs(np.fft.fft2(cwt)), fft_params['var_lims'][0], fft_params['var_lims'][1]) for cwt in cwt_tensor]
 
-            feature_list.append(np.stack(cwtfft_tensor, axis=2))
 
             # one hot encoding
             if classes['var'][iT, iR] in [8, 9, 10]:
@@ -264,11 +247,11 @@ def load_features_and_labels(spectra, classes, **feature_info):
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
-    FEATURES = np.array(feature_list, dtype=np.float16)
-    LABELS = np.array(target_labels, dtype=np.float16)
+    FEATURES = np.array(feature_list, dtype=np.float32)
+    LABELS = np.array(target_labels, dtype=np.float32)
 
-    print(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
-    print(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
+    logger.debug(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
+    logger.debug(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
 
     return FEATURES, LABELS, masked
 
@@ -736,7 +719,7 @@ if __name__ == '__main__':
             n_channels=n_channels_
         )
 
-    except Exception as e:
+    except Exception:
         exc_type, exc_value, exc_tb = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_tb)
         print(ValueError(f'Something went wrong with this interval: {TIME_SPAN_}'))
