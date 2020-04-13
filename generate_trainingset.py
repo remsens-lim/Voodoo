@@ -107,6 +107,10 @@ def replace_fill_value(data, newfill):
 
 
 def load_training_mask(classes, status):
+    # cn_good radar and lidar =  3
+    # cnpy_good radar and lidar =  1
+    # cn_good lidar only =  1
+    # cnpy_good lidar only =  3
     # create mask
     valid_samples = np.full(status['var'].shape, False)
     valid_samples[status['var'] == 1] = True  # add good radar radar & lidar
@@ -160,7 +164,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
-    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
+    masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
@@ -213,9 +217,12 @@ def load_features_and_labels(spectra, classes, **feature_info):
                 cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
                 cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 
+            cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
+
 #            feature_list.append(cwt_matrix)
 
-            cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+            #cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+
             feature_list.append(np.stack(cwt_tensor, axis=2))
 #
 #            # TRY THIS IF CWT WITH MINIMUM; MAXIMUM; MEAN; STD FAILS
@@ -477,6 +484,7 @@ def load_features_from_nc(
         data_path='',
         kind='1HSI',
         system='limra94',
+        cloudnet='CLOUDNET',
         interp='rectbivar',
         save=True,
         **kwargs
@@ -529,13 +537,13 @@ def load_features_from_nc(
     #   |___ |__| |  | |__/ /   ___] |  |  \/  |___    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
     #                      /
     #
-    cnpy94_model = load_data(larda_connected, 'CLOUDNETpy94', TIME_SPAN_, ['T', 'P'])
+    cnpy94_model = load_data(larda_connected, cloudnet, TIME_SPAN_, ['T', 'P'])
 
     if save:
         h.change_dir(f'{data_path}/cloudnet/')
-        savemat(f'{dt_string}_cloudnetpy94_model_T.mat', cnpy94_model.pop('T'), do_compression=True)
-        savemat(f'{dt_string}_cloudnetpy94_model_P.mat', cnpy94_model.pop('P'), do_compression=True)
-        print(f'save :: {dt_string}_cloudnetpy94_model_T/P')
+        savemat(f'{dt_string}_{cloudnet}_model_T.mat', cnpy94_model.pop('T'), do_compression=True)
+        savemat(f'{dt_string}_{cloudnet}_model_P.mat', cnpy94_model.pop('P'), do_compression=True)
+        print(f'save :: {dt_string}_{cloudnet}_model_T/P')
 
     """
     " STATUS
@@ -564,12 +572,12 @@ def load_features_from_nc(
     \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
 
     """
-    cnpy94_class = load_data(larda_connected, 'CLOUDNETpy94', TIME_SPAN_, ['CLASS', 'detection_status'])
+    cnpy94_class = load_data(larda_connected, cloudnet, TIME_SPAN_, ['CLASS', 'detection_status'])
     ts_cnpy94, rg_cnpy94 = cnpy94_class['CLASS']['ts'], cnpy94_class['CLASS']['rg']
 
     if save:
-        savemat(f'{dt_string}_cloudnetpy94_class.mat', cnpy94_class['CLASS'], do_compression=True)
-        savemat(f'{dt_string}_cloudnetpy94_status.mat', cnpy94_class['detection_status'], do_compression=True)
+        savemat(f'{dt_string}_{cloudnet}_class.mat', cnpy94_class['CLASS'], do_compression=True)
+        savemat(f'{dt_string}_{cloudnet}_status.mat', cnpy94_class['detection_status'], do_compression=True)
         print(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of cLoudnetpy94 Class & Status\n')
 
     ########################################################################################################################################################
@@ -689,6 +697,7 @@ if __name__ == '__main__':
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
     SYSTEM = kwargs['system'] if 'system' in kwargs else 'limrad94'
+    CLOUDNET = kwargs['cloudnet'] if 'cloudnet' in kwargs else 'CLOUDNETpy94'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
     case_string = kwargs['case'] if 'case' in kwargs else '20190801-01'
     n_channels_ = 6 if 'HSI' in KIND else 1
@@ -715,6 +724,7 @@ if __name__ == '__main__':
             data_path=DATA_PATH,
             kind=KIND,
             system=SYSTEM,
+            cloudnet=CLOUDNET,
             save=True,
             n_channels=n_channels_
         )

@@ -54,6 +54,7 @@ __status__ = "Prototype"
 CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
 VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
 SYSTEM = 'limrad94'
+CLOUDNET = 'CLOUDNETpy94'
 
 DATA_PATH = f'{VOODOO_PATH}/data/'
 LOGS_PATH = f'{VOODOO_PATH}/logs/'
@@ -62,21 +63,21 @@ PLOTS_PATH = f'{VOODOO_PATH}/plots/'
 
 
 
-def check_mat_file_availability(data_path, kind, dt_str, system):
+def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet=CLOUDNET):
     if not os.path.isfile(f'{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'):
         print(f"{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'  not found!")
         return False
-    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{SYSTEM}_labels.mat'):
-        print(f"'{data_path}/labels/{dt_str}_{SYSTEM}_labels.mat'  not found!")
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_labels.mat'):
+        print(f"'{data_path}/labels/{dt_str}_{system}_labels.mat'  not found!")
         return False
-    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{SYSTEM}_masked.mat'):
-        print(f"'{data_path}/labels/{dt_str}_{SYSTEM}_masked.mat'  not found!")
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_masked.mat'):
+        print(f"'{data_path}/labels/{dt_str}_{system}_masked.mat'  not found!")
         return False
-    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_cloudnetpy94_class.mat'):
-        print(f"'{data_path}/cloudnet/{dt_str}_cloudnetpy94_class.mat'  not found!")
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'):
+        print(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'  not found!")
         return False
-    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_cloudnetpy94_status.mat'):
-        print(f"'{data_path}/cloudnet/{dt_str}_cloudnetpy94_status.mat'  not found!")
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'):
+        print(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'  not found!")
         return False
     return True
 
@@ -160,7 +161,7 @@ def load_matv5(path, file):
     return data, False
 
 
-def load_mat_files_list(case_string_list, kind):
+def load_mat_files_list(case_string_list, kind, system=SYSTEM, cloudnet=CLOUDNET):
     mat_files_list = []
     for icase, case_str in enumerate(case_string_list):
 
@@ -172,11 +173,11 @@ def load_mat_files_list(case_string_list, kind):
         # check if a mat files is available
         if check_mat_file_availability(DATA_PATH, kind, dt_str, SYSTEM):
             mat_files_list.append([
-                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat'],
-                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat'],
-                [f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat'],
-                [f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat'],
-                [f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_masked.mat'],
+                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_{cloudnet}_class.mat'],
+                [f'{DATA_PATH}/cloudnet/', f'{dt_str}_{cloudnet}_status.mat'],
+                [f'{DATA_PATH}/features/{kind}', f'{dt_str}_{system}_features_{kind}.mat'],
+                [f'{DATA_PATH}/labels/', f'{dt_str}_{system}_labels.mat'],
+                [f'{DATA_PATH}/labels/', f'{dt_str}_{system}_masked.mat'],
             ])
 
     if not mat_files_list: raise ValueError('Empty mat file list!')
@@ -204,6 +205,7 @@ if __name__ == '__main__':
     TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
     TASK = kwargs['task'] if 'task' in kwargs else 'train'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
+    CLOUDNET = 'CLOUDNETpy94'
 
     use_only_given = True if TASK == 'train' else False
 
@@ -254,9 +256,9 @@ if __name__ == '__main__':
 
         if mat_file_avlb:
 
-            _class, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_class.mat')
+            _class, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_{CLOUDNET}_class.mat')
             if flag: continue
-            _status, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_cloudnetpy94_status.mat')
+            _status, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_{CLOUDNET}_status.mat')
             if flag: continue
             _feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
             if flag: continue
@@ -365,6 +367,7 @@ if __name__ == '__main__':
                 'CONV_LAYERS': cl,
                 'NFILTERS': tf_settings['NFILTERS'],
                 'KERNEL_SIZE': tf_settings['KERNEL_SIZE'],
+                'STRIDE_SIZE': tf_settings['STRIDE_SIZE'],
                 'POOL_SIZE': tf_settings['POOL_SIZE'],
                 'ACTIVATIONS': af,
 
@@ -458,12 +461,12 @@ if __name__ == '__main__':
             prediction_container['var'] = prediction2D_classes
 
             # create directory for plots
-            fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {dt_str}',
+            fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {kwargs["case"]}',
                                         range_interval=case['range_interval'])  # , **plot_settings)
 
             Plot.save_figure(fig,
-                             path=f'{PLOTS_PATH}/training/{dt_str}/',
-                             name=f'prediction_{dt_str}__{model_name}.png',
+                             path=f'{PLOTS_PATH}/training/{kwargs["case"]}/',
+                             name=f'prediction_{kwargs["case"]}__{model_name}.png',
                              dpi=200
                              )
 

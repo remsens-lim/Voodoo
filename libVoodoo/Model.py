@@ -99,6 +99,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
         NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
         KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
+        STRIDE_SIZE = hyper_params['STRIDE_SIZE'] if 'STRIDE_SIZE' in hyper_params else ValueError('STRIDE_SIZE missing!')
         POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else False
         ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
         ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
@@ -111,7 +112,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
 
         model = Sequential()
 
-        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
+        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
                          # kernel_initializer=initializer,
                          # kernel_regularizer=regularizers
                          ))
@@ -120,7 +121,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
 
         # add more conv layers
         for idl in range(CONV_LAYERS - 1):
-            model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, activation=ACTIVATION, padding="same",
+            model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, padding="same",
                              # kernel_initializer=initializer,
                              # kernel_regularizer=regularizers
                              ))

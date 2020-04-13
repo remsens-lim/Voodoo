@@ -34,24 +34,24 @@
 [tensorflow]
     window_dimension = [3, 3]
 
-    BATCH_SIZE   = 16
+    BATCH_SIZE   = 64
     BATCH_NORM   = true
-    EPOCHS       = 20
+    EPOCHS       = 50
 
-    DENSE_LAYERS = [1]
-    DENSE_NODES  = [128]
-    DROPOUT      = 0.80
+    DENSE_LAYERS = [4]
+    DENSE_NODES  = [64, 64, 64, 32]
+    DROPOUT      = 0.70
 
     CONV_LAYERS  = [3]
     KERNEL_SIZE  = [3, 3]
-    #STRIDE_SIZE  = [2, 1]
-    POOL_SIZE    = [4, 2]
+    STRIDE_SIZE  = [2, 1]
+    POOL_SIZE    = [2, 2]
     NFILTERS     = [64, 128, 256]
 
     # binary classifier
     OPTIMIZERS   = ['adam']
     ACTIVATIONS  = ['relu']
-    ACTIVATIONS_OL  = 'log_softmax'
+    ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = ['CategoricalCrossentropy']
 
     LEARNING_RATE = [1.0e-4]
