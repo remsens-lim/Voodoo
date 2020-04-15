@@ -7,6 +7,16 @@ import os
 from itertools import product
 
 import numpy as np
+
+
+# Nvidia-smi GPU memory parsing.
+# Tested on nvidia-smi 370.23
+
+import libVoodoo.Utils as util
+os.environ["CUDA_VISIBLE_DEVICES"] = str(util.pick_gpu_lowest_memory())
+ID_GPU = os.environ["CUDA_VISIBLE_DEVICES"]
+
+
 # neural network imports
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -105,71 +115,75 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
         BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
         DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
+        DEVICE = ID_GPU
 
         # create the model and add the input layer
         # initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
         # regularizers = tf.keras.regularizers.l2(l=0.01)
 
-        model = Sequential()
+        mirrored_strategy = tf.distribute.MirroredStrategy(devices=[f"/gpu:{DEVICE}"])
 
-        model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
-                         # kernel_initializer=initializer,
-                         # kernel_regularizer=regularizers
-                         ))
-        if BATCH_NORM: model.add(BatchNormalization())
-        if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
+        with mirrored_strategy.scope():
+            model = Sequential()
 
-        # add more conv layers
-        for idl in range(CONV_LAYERS - 1):
-            model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, padding="same",
+            model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
                              # kernel_initializer=initializer,
                              # kernel_regularizer=regularizers
                              ))
             if BATCH_NORM: model.add(BatchNormalization())
             if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
 
-        model.add(Flatten())
+            # add more conv layers
+            for idl in range(CONV_LAYERS - 1):
+                model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, padding="same",
+                                 # kernel_initializer=initializer,
+                                 # kernel_regularizer=regularizers
+                                 ))
+                if BATCH_NORM: model.add(BatchNormalization())
+                if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
 
-        for idense in range(DENSE_LAYERS):
-            model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
-                            # kernel_initializer=initializer,
-                            # kernel_regularizer=regularizers
-                            ))
-            if BATCH_NORM:    model.add(BatchNormalization())
-            if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
+            model.add(Flatten())
 
-        model.add(Dense(n_output[0], activation=ACTIVATION_OL))
-        print(f"Created model {MODEL_PATH}")
+            for idense in range(DENSE_LAYERS):
+                model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
+                                # kernel_initializer=initializer,
+                                # kernel_regularizer=regularizers
+                                ))
+                if BATCH_NORM:    model.add(BatchNormalization())
+                if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
-        LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
-        OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
-        beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
-        beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
-        learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
-        decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
-        momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
+            model.add(Dense(n_output[0], activation=ACTIVATION_OL))
+            print(f"Created model {MODEL_PATH}")
 
-        if OPTIMIZER == 'sgd':
-            opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
-        elif OPTIMIZER == 'Nadam':
-            opt = Nadam(learning_rate=learning_rate, beta_1=beta_1, beta_2=beta_2)
-        elif OPTIMIZER == 'rmsprop':
-            opt = RMSprop(learning_rate=learning_rate, rho=momentum)
-        elif OPTIMIZER == 'adam':
-            opt = Adam(lr=learning_rate, decay=decay_rate)
-        else:
-            raise ValueError('Unknown OPTIMIZER!', OPTIMIZER)
+            LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
+            OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
+            beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
+            beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
+            learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
+            decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
+            momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
 
-        if LOSSES == 'BinaryCrossentropy':
-            loss = BinaryCrossentropy()
-        elif LOSSES == 'CategoricalCrossentropy':
-            loss = CategoricalCrossentropy()
-        elif LOSSES == 'SparseCategoricalCrossentropy':
-            loss = SparseCategoricalCrossentropy()
-        else:
-            raise ValueError('Unknown LOSS_FCNS!', LOSSES)
+            if OPTIMIZER == 'sgd':
+                opt = SGD(lr=learning_rate, momentum=momentum, decay=decay_rate)
+            elif OPTIMIZER == 'Nadam':
+                opt = Nadam(learning_rate=learning_rate, beta_1=beta_1, beta_2=beta_2)
+            elif OPTIMIZER == 'rmsprop':
+                opt = RMSprop(learning_rate=learning_rate, rho=momentum)
+            elif OPTIMIZER == 'adam':
+                opt = Adam(lr=learning_rate, decay=decay_rate)
+            else:
+                raise ValueError('Unknown OPTIMIZER!', OPTIMIZER)
 
-        model.compile(optimizer=opt, loss=loss, metrics=['CategoricalAccuracy'])
+            if LOSSES == 'BinaryCrossentropy':
+                loss = BinaryCrossentropy()
+            elif LOSSES == 'CategoricalCrossentropy':
+                loss = CategoricalCrossentropy()
+            elif LOSSES == 'SparseCategoricalCrossentropy':
+                loss = SparseCategoricalCrossentropy()
+            else:
+                raise ValueError('Unknown LOSS_FCNS!', LOSSES)
+
+            model.compile(optimizer=opt, loss=loss, metrics=['CategoricalAccuracy'])
     model.summary()
 
     return model
@@ -213,22 +227,26 @@ def training(model, train_set, train_label, **hyper_params):
     # initialize tqdm callback with default parameters
     tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
-    with tf.device(f'/gpu:{DEVICE}'):
-        history = model.fit(
-            train_set, train_label,
-            batch_size=BATCH_SIZE,
-            epochs=EPOCHS,
-            shuffle=True,
-            callbacks=[tensorboard_callback, tqdm_callback],  # , lr_callback],
-            # validation_split=0.1,
-            validation_data=VALID_SET,
-            # callbacks=[PrintDot()],
-            verbose=0
-        )
+    #with tf.device(f'/gpu:{DEVICE}'):
+    history = model.fit(
+        train_set, train_label,
+        batch_size=BATCH_SIZE,
+        epochs=EPOCHS,
+        shuffle=True,
+        callbacks=[
+            #tensorboard_callback,
+            tqdm_callback,
+            #lr_callback
+            ],
+        # validation_split=0.1,
+        validation_data=VALID_SET,
+        # callbacks=[PrintDot()],
+        verbose=0
+    )
 
-        # serialize model to HDF5
-        model.save(MODEL_PATH)
-        print(f"Saved model to disk :: {MODEL_PATH}")
+    # serialize model to HDF5
+    model.save(MODEL_PATH)
+    print(f"Saved model to disk :: {MODEL_PATH}")
 
     return history
 
@@ -262,6 +280,9 @@ def one_hot_to_classes(cnn_pred, mask):
     for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
         if mask[iT, iR]: continue
         predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
+#        if predicted_classes[iT, iR] in [1, 5]:
+#            if np.max(cnn_pred[cnt]) < 0.5:
+#                predicted_classes[iT, iR] = 4
         cnt += 1
 
     return predicted_classes

@@ -2,126 +2,6 @@
 t_train = 15.00
 t_skip = 15.00
 
-[case.20190318-0]
-    time_interval = ['20190318-0000', '20190318-0015']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-0/'
-
-[case.20190318-1]
-    time_interval = ['20190318-0015', '20190318-0030']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-1/'
-
-[case.20190318-2]
-    time_interval = ['20190318-0030', '20190318-0045']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-2/'
-
-[case.20190318-3]
-    time_interval = ['20190318-0045', '20190318-0100']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-3/'
-
-[case.20190318-4]
-    time_interval = ['20190318-0100', '20190318-0115']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-4/'
-
-[case.20190318-5]
-    time_interval = ['20190318-0115', '20190318-0130']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-5/'
-
-[case.20190318-6]
-    time_interval = ['20190318-0130', '20190318-0145']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-6/'
-
-[case.20190318-7]
-    time_interval = ['20190318-0145', '20190318-0200']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-7/'
-
-[case.20190318-8]
-    time_interval = ['20190318-0200', '20190318-0215']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-8/'
-
-[case.20190318-9]
-    time_interval = ['20190318-0215', '20190318-0230']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-9/'
-
-[case.20190318-10]
-    time_interval = ['20190318-0230', '20190318-0245']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-10/'
-
-[case.20190318-11]
-    time_interval = ['20190318-0245', '20190318-0300']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-11/'
-
-[case.20190318-12]
-    time_interval = ['20190318-0300', '20190318-0315']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-12/'
-
-[case.20190318-13]
-    time_interval = ['20190318-0315', '20190318-0330']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-13/'
-
-[case.20190318-14]
-    time_interval = ['20190318-0330', '20190318-0345']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-14/'
-
-[case.20190318-15]
-    time_interval = ['20190318-0345', '20190318-0400']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-15/'
-
-[case.20190318-16]
-    time_interval = ['20190318-0400', '20190318-0415']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-16/'
-
-[case.20190318-17]
-    time_interval = ['20190318-0415', '20190318-0430']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-17/'
-
-[case.20190318-18]
-    time_interval = ['20190318-0430', '20190318-0445']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-18/'
-
-[case.20190318-19]
-    time_interval = ['20190318-0445', '20190318-0500']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-19/'
-
-[case.20190318-20]
-    time_interval = ['20190318-0500', '20190318-0515']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-20/'
-
-[case.20190318-21]
-    time_interval = ['20190318-0515', '20190318-0530']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-21/'
-
-[case.20190318-22]
-    time_interval = ['20190318-0530', '20190318-0545']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-22/'
-
-[case.20190318-23]
-    time_interval = ['20190318-0545', '20190318-0600']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-23/'
-
 [case.20190318-24]
     time_interval = ['20190318-0600', '20190318-0615']
     range_interval = [0, 12000]
@@ -322,162 +202,2275 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20190318-63/'
 
-[case.20190318-64]
-    time_interval = ['20190318-1600', '20190318-1615']
-    range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-64/'
+t_train = 15.00
+t_skip = 15.00
 
-[case.20190318-65]
-    time_interval = ['20190318-1615', '20190318-1630']
+[case.20190801-0]
+    time_interval = ['20190801-0000', '20190801-0015']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-65/'
+    plot_dir = 'plots/20190801-0/'
 
-[case.20190318-66]
-    time_interval = ['20190318-1630', '20190318-1645']
+[case.20190801-1]
+    time_interval = ['20190801-0015', '20190801-0030']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-66/'
+    plot_dir = 'plots/20190801-1/'
 
-[case.20190318-67]
-    time_interval = ['20190318-1645', '20190318-1700']
+[case.20190801-2]
+    time_interval = ['20190801-0030', '20190801-0045']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-67/'
+    plot_dir = 'plots/20190801-2/'
 
-[case.20190318-68]
-    time_interval = ['20190318-1700', '20190318-1715']
+[case.20190801-3]
+    time_interval = ['20190801-0045', '20190801-0100']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-68/'
+    plot_dir = 'plots/20190801-3/'
 
-[case.20190318-69]
-    time_interval = ['20190318-1715', '20190318-1730']
+[case.20190801-4]
+    time_interval = ['20190801-0100', '20190801-0115']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-69/'
+    plot_dir = 'plots/20190801-4/'
 
-[case.20190318-70]
-    time_interval = ['20190318-1730', '20190318-1745']
+[case.20190801-5]
+    time_interval = ['20190801-0115', '20190801-0130']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-70/'
+    plot_dir = 'plots/20190801-5/'
 
-[case.20190318-71]
-    time_interval = ['20190318-1745', '20190318-1800']
+[case.20190801-6]
+    time_interval = ['20190801-0130', '20190801-0145']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-71/'
+    plot_dir = 'plots/20190801-6/'
 
-[case.20190318-72]
-    time_interval = ['20190318-1800', '20190318-1815']
+[case.20190801-7]
+    time_interval = ['20190801-0145', '20190801-0200']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-72/'
+    plot_dir = 'plots/20190801-7/'
 
-[case.20190318-73]
-    time_interval = ['20190318-1815', '20190318-1830']
+[case.20190801-8]
+    time_interval = ['20190801-0200', '20190801-0215']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-73/'
+    plot_dir = 'plots/20190801-8/'
 
-[case.20190318-74]
-    time_interval = ['20190318-1830', '20190318-1845']
+[case.20190801-9]
+    time_interval = ['20190801-0215', '20190801-0230']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-74/'
+    plot_dir = 'plots/20190801-9/'
 
-[case.20190318-75]
-    time_interval = ['20190318-1845', '20190318-1900']
+[case.20190801-10]
+    time_interval = ['20190801-0230', '20190801-0245']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-75/'
+    plot_dir = 'plots/20190801-10/'
 
-[case.20190318-76]
-    time_interval = ['20190318-1900', '20190318-1915']
+[case.20190801-11]
+    time_interval = ['20190801-0245', '20190801-0300']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-76/'
+    plot_dir = 'plots/20190801-11/'
 
-[case.20190318-77]
-    time_interval = ['20190318-1915', '20190318-1930']
+[case.20190801-12]
+    time_interval = ['20190801-0300', '20190801-0315']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-77/'
+    plot_dir = 'plots/20190801-12/'
 
-[case.20190318-78]
-    time_interval = ['20190318-1930', '20190318-1945']
+[case.20190801-13]
+    time_interval = ['20190801-0315', '20190801-0330']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-78/'
+    plot_dir = 'plots/20190801-13/'
 
-[case.20190318-79]
-    time_interval = ['20190318-1945', '20190318-2000']
+[case.20190801-14]
+    time_interval = ['20190801-0330', '20190801-0345']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-79/'
+    plot_dir = 'plots/20190801-14/'
 
-[case.20190318-80]
-    time_interval = ['20190318-2000', '20190318-2015']
+[case.20190801-15]
+    time_interval = ['20190801-0345', '20190801-0400']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-80/'
+    plot_dir = 'plots/20190801-15/'
 
-[case.20190318-81]
-    time_interval = ['20190318-2015', '20190318-2030']
+[case.20190801-16]
+    time_interval = ['20190801-0400', '20190801-0415']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-81/'
+    plot_dir = 'plots/20190801-16/'
 
-[case.20190318-82]
-    time_interval = ['20190318-2030', '20190318-2045']
+[case.20190801-17]
+    time_interval = ['20190801-0415', '20190801-0430']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-82/'
+    plot_dir = 'plots/20190801-17/'
 
-[case.20190318-83]
-    time_interval = ['20190318-2045', '20190318-2100']
+[case.20190801-18]
+    time_interval = ['20190801-0430', '20190801-0445']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-83/'
+    plot_dir = 'plots/20190801-18/'
 
-[case.20190318-84]
-    time_interval = ['20190318-2100', '20190318-2115']
+[case.20190801-19]
+    time_interval = ['20190801-0445', '20190801-0500']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-84/'
+    plot_dir = 'plots/20190801-19/'
 
-[case.20190318-85]
-    time_interval = ['20190318-2115', '20190318-2130']
+[case.20190801-20]
+    time_interval = ['20190801-0500', '20190801-0515']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-85/'
+    plot_dir = 'plots/20190801-20/'
 
-[case.20190318-86]
-    time_interval = ['20190318-2130', '20190318-2145']
+[case.20190801-21]
+    time_interval = ['20190801-0515', '20190801-0530']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-86/'
+    plot_dir = 'plots/20190801-21/'
 
-[case.20190318-87]
-    time_interval = ['20190318-2145', '20190318-2200']
+[case.20190801-22]
+    time_interval = ['20190801-0530', '20190801-0545']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-87/'
+    plot_dir = 'plots/20190801-22/'
 
-[case.20190318-88]
-    time_interval = ['20190318-2200', '20190318-2215']
+[case.20190801-23]
+    time_interval = ['20190801-0545', '20190801-0600']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-88/'
+    plot_dir = 'plots/20190801-23/'
 
-[case.20190318-89]
-    time_interval = ['20190318-2215', '20190318-2230']
+[case.20190801-24]
+    time_interval = ['20190801-0600', '20190801-0615']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-89/'
+    plot_dir = 'plots/20190801-24/'
 
-[case.20190318-90]
-    time_interval = ['20190318-2230', '20190318-2245']
+[case.20190801-25]
+    time_interval = ['20190801-0615', '20190801-0630']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-90/'
+    plot_dir = 'plots/20190801-25/'
 
-[case.20190318-91]
-    time_interval = ['20190318-2245', '20190318-2300']
+[case.20190801-26]
+    time_interval = ['20190801-0630', '20190801-0645']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-91/'
+    plot_dir = 'plots/20190801-26/'
 
-[case.20190318-92]
-    time_interval = ['20190318-2300', '20190318-2315']
+[case.20190801-27]
+    time_interval = ['20190801-0645', '20190801-0700']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-92/'
+    plot_dir = 'plots/20190801-27/'
 
-[case.20190318-93]
-    time_interval = ['20190318-2315', '20190318-2330']
+[case.20190801-28]
+    time_interval = ['20190801-0700', '20190801-0715']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-93/'
+    plot_dir = 'plots/20190801-28/'
 
-[case.20190318-94]
-    time_interval = ['20190318-2330', '20190318-2345']
+[case.20190801-29]
+    time_interval = ['20190801-0715', '20190801-0730']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-94/'
+    plot_dir = 'plots/20190801-29/'
 
-[case.20190318-95]
-    time_interval = ['20190318-2345', '20190319-0000']
+[case.20190801-30]
+    time_interval = ['20190801-0730', '20190801-0745']
     range_interval = [0, 12000]
-    plot_dir = 'plots/20190318-95/'
+    plot_dir = 'plots/20190801-30/'
+
+[case.20190801-31]
+    time_interval = ['20190801-0745', '20190801-0800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-31/'
+
+[case.20190801-32]
+    time_interval = ['20190801-0800', '20190801-0815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-32/'
+
+[case.20190801-33]
+    time_interval = ['20190801-0815', '20190801-0830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-33/'
+
+[case.20190801-34]
+    time_interval = ['20190801-0830', '20190801-0845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-34/'
+
+[case.20190801-35]
+    time_interval = ['20190801-0845', '20190801-0900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-35/'
+
+[case.20190801-36]
+    time_interval = ['20190801-0900', '20190801-0915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-36/'
+
+[case.20190801-37]
+    time_interval = ['20190801-0915', '20190801-0930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-37/'
+
+[case.20190801-38]
+    time_interval = ['20190801-0930', '20190801-0945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-38/'
+
+[case.20190801-39]
+    time_interval = ['20190801-0945', '20190801-1000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-39/'
+
+[case.20190801-40]
+    time_interval = ['20190801-1000', '20190801-1015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-40/'
+
+[case.20190801-41]
+    time_interval = ['20190801-1015', '20190801-1030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-41/'
+
+[case.20190801-42]
+    time_interval = ['20190801-1030', '20190801-1045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-42/'
+
+[case.20190801-43]
+    time_interval = ['20190801-1045', '20190801-1100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-43/'
+
+[case.20190801-44]
+    time_interval = ['20190801-1100', '20190801-1115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-44/'
+
+[case.20190801-45]
+    time_interval = ['20190801-1115', '20190801-1130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-45/'
+
+[case.20190801-46]
+    time_interval = ['20190801-1130', '20190801-1145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-46/'
+
+[case.20190801-47]
+    time_interval = ['20190801-1145', '20190801-1200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-47/'
+
+[case.20190801-48]
+    time_interval = ['20190801-1200', '20190801-1215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-48/'
+
+[case.20190801-49]
+    time_interval = ['20190801-1215', '20190801-1230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-49/'
+
+[case.20190801-50]
+    time_interval = ['20190801-1230', '20190801-1245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-50/'
+
+[case.20190801-51]
+    time_interval = ['20190801-1245', '20190801-1300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-51/'
+
+[case.20190801-52]
+    time_interval = ['20190801-1300', '20190801-1315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-52/'
+
+[case.20190801-53]
+    time_interval = ['20190801-1315', '20190801-1330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-53/'
+
+[case.20190801-54]
+    time_interval = ['20190801-1330', '20190801-1345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-54/'
+
+[case.20190801-55]
+    time_interval = ['20190801-1345', '20190801-1400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-55/'
+
+[case.20190801-56]
+    time_interval = ['20190801-1400', '20190801-1415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-56/'
+
+[case.20190801-57]
+    time_interval = ['20190801-1415', '20190801-1430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-57/'
+
+[case.20190801-58]
+    time_interval = ['20190801-1430', '20190801-1445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-58/'
+
+[case.20190801-59]
+    time_interval = ['20190801-1445', '20190801-1500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-59/'
+
+[case.20190801-60]
+    time_interval = ['20190801-1500', '20190801-1515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-60/'
+
+[case.20190801-61]
+    time_interval = ['20190801-1515', '20190801-1530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-61/'
+
+[case.20190801-62]
+    time_interval = ['20190801-1530', '20190801-1545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-62/'
+
+[case.20190801-63]
+    time_interval = ['20190801-1545', '20190801-1600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-63/'
+
+[case.20190801-64]
+    time_interval = ['20190801-1600', '20190801-1615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-64/'
+
+[case.20190801-65]
+    time_interval = ['20190801-1615', '20190801-1630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-65/'
+
+[case.20190801-66]
+    time_interval = ['20190801-1630', '20190801-1645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-66/'
+
+[case.20190801-67]
+    time_interval = ['20190801-1645', '20190801-1700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-67/'
+
+[case.20190801-68]
+    time_interval = ['20190801-1700', '20190801-1715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-68/'
+
+[case.20190801-69]
+    time_interval = ['20190801-1715', '20190801-1730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-69/'
+
+[case.20190801-70]
+    time_interval = ['20190801-1730', '20190801-1745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-70/'
+
+[case.20190801-71]
+    time_interval = ['20190801-1745', '20190801-1800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-71/'
+
+[case.20190801-72]
+    time_interval = ['20190801-1800', '20190801-1815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-72/'
+
+[case.20190801-73]
+    time_interval = ['20190801-1815', '20190801-1830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-73/'
+
+[case.20190801-74]
+    time_interval = ['20190801-1830', '20190801-1845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-74/'
+
+[case.20190801-75]
+    time_interval = ['20190801-1845', '20190801-1900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-75/'
+
+[case.20190801-76]
+    time_interval = ['20190801-1900', '20190801-1915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-76/'
+
+[case.20190801-77]
+    time_interval = ['20190801-1915', '20190801-1930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-77/'
+
+[case.20190801-78]
+    time_interval = ['20190801-1930', '20190801-1945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-78/'
+
+[case.20190801-79]
+    time_interval = ['20190801-1945', '20190801-2000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-79/'
+
+[case.20190801-80]
+    time_interval = ['20190801-2000', '20190801-2015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-80/'
+
+[case.20190801-81]
+    time_interval = ['20190801-2015', '20190801-2030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-81/'
+
+[case.20190801-82]
+    time_interval = ['20190801-2030', '20190801-2045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-82/'
+
+[case.20190801-83]
+    time_interval = ['20190801-2045', '20190801-2100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-83/'
+
+[case.20190801-84]
+    time_interval = ['20190801-2100', '20190801-2115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-84/'
+
+[case.20190801-85]
+    time_interval = ['20190801-2115', '20190801-2130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-85/'
+
+[case.20190801-86]
+    time_interval = ['20190801-2130', '20190801-2145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-86/'
+
+[case.20190801-87]
+    time_interval = ['20190801-2145', '20190801-2200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-87/'
+
+[case.20190801-88]
+    time_interval = ['20190801-2200', '20190801-2215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-88/'
+
+[case.20190801-89]
+    time_interval = ['20190801-2215', '20190801-2230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-89/'
+
+[case.20190801-90]
+    time_interval = ['20190801-2230', '20190801-2245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-90/'
+
+[case.20190801-91]
+    time_interval = ['20190801-2245', '20190801-2300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-91/'
+
+[case.20190801-92]
+    time_interval = ['20190801-2300', '20190801-2315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-92/'
+
+[case.20190801-93]
+    time_interval = ['20190801-2315', '20190801-2330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-93/'
+
+[case.20190801-94]
+    time_interval = ['20190801-2330', '20190801-2345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190801-94/'
+
+[case.20190904-36]
+    time_interval = ['20190904-0900', '20190904-0915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-36/'
+
+[case.20190904-37]
+    time_interval = ['20190904-0915', '20190904-0930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-37/'
+
+[case.20190904-38]
+    time_interval = ['20190904-0930', '20190904-0945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-38/'
+
+[case.20190904-39]
+    time_interval = ['20190904-0945', '20190904-1000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-39/'
+
+[case.20190904-40]
+    time_interval = ['20190904-1000', '20190904-1015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-40/'
+
+[case.20190904-41]
+    time_interval = ['20190904-1015', '20190904-1030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-41/'
+
+[case.20190904-42]
+    time_interval = ['20190904-1030', '20190904-1045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-42/'
+
+[case.20190904-43]
+    time_interval = ['20190904-1045', '20190904-1100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-43/'
+
+[case.20190904-44]
+    time_interval = ['20190904-1100', '20190904-1115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-44/'
+
+[case.20190904-45]
+    time_interval = ['20190904-1115', '20190904-1130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-45/'
+
+[case.20190904-46]
+    time_interval = ['20190904-1130', '20190904-1145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-46/'
+
+[case.20190904-47]
+    time_interval = ['20190904-1145', '20190904-1200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-47/'
+
+[case.20190904-48]
+    time_interval = ['20190904-1200', '20190904-1215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-48/'
+
+[case.20190904-49]
+    time_interval = ['20190904-1215', '20190904-1230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-49/'
+
+[case.20190904-50]
+    time_interval = ['20190904-1230', '20190904-1245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-50/'
+
+[case.20190904-51]
+    time_interval = ['20190904-1245', '20190904-1300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-51/'
+
+[case.20190904-52]
+    time_interval = ['20190904-1300', '20190904-1315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-52/'
+
+[case.20190904-53]
+    time_interval = ['20190904-1315', '20190904-1330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-53/'
+
+[case.20190904-54]
+    time_interval = ['20190904-1330', '20190904-1345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-54/'
+
+[case.20190904-55]
+    time_interval = ['20190904-1345', '20190904-1400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-55/'
+
+[case.20190904-56]
+    time_interval = ['20190904-1400', '20190904-1415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-56/'
+
+[case.20190904-57]
+    time_interval = ['20190904-1415', '20190904-1430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-57/'
+
+[case.20190904-58]
+    time_interval = ['20190904-1430', '20190904-1445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-58/'
+
+[case.20190904-59]
+    time_interval = ['20190904-1445', '20190904-1500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-59/'
+
+[case.20190904-60]
+    time_interval = ['20190904-1500', '20190904-1515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-60/'
+
+[case.20190904-61]
+    time_interval = ['20190904-1515', '20190904-1530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-61/'
+
+[case.20190904-62]
+    time_interval = ['20190904-1530', '20190904-1545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-62/'
+
+[case.20190904-63]
+    time_interval = ['20190904-1545', '20190904-1600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-63/'
+
+[case.20190904-64]
+    time_interval = ['20190904-1600', '20190904-1615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-64/'
+
+[case.20190904-65]
+    time_interval = ['20190904-1615', '20190904-1630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-65/'
+
+[case.20190904-66]
+    time_interval = ['20190904-1630', '20190904-1645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-66/'
+
+[case.20190904-67]
+    time_interval = ['20190904-1645', '20190904-1700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-67/'
+
+[case.20190904-68]
+    time_interval = ['20190904-1700', '20190904-1715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-68/'
+
+[case.20190904-69]
+    time_interval = ['20190904-1715', '20190904-1730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-69/'
+
+[case.20190904-70]
+    time_interval = ['20190904-1730', '20190904-1745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-70/'
+
+[case.20190904-71]
+    time_interval = ['20190904-1745', '20190904-1800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190904-71/'
+
+
+[case.20190102-0]
+    time_interval = ['20190102-0000', '20190102-0015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-0/'
+
+[case.20190102-1]
+    time_interval = ['20190102-0015', '20190102-0030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-1/'
+
+[case.20190102-2]
+    time_interval = ['20190102-0030', '20190102-0045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-2/'
+
+[case.20190102-3]
+    time_interval = ['20190102-0045', '20190102-0100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-3/'
+
+[case.20190102-4]
+    time_interval = ['20190102-0100', '20190102-0115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-4/'
+
+[case.20190102-5]
+    time_interval = ['20190102-0115', '20190102-0130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-5/'
+
+[case.20190102-6]
+    time_interval = ['20190102-0130', '20190102-0145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-6/'
+
+[case.20190102-7]
+    time_interval = ['20190102-0145', '20190102-0200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-7/'
+
+[case.20190102-8]
+    time_interval = ['20190102-0200', '20190102-0215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-8/'
+
+[case.20190102-9]
+    time_interval = ['20190102-0215', '20190102-0230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-9/'
+
+[case.20190102-10]
+    time_interval = ['20190102-0230', '20190102-0245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-10/'
+
+[case.20190102-11]
+    time_interval = ['20190102-0245', '20190102-0300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-11/'
+
+[case.20190102-12]
+    time_interval = ['20190102-0300', '20190102-0315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-12/'
+
+[case.20190102-13]
+    time_interval = ['20190102-0315', '20190102-0330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-13/'
+
+[case.20190102-14]
+    time_interval = ['20190102-0330', '20190102-0345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-14/'
+
+[case.20190102-15]
+    time_interval = ['20190102-0345', '20190102-0400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-15/'
+
+[case.20190102-16]
+    time_interval = ['20190102-0400', '20190102-0415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-16/'
+
+[case.20190102-17]
+    time_interval = ['20190102-0415', '20190102-0430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-17/'
+
+[case.20190102-18]
+    time_interval = ['20190102-0430', '20190102-0445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-18/'
+
+[case.20190102-19]
+    time_interval = ['20190102-0445', '20190102-0500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-19/'
+
+[case.20190102-20]
+    time_interval = ['20190102-0500', '20190102-0515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-20/'
+
+[case.20190102-21]
+    time_interval = ['20190102-0515', '20190102-0530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-21/'
+
+[case.20190102-22]
+    time_interval = ['20190102-0530', '20190102-0545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-22/'
+
+[case.20190102-23]
+    time_interval = ['20190102-0545', '20190102-0600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-23/'
+
+[case.20190102-24]
+    time_interval = ['20190102-0600', '20190102-0615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-24/'
+
+[case.20190102-25]
+    time_interval = ['20190102-0615', '20190102-0630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-25/'
+
+[case.20190102-26]
+    time_interval = ['20190102-0630', '20190102-0645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-26/'
+
+[case.20190102-27]
+    time_interval = ['20190102-0645', '20190102-0700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-27/'
+
+[case.20190102-28]
+    time_interval = ['20190102-0700', '20190102-0715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-28/'
+
+[case.20190102-29]
+    time_interval = ['20190102-0715', '20190102-0730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-29/'
+
+[case.20190102-30]
+    time_interval = ['20190102-0730', '20190102-0745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-30/'
+
+[case.20190102-31]
+    time_interval = ['20190102-0745', '20190102-0800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-31/'
+
+[case.20190102-32]
+    time_interval = ['20190102-0800', '20190102-0815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-32/'
+
+[case.20190102-33]
+    time_interval = ['20190102-0815', '20190102-0830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-33/'
+
+[case.20190102-34]
+    time_interval = ['20190102-0830', '20190102-0845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-34/'
+
+[case.20190102-35]
+    time_interval = ['20190102-0845', '20190102-0900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-35/'
+
+[case.20190102-36]
+    time_interval = ['20190102-0900', '20190102-0915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-36/'
+
+[case.20190102-37]
+    time_interval = ['20190102-0915', '20190102-0930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-37/'
+
+[case.20190102-38]
+    time_interval = ['20190102-0930', '20190102-0945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-38/'
+
+[case.20190102-39]
+    time_interval = ['20190102-0945', '20190102-1000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-39/'
+
+[case.20190102-40]
+    time_interval = ['20190102-1000', '20190102-1015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-40/'
+
+[case.20190102-41]
+    time_interval = ['20190102-1015', '20190102-1030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-41/'
+
+[case.20190102-42]
+    time_interval = ['20190102-1030', '20190102-1045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-42/'
+
+[case.20190102-43]
+    time_interval = ['20190102-1045', '20190102-1100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-43/'
+
+[case.20190102-44]
+    time_interval = ['20190102-1100', '20190102-1115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-44/'
+
+[case.20190102-45]
+    time_interval = ['20190102-1115', '20190102-1130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-45/'
+
+[case.20190102-46]
+    time_interval = ['20190102-1130', '20190102-1145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-46/'
+
+[case.20190102-47]
+    time_interval = ['20190102-1145', '20190102-1200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-47/'
+
+[case.20190102-48]
+    time_interval = ['20190102-1200', '20190102-1215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-48/'
+
+[case.20190102-49]
+    time_interval = ['20190102-1215', '20190102-1230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-49/'
+
+[case.20190102-50]
+    time_interval = ['20190102-1230', '20190102-1245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-50/'
+
+[case.20190102-51]
+    time_interval = ['20190102-1245', '20190102-1300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-51/'
+
+[case.20190102-52]
+    time_interval = ['20190102-1300', '20190102-1315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-52/'
+
+[case.20190102-53]
+    time_interval = ['20190102-1315', '20190102-1330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-53/'
+
+[case.20190102-54]
+    time_interval = ['20190102-1330', '20190102-1345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-54/'
+
+[case.20190102-55]
+    time_interval = ['20190102-1345', '20190102-1400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-55/'
+
+[case.20190102-56]
+    time_interval = ['20190102-1400', '20190102-1415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-56/'
+
+[case.20190102-57]
+    time_interval = ['20190102-1415', '20190102-1430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-57/'
+
+[case.20190102-58]
+    time_interval = ['20190102-1430', '20190102-1445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-58/'
+
+[case.20190102-59]
+    time_interval = ['20190102-1445', '20190102-1500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-59/'
+
+[case.20190102-60]
+    time_interval = ['20190102-1500', '20190102-1515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-60/'
+
+[case.20190102-61]
+    time_interval = ['20190102-1515', '20190102-1530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-61/'
+
+[case.20190102-62]
+    time_interval = ['20190102-1530', '20190102-1545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-62/'
+
+[case.20190102-63]
+    time_interval = ['20190102-1545', '20190102-1600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-63/'
+
+[case.20190102-64]
+    time_interval = ['20190102-1600', '20190102-1615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-64/'
+
+[case.20190102-65]
+    time_interval = ['20190102-1615', '20190102-1630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-65/'
+
+[case.20190102-66]
+    time_interval = ['20190102-1630', '20190102-1645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-66/'
+
+[case.20190102-67]
+    time_interval = ['20190102-1645', '20190102-1700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-67/'
+
+[case.20190102-68]
+    time_interval = ['20190102-1700', '20190102-1715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-68/'
+
+[case.20190102-69]
+    time_interval = ['20190102-1715', '20190102-1730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-69/'
+
+[case.20190102-70]
+    time_interval = ['20190102-1730', '20190102-1745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-70/'
+
+[case.20190102-71]
+    time_interval = ['20190102-1745', '20190102-1800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-71/'
+
+[case.20190102-72]
+    time_interval = ['20190102-1800', '20190102-1815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-72/'
+
+[case.20190102-73]
+    time_interval = ['20190102-1815', '20190102-1830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-73/'
+
+[case.20190102-74]
+    time_interval = ['20190102-1830', '20190102-1845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-74/'
+
+[case.20190102-75]
+    time_interval = ['20190102-1845', '20190102-1900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-75/'
+
+[case.20190102-76]
+    time_interval = ['20190102-1900', '20190102-1915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-76/'
+
+[case.20190102-77]
+    time_interval = ['20190102-1915', '20190102-1930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-77/'
+
+[case.20190102-78]
+    time_interval = ['20190102-1930', '20190102-1945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-78/'
+
+[case.20190102-79]
+    time_interval = ['20190102-1945', '20190102-2000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-79/'
+
+[case.20190102-80]
+    time_interval = ['20190102-2000', '20190102-2015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-80/'
+
+[case.20190102-81]
+    time_interval = ['20190102-2015', '20190102-2030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-81/'
+
+[case.20190102-82]
+    time_interval = ['20190102-2030', '20190102-2045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-82/'
+
+[case.20190102-83]
+    time_interval = ['20190102-2045', '20190102-2100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-83/'
+
+[case.20190102-84]
+    time_interval = ['20190102-2100', '20190102-2115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-84/'
+
+[case.20190102-85]
+    time_interval = ['20190102-2115', '20190102-2130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-85/'
+
+[case.20190102-86]
+    time_interval = ['20190102-2130', '20190102-2145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-86/'
+
+[case.20190102-87]
+    time_interval = ['20190102-2145', '20190102-2200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-87/'
+
+[case.20190102-88]
+    time_interval = ['20190102-2200', '20190102-2215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-88/'
+
+[case.20190102-89]
+    time_interval = ['20190102-2215', '20190102-2230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-89/'
+
+[case.20190102-90]
+    time_interval = ['20190102-2230', '20190102-2245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-90/'
+
+[case.20190102-91]
+    time_interval = ['20190102-2245', '20190102-2300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-91/'
+
+[case.20190102-92]
+    time_interval = ['20190102-2300', '20190102-2315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-92/'
+
+[case.20190102-93]
+    time_interval = ['20190102-2315', '20190102-2330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-93/'
+
+[case.20190102-94]
+    time_interval = ['20190102-2330', '20190102-2345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-94/'
+
+[case.20190102-95]
+    time_interval = ['20190102-2345', '20190103-0000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190102-95/'
+
+
+[case.20190131-0]
+    time_interval = ['20190131-0000', '20190131-0015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-0/'
+
+[case.20190131-1]
+    time_interval = ['20190131-0015', '20190131-0030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-1/'
+
+[case.20190131-2]
+    time_interval = ['20190131-0030', '20190131-0045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-2/'
+
+[case.20190131-3]
+    time_interval = ['20190131-0045', '20190131-0100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-3/'
+
+[case.20190131-4]
+    time_interval = ['20190131-0100', '20190131-0115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-4/'
+
+[case.20190131-5]
+    time_interval = ['20190131-0115', '20190131-0130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-5/'
+
+[case.20190131-6]
+    time_interval = ['20190131-0130', '20190131-0145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-6/'
+
+[case.20190131-7]
+    time_interval = ['20190131-0145', '20190131-0200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-7/'
+
+[case.20190131-8]
+    time_interval = ['20190131-0200', '20190131-0215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-8/'
+
+[case.20190131-9]
+    time_interval = ['20190131-0215', '20190131-0230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-9/'
+
+[case.20190131-10]
+    time_interval = ['20190131-0230', '20190131-0245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-10/'
+
+[case.20190131-11]
+    time_interval = ['20190131-0245', '20190131-0300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-11/'
+
+[case.20190131-12]
+    time_interval = ['20190131-0300', '20190131-0315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-12/'
+
+[case.20190131-13]
+    time_interval = ['20190131-0315', '20190131-0330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-13/'
+
+[case.20190131-14]
+    time_interval = ['20190131-0330', '20190131-0345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-14/'
+
+[case.20190131-15]
+    time_interval = ['20190131-0345', '20190131-0400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-15/'
+
+[case.20190131-16]
+    time_interval = ['20190131-0400', '20190131-0415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-16/'
+
+[case.20190131-17]
+    time_interval = ['20190131-0415', '20190131-0430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-17/'
+
+[case.20190131-18]
+    time_interval = ['20190131-0430', '20190131-0445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-18/'
+
+[case.20190131-19]
+    time_interval = ['20190131-0445', '20190131-0500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-19/'
+
+[case.20190131-20]
+    time_interval = ['20190131-0500', '20190131-0515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-20/'
+
+[case.20190131-21]
+    time_interval = ['20190131-0515', '20190131-0530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-21/'
+
+[case.20190131-22]
+    time_interval = ['20190131-0530', '20190131-0545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-22/'
+
+[case.20190131-23]
+    time_interval = ['20190131-0545', '20190131-0600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-23/'
+
+[case.20190131-24]
+    time_interval = ['20190131-0600', '20190131-0615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-24/'
+
+[case.20190131-25]
+    time_interval = ['20190131-0615', '20190131-0630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-25/'
+
+[case.20190131-26]
+    time_interval = ['20190131-0630', '20190131-0645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-26/'
+
+[case.20190131-27]
+    time_interval = ['20190131-0645', '20190131-0700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-27/'
+
+[case.20190131-28]
+    time_interval = ['20190131-0700', '20190131-0715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-28/'
+
+[case.20190131-29]
+    time_interval = ['20190131-0715', '20190131-0730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-29/'
+
+[case.20190131-30]
+    time_interval = ['20190131-0730', '20190131-0745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-30/'
+
+[case.20190131-31]
+    time_interval = ['20190131-0745', '20190131-0800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-31/'
+
+[case.20190131-32]
+    time_interval = ['20190131-0800', '20190131-0815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-32/'
+
+[case.20190131-33]
+    time_interval = ['20190131-0815', '20190131-0830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-33/'
+
+[case.20190131-34]
+    time_interval = ['20190131-0830', '20190131-0845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-34/'
+
+[case.20190131-35]
+    time_interval = ['20190131-0845', '20190131-0900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20190131-35/'
+
+
+[case.20181201-0]
+    time_interval = ['20181201-0000', '20181201-0015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-0/'
+
+[case.20181201-1]
+    time_interval = ['20181201-0015', '20181201-0030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-1/'
+
+[case.20181201-2]
+    time_interval = ['20181201-0030', '20181201-0045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-2/'
+
+[case.20181201-3]
+    time_interval = ['20181201-0045', '20181201-0100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-3/'
+
+[case.20181201-4]
+    time_interval = ['20181201-0100', '20181201-0115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-4/'
+
+[case.20181201-5]
+    time_interval = ['20181201-0115', '20181201-0130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-5/'
+
+[case.20181201-6]
+    time_interval = ['20181201-0130', '20181201-0145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-6/'
+
+[case.20181201-7]
+    time_interval = ['20181201-0145', '20181201-0200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-7/'
+
+[case.20181201-8]
+    time_interval = ['20181201-0200', '20181201-0215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-8/'
+
+[case.20181201-9]
+    time_interval = ['20181201-0215', '20181201-0230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-9/'
+
+[case.20181201-10]
+    time_interval = ['20181201-0230', '20181201-0245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-10/'
+
+[case.20181201-11]
+    time_interval = ['20181201-0245', '20181201-0300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-11/'
+
+[case.20181201-12]
+    time_interval = ['20181201-0300', '20181201-0315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-12/'
+
+[case.20181201-13]
+    time_interval = ['20181201-0315', '20181201-0330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-13/'
+
+[case.20181201-14]
+    time_interval = ['20181201-0330', '20181201-0345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-14/'
+
+[case.20181201-15]
+    time_interval = ['20181201-0345', '20181201-0400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-15/'
+
+[case.20181201-16]
+    time_interval = ['20181201-0400', '20181201-0415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-16/'
+
+[case.20181201-17]
+    time_interval = ['20181201-0415', '20181201-0430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-17/'
+
+[case.20181201-18]
+    time_interval = ['20181201-0430', '20181201-0445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-18/'
+
+[case.20181201-19]
+    time_interval = ['20181201-0445', '20181201-0500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-19/'
+
+[case.20181201-20]
+    time_interval = ['20181201-0500', '20181201-0515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-20/'
+
+[case.20181201-21]
+    time_interval = ['20181201-0515', '20181201-0530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-21/'
+
+[case.20181201-22]
+    time_interval = ['20181201-0530', '20181201-0545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-22/'
+
+[case.20181201-23]
+    time_interval = ['20181201-0545', '20181201-0600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-23/'
+
+[case.20181201-24]
+    time_interval = ['20181201-0600', '20181201-0615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-24/'
+
+[case.20181201-25]
+    time_interval = ['20181201-0615', '20181201-0630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-25/'
+
+[case.20181201-26]
+    time_interval = ['20181201-0630', '20181201-0645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-26/'
+
+[case.20181201-27]
+    time_interval = ['20181201-0645', '20181201-0700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-27/'
+
+[case.20181201-28]
+    time_interval = ['20181201-0700', '20181201-0715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-28/'
+
+[case.20181201-29]
+    time_interval = ['20181201-0715', '20181201-0730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-29/'
+
+[case.20181201-30]
+    time_interval = ['20181201-0730', '20181201-0745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-30/'
+
+[case.20181201-31]
+    time_interval = ['20181201-0745', '20181201-0800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-31/'
+
+[case.20181201-32]
+    time_interval = ['20181201-0800', '20181201-0815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-32/'
+
+[case.20181201-33]
+    time_interval = ['20181201-0815', '20181201-0830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-33/'
+
+[case.20181201-34]
+    time_interval = ['20181201-0830', '20181201-0845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-34/'
+
+[case.20181201-35]
+    time_interval = ['20181201-0845', '20181201-0900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-35/'
+
+[case.20181201-36]
+    time_interval = ['20181201-0900', '20181201-0915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-36/'
+
+[case.20181201-37]
+    time_interval = ['20181201-0915', '20181201-0930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-37/'
+
+[case.20181201-38]
+    time_interval = ['20181201-0930', '20181201-0945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-38/'
+
+[case.20181201-39]
+    time_interval = ['20181201-0945', '20181201-1000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-39/'
+
+[case.20181201-40]
+    time_interval = ['20181201-1000', '20181201-1015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-40/'
+
+[case.20181201-41]
+    time_interval = ['20181201-1015', '20181201-1030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-41/'
+
+[case.20181201-42]
+    time_interval = ['20181201-1030', '20181201-1045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-42/'
+
+[case.20181201-43]
+    time_interval = ['20181201-1045', '20181201-1100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-43/'
+
+[case.20181201-44]
+    time_interval = ['20181201-1100', '20181201-1115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-44/'
+
+[case.20181201-45]
+    time_interval = ['20181201-1115', '20181201-1130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-45/'
+
+[case.20181201-46]
+    time_interval = ['20181201-1130', '20181201-1145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-46/'
+
+[case.20181201-47]
+    time_interval = ['20181201-1145', '20181201-1200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-47/'
+
+[case.20181201-48]
+    time_interval = ['20181201-1200', '20181201-1215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-48/'
+
+[case.20181201-49]
+    time_interval = ['20181201-1215', '20181201-1230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-49/'
+
+[case.20181201-50]
+    time_interval = ['20181201-1230', '20181201-1245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-50/'
+
+[case.20181201-51]
+    time_interval = ['20181201-1245', '20181201-1300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-51/'
+
+[case.20181201-52]
+    time_interval = ['20181201-1300', '20181201-1315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-52/'
+
+[case.20181201-53]
+    time_interval = ['20181201-1315', '20181201-1330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-53/'
+
+[case.20181201-54]
+    time_interval = ['20181201-1330', '20181201-1345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-54/'
+
+[case.20181201-55]
+    time_interval = ['20181201-1345', '20181201-1400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-55/'
+
+[case.20181201-56]
+    time_interval = ['20181201-1400', '20181201-1415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-56/'
+
+[case.20181201-57]
+    time_interval = ['20181201-1415', '20181201-1430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-57/'
+
+[case.20181201-58]
+    time_interval = ['20181201-1430', '20181201-1445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-58/'
+
+[case.20181201-59]
+    time_interval = ['20181201-1445', '20181201-1500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-59/'
+
+[case.20181201-60]
+    time_interval = ['20181201-1500', '20181201-1515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-60/'
+
+[case.20181201-61]
+    time_interval = ['20181201-1515', '20181201-1530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-61/'
+
+[case.20181201-62]
+    time_interval = ['20181201-1530', '20181201-1545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-62/'
+
+[case.20181201-63]
+    time_interval = ['20181201-1545', '20181201-1600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-63/'
+
+[case.20181201-64]
+    time_interval = ['20181201-1600', '20181201-1615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-64/'
+
+[case.20181201-65]
+    time_interval = ['20181201-1615', '20181201-1630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-65/'
+
+[case.20181201-66]
+    time_interval = ['20181201-1630', '20181201-1645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-66/'
+
+[case.20181201-67]
+    time_interval = ['20181201-1645', '20181201-1700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-67/'
+
+[case.20181201-68]
+    time_interval = ['20181201-1700', '20181201-1715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-68/'
+
+[case.20181201-69]
+    time_interval = ['20181201-1715', '20181201-1730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-69/'
+
+[case.20181201-70]
+    time_interval = ['20181201-1730', '20181201-1745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-70/'
+
+[case.20181201-71]
+    time_interval = ['20181201-1745', '20181201-1800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-71/'
+
+[case.20181201-72]
+    time_interval = ['20181201-1800', '20181201-1815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-72/'
+
+[case.20181201-73]
+    time_interval = ['20181201-1815', '20181201-1830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-73/'
+
+[case.20181201-74]
+    time_interval = ['20181201-1830', '20181201-1845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-74/'
+
+[case.20181201-75]
+    time_interval = ['20181201-1845', '20181201-1900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-75/'
+
+[case.20181201-76]
+    time_interval = ['20181201-1900', '20181201-1915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-76/'
+
+[case.20181201-77]
+    time_interval = ['20181201-1915', '20181201-1930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-77/'
+
+[case.20181201-78]
+    time_interval = ['20181201-1930', '20181201-1945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-78/'
+
+[case.20181201-79]
+    time_interval = ['20181201-1945', '20181201-2000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-79/'
+
+[case.20181201-80]
+    time_interval = ['20181201-2000', '20181201-2015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-80/'
+
+[case.20181201-81]
+    time_interval = ['20181201-2015', '20181201-2030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-81/'
+
+[case.20181201-82]
+    time_interval = ['20181201-2030', '20181201-2045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-82/'
+
+[case.20181201-83]
+    time_interval = ['20181201-2045', '20181201-2100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-83/'
+
+[case.20181201-84]
+    time_interval = ['20181201-2100', '20181201-2115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-84/'
+
+[case.20181201-85]
+    time_interval = ['20181201-2115', '20181201-2130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-85/'
+
+[case.20181201-86]
+    time_interval = ['20181201-2130', '20181201-2145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-86/'
+
+[case.20181201-87]
+    time_interval = ['20181201-2145', '20181201-2200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-87/'
+
+[case.20181201-88]
+    time_interval = ['20181201-2200', '20181201-2215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-88/'
+
+[case.20181201-89]
+    time_interval = ['20181201-2215', '20181201-2230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-89/'
+
+[case.20181201-90]
+    time_interval = ['20181201-2230', '20181201-2245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-90/'
+
+[case.20181201-91]
+    time_interval = ['20181201-2245', '20181201-2300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-91/'
+
+[case.20181201-92]
+    time_interval = ['20181201-2300', '20181201-2315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-92/'
+
+[case.20181201-93]
+    time_interval = ['20181201-2315', '20181201-2330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-93/'
+
+[case.20181201-94]
+    time_interval = ['20181201-2330', '20181201-2345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181201-94/'
+
+###
+
+[case.20181202-0]
+    time_interval = ['20181202-0000', '20181202-0015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-0/'
+
+[case.20181202-1]
+    time_interval = ['20181202-0015', '20181202-0030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-1/'
+
+[case.20181202-2]
+    time_interval = ['20181202-0030', '20181202-0045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-2/'
+
+[case.20181202-3]
+    time_interval = ['20181202-0045', '20181202-0100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-3/'
+
+[case.20181202-4]
+    time_interval = ['20181202-0100', '20181202-0115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-4/'
+
+[case.20181202-5]
+    time_interval = ['20181202-0115', '20181202-0130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-5/'
+
+[case.20181202-6]
+    time_interval = ['20181202-0130', '20181202-0145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-6/'
+
+[case.20181202-7]
+    time_interval = ['20181202-0145', '20181202-0200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-7/'
+
+[case.20181202-8]
+    time_interval = ['20181202-0200', '20181202-0215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-8/'
+
+[case.20181202-9]
+    time_interval = ['20181202-0215', '20181202-0230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-9/'
+
+[case.20181202-10]
+    time_interval = ['20181202-0230', '20181202-0245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-10/'
+
+[case.20181202-11]
+    time_interval = ['20181202-0245', '20181202-0300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-11/'
+
+[case.20181202-12]
+    time_interval = ['20181202-0300', '20181202-0315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-12/'
+
+[case.20181202-13]
+    time_interval = ['20181202-0315', '20181202-0330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-13/'
+
+[case.20181202-14]
+    time_interval = ['20181202-0330', '20181202-0345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-14/'
+
+[case.20181202-15]
+    time_interval = ['20181202-0345', '20181202-0400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-15/'
+
+[case.20181202-16]
+    time_interval = ['20181202-0400', '20181202-0415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-16/'
+
+[case.20181202-17]
+    time_interval = ['20181202-0415', '20181202-0430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-17/'
+
+[case.20181202-18]
+    time_interval = ['20181202-0430', '20181202-0445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-18/'
+
+[case.20181202-19]
+    time_interval = ['20181202-0445', '20181202-0500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-19/'
+
+[case.20181202-20]
+    time_interval = ['20181202-0500', '20181202-0515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-20/'
+
+[case.20181202-21]
+    time_interval = ['20181202-0515', '20181202-0530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-21/'
+
+[case.20181202-22]
+    time_interval = ['20181202-0530', '20181202-0545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-22/'
+
+[case.20181202-23]
+    time_interval = ['20181202-0545', '20181202-0600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-23/'
+
+[case.20181202-24]
+    time_interval = ['20181202-0600', '20181202-0615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-24/'
+
+[case.20181202-25]
+    time_interval = ['20181202-0615', '20181202-0630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-25/'
+
+[case.20181202-26]
+    time_interval = ['20181202-0630', '20181202-0645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-26/'
+
+[case.20181202-27]
+    time_interval = ['20181202-0645', '20181202-0700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-27/'
+
+[case.20181202-28]
+    time_interval = ['20181202-0700', '20181202-0715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-28/'
+
+[case.20181202-29]
+    time_interval = ['20181202-0715', '20181202-0730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-29/'
+
+[case.20181202-30]
+    time_interval = ['20181202-0730', '20181202-0745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-30/'
+
+[case.20181202-31]
+    time_interval = ['20181202-0745', '20181202-0800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-31/'
+
+[case.20181202-32]
+    time_interval = ['20181202-0800', '20181202-0815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-32/'
+
+[case.20181202-33]
+    time_interval = ['20181202-0815', '20181202-0830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-33/'
+
+[case.20181202-34]
+    time_interval = ['20181202-0830', '20181202-0845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-34/'
+
+[case.20181202-35]
+    time_interval = ['20181202-0845', '20181202-0900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-35/'
+
+[case.20181202-36]
+    time_interval = ['20181202-0900', '20181202-0915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-36/'
+
+[case.20181202-37]
+    time_interval = ['20181202-0915', '20181202-0930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-37/'
+
+[case.20181202-38]
+    time_interval = ['20181202-0930', '20181202-0945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-38/'
+
+[case.20181202-39]
+    time_interval = ['20181202-0945', '20181202-1000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-39/'
+
+[case.20181202-40]
+    time_interval = ['20181202-1000', '20181202-1015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-40/'
+
+[case.20181202-41]
+    time_interval = ['20181202-1015', '20181202-1030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-41/'
+
+[case.20181202-42]
+    time_interval = ['20181202-1030', '20181202-1045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-42/'
+
+[case.20181202-43]
+    time_interval = ['20181202-1045', '20181202-1100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-43/'
+
+[case.20181202-44]
+    time_interval = ['20181202-1100', '20181202-1115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-44/'
+
+[case.20181202-45]
+    time_interval = ['20181202-1115', '20181202-1130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-45/'
+
+[case.20181202-46]
+    time_interval = ['20181202-1130', '20181202-1145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-46/'
+
+[case.20181202-47]
+    time_interval = ['20181202-1145', '20181202-1200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-47/'
+
+[case.20181202-48]
+    time_interval = ['20181202-1200', '20181202-1215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-48/'
+
+[case.20181202-49]
+    time_interval = ['20181202-1215', '20181202-1230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-49/'
+
+[case.20181202-50]
+    time_interval = ['20181202-1230', '20181202-1245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-50/'
+
+[case.20181202-51]
+    time_interval = ['20181202-1245', '20181202-1300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-51/'
+
+[case.20181202-52]
+    time_interval = ['20181202-1300', '20181202-1315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-52/'
+
+[case.20181202-53]
+    time_interval = ['20181202-1315', '20181202-1330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-53/'
+
+[case.20181202-54]
+    time_interval = ['20181202-1330', '20181202-1345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-54/'
+
+[case.20181202-55]
+    time_interval = ['20181202-1345', '20181202-1400']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-55/'
+
+[case.20181202-56]
+    time_interval = ['20181202-1400', '20181202-1415']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-56/'
+
+[case.20181202-57]
+    time_interval = ['20181202-1415', '20181202-1430']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-57/'
+
+[case.20181202-58]
+    time_interval = ['20181202-1430', '20181202-1445']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-58/'
+
+[case.20181202-59]
+    time_interval = ['20181202-1445', '20181202-1500']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-59/'
+
+[case.20181202-60]
+    time_interval = ['20181202-1500', '20181202-1515']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-60/'
+
+[case.20181202-61]
+    time_interval = ['20181202-1515', '20181202-1530']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-61/'
+
+[case.20181202-62]
+    time_interval = ['20181202-1530', '20181202-1545']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-62/'
+
+[case.20181202-63]
+    time_interval = ['20181202-1545', '20181202-1600']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-63/'
+
+[case.20181202-64]
+    time_interval = ['20181202-1600', '20181202-1615']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-64/'
+
+[case.20181202-65]
+    time_interval = ['20181202-1615', '20181202-1630']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-65/'
+
+[case.20181202-66]
+    time_interval = ['20181202-1630', '20181202-1645']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-66/'
+
+[case.20181202-67]
+    time_interval = ['20181202-1645', '20181202-1700']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-67/'
+
+[case.20181202-68]
+    time_interval = ['20181202-1700', '20181202-1715']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-68/'
+
+[case.20181202-69]
+    time_interval = ['20181202-1715', '20181202-1730']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-69/'
+
+[case.20181202-70]
+    time_interval = ['20181202-1730', '20181202-1745']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-70/'
+
+[case.20181202-71]
+    time_interval = ['20181202-1745', '20181202-1800']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-71/'
+
+[case.20181202-72]
+    time_interval = ['20181202-1800', '20181202-1815']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-72/'
+
+[case.20181202-73]
+    time_interval = ['20181202-1815', '20181202-1830']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-73/'
+
+[case.20181202-74]
+    time_interval = ['20181202-1830', '20181202-1845']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-74/'
+
+[case.20181202-75]
+    time_interval = ['20181202-1845', '20181202-1900']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-75/'
+
+[case.20181202-76]
+    time_interval = ['20181202-1900', '20181202-1915']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-76/'
+
+[case.20181202-77]
+    time_interval = ['20181202-1915', '20181202-1930']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-77/'
+
+[case.20181202-78]
+    time_interval = ['20181202-1930', '20181202-1945']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-78/'
+
+[case.20181202-79]
+    time_interval = ['20181202-1945', '20181202-2000']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-79/'
+
+[case.20181202-80]
+    time_interval = ['20181202-2000', '20181202-2015']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-80/'
+
+[case.20181202-81]
+    time_interval = ['20181202-2015', '20181202-2030']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-81/'
+
+[case.20181202-82]
+    time_interval = ['20181202-2030', '20181202-2045']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-82/'
+
+[case.20181202-83]
+    time_interval = ['20181202-2045', '20181202-2100']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-83/'
+
+[case.20181202-84]
+    time_interval = ['20181202-2100', '20181202-2115']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-84/'
+
+[case.20181202-85]
+    time_interval = ['20181202-2115', '20181202-2130']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-85/'
+
+[case.20181202-86]
+    time_interval = ['20181202-2130', '20181202-2145']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-86/'
+
+[case.20181202-87]
+    time_interval = ['20181202-2145', '20181202-2200']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-87/'
+
+[case.20181202-88]
+    time_interval = ['20181202-2200', '20181202-2215']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-88/'
+
+[case.20181202-89]
+    time_interval = ['20181202-2215', '20181202-2230']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-89/'
+
+[case.20181202-90]
+    time_interval = ['20181202-2230', '20181202-2245']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-90/'
+
+[case.20181202-91]
+    time_interval = ['20181202-2245', '20181202-2300']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-91/'
+
+[case.20181202-92]
+    time_interval = ['20181202-2300', '20181202-2315']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-92/'
+
+[case.20181202-93]
+    time_interval = ['20181202-2315', '20181202-2330']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-93/'
+
+[case.20181202-94]
+    time_interval = ['20181202-2330', '20181202-2345']
+    range_interval = [0, 12000]
+    plot_dir = 'plots/20181202-94/'

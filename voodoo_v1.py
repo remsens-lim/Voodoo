@@ -62,25 +62,6 @@ MODELS_PATH = f'{VOODOO_PATH}/models/'
 PLOTS_PATH = f'{VOODOO_PATH}/plots/'
 
 
-
-def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet=CLOUDNET):
-    if not os.path.isfile(f'{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'):
-        print(f"{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'  not found!")
-        return False
-    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_labels.mat'):
-        print(f"'{data_path}/labels/{dt_str}_{system}_labels.mat'  not found!")
-        return False
-    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_masked.mat'):
-        print(f"'{data_path}/labels/{dt_str}_{system}_masked.mat'  not found!")
-        return False
-    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'):
-        print(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'  not found!")
-        return False
-    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'):
-        print(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'  not found!")
-        return False
-    return True
-
 def get_logger(logger_list, status='info'):
     log = []
     for ilog in logger_list:
@@ -97,6 +78,32 @@ def get_logger(logger_list, status='info'):
     return log
 
 
+# get all loggers
+loggers = get_logger(['libVoodoo'])
+
+
+def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet=CLOUDNET):
+    if not os.path.isfile(f'{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'):
+        loggers[0].info(f"{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_labels.mat'):
+        loggers[0].info(f"'{data_path}/labels/{dt_str}_{system}_labels.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_masked.mat'):
+        loggers[0].info(f"'{data_path}/labels/{dt_str}_{system}_masked.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'):
+        loggers[0].info(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_class.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'):
+        loggers[0].info(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_status.mat'  not found!")
+        return False
+    if not os.path.isfile(f'{data_path}/cloudnet/{dt_str}_{cloudnet}_model_T.mat'):
+        loggers[0].info(f"'{data_path}/cloudnet/{dt_str}_{cloudnet}_model_T.mat'  not found!")
+        return False
+    return True
+
+
 def log_dimensions(spec_dim, cn_dim, *args):
     loggers[0].info(f'Radar-Input  :: LIMRAD94\n'
                     f'      (n_ts, n_rg, n_vel) = ({spec_dim["n_ts"]}, {spec_dim["n_rg"]}, {spec_dim["n_vel"]})')
@@ -105,6 +112,7 @@ def log_dimensions(spec_dim, cn_dim, *args):
     if len(args) > 0:
         loggers[0].info(f'Target-Input :: PollyNET\n'
                         f'      (n_ts, n_rg)        = ({args[0]["n_ts"]}, {args[0]["n_rg"]})')
+
 
 def create_filename(modelname, **kwargs):
     if not TRAINED_MODEL:
@@ -128,6 +136,7 @@ def create_filename(modelname, **kwargs):
     else:
         return {'MODEL_PATH': MODELS_PATH + modelname, 'LOG_PATH': LOGS_PATH + modelname}
 
+
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return np.array(lst3)
@@ -148,6 +157,7 @@ def set_intersection(mask0, mask1):
 
     return idx_list
 
+
 def load_matv5(path, file):
     h.change_dir(path)
     try:
@@ -155,7 +165,10 @@ def load_matv5(path, file):
     except Exception as e:
         exc_type, exc_value, exc_tb = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_tb)
-        print(f'FileNotFound Error: Check ~/{file}')
+        loggers[0].info(f'FileNotFound Error: Check ~/{file}')
+        return [], True
+
+    if not data:
         return [], True
 
     return data, False
@@ -184,6 +197,59 @@ def load_mat_files_list(case_string_list, kind, system=SYSTEM, cloudnet=CLOUDNET
     return mat_files_list
 
 
+def container_from_prediction(ts, rg, var, mask):
+    prediction_container = {}
+    prediction_container['dimlabel'] = ['time', 'range']
+    prediction_container['name'] = 'CLASS'
+    prediction_container['joints'] = ''
+    prediction_container['rg_unit'] = 'm'
+    prediction_container['colormap'] = 'ann_target_7class'
+    prediction_container['system'] = 'Voodoo'
+    prediction_container['ts'] = ts
+    prediction_container['rg'] = rg
+    prediction_container['var_lims'] = [0, 8]
+    prediction_container['var_unit'] = ''
+    prediction_container['mask'] = mask
+    prediction_container['var'] = var
+    return prediction_container
+
+
+def get_isotherms(temperature_list):
+    def toC(datalist):
+        return datalist[0]['var'] - 273.15, datalist[0]['mask']
+
+    T = {}
+    T['dimlabel'] = ['time', 'range']
+    T['name'] = 'Temperature'
+    T['joints'] = ''
+    T['paraminfo'] = ''
+    T['filename'] = 'ann_input_files'
+    T['rg_unit'] = 'm'
+    T['colormap'] = 'cloudnet_jet'
+    T['system'] = CLOUDNET
+    T['ts'] = np.concatenate([np.squeeze(itemp['ts']) for itemp in temperature_list], axis=0)
+    T['rg'] = np.squeeze(temperature_list[0]['rg'])
+    T['var_lims'] = [240.0, 320.0]
+    T['var_unit'] = 'K'
+    T['mask'] = np.concatenate([np.squeeze(itemp['mask']) for itemp in temperature_list], axis=0)
+    T['var'] = np.concatenate([np.squeeze(itemp['var']) for itemp in temperature_list], axis=0)
+
+    return {'data': tr.combine(toC, [T], {'var_unit': "C"}), 'levels': np.arange(-40, 16, 5)}
+
+
+def post_processor(data, contour):
+    import copy
+    container = copy.deepcopy(data)
+
+    container['var'][(contour['data']['var'] > 0.0) * (container['var'] == 4)] = 2
+    container['var'][(contour['data']['var'] > 0.0) * (container['var'] == 5)] = 3
+    # container['var'][(contour['data']['var'] < -40.0) * ((container['var'] == 1) + (container['var'] == 5))] = 4
+
+    loggers[0].info('Postprocessing done.')
+
+    return container
+
+
 ########################################################################################################################################################
 ########################################################################################################################################################
 #
@@ -207,15 +273,18 @@ if __name__ == '__main__':
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
     CLOUDNET = 'CLOUDNETpy94'
 
-    use_only_given = True if TASK == 'train' else False
+    use_only_given = False
 
     n_channels_ = 6 if 'HSI' in KIND else 1
+
+    add_flipped = True
+    loggers[0].info('Add flipped CWT to features')
 
     if TASK == 'predict' and not os.path.isfile(f'{MODELS_PATH}/{TRAINED_MODEL}'):
         raise FileNotFoundError(f'Trained model not found! {TRAINED_MODEL}')
 
     if 'case' in kwargs:
-        if len(kwargs['case']) == 17:
+        if len(kwargs['case']) == 17:  # format YYYYMMDD-YYYYMMDD
             use_only_given = True
             CASE_LIST = VOODOO_PATH + f'/tomls/auto-trainingset-{kwargs["case"]}.toml'
             case_string_list = [case for case in Loader.load_case_file(CASE_LIST).keys()]
@@ -233,16 +302,13 @@ if __name__ == '__main__':
     t0_voodoo = datetime.datetime.today()
     time_str = f'{t0_voodoo:%Y%m%d-%H%M%S}'
 
-    # get all loggers
-    loggers = get_logger(['libVoodoo'])
-
     # load ann model parameter and other global values
     config_global_model = toml.load(VOODOO_PATH + 'ann_model_setting.toml')
     radar_input_setting = config_global_model['feature']['info']['VSpec']
     tf_settings = config_global_model['tensorflow']
 
     feature_set, target_labels, masked_total = [], [], []
-    cloudnet_class, cloudnet_status = [], []
+    cloudnet_class, cloudnet_status, model_temp = [], [], []
 
     for icase, case_str in enumerate(case_string_list):
 
@@ -260,6 +326,8 @@ if __name__ == '__main__':
             if flag: continue
             _status, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_{CLOUDNET}_status.mat')
             if flag: continue
+            _temperature, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_{CLOUDNET}_model_T.mat')
+            if flag: continue
             _feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
             if flag: continue
             _target, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')
@@ -271,30 +339,37 @@ if __name__ == '__main__':
             _target = _target['labels']
             _masked = _masked['masked']
 
-            print(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files')
+            loggers[0].critical(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files')
 
         else:
 
             if use_only_given: continue
 
-            _feature, _target, _masked, _class, _status = Loader.load_features_from_nc(
+            _feature, _target, _masked, _class, _status, _temperature = Loader.load_features_from_nc(
                 time_span=TIME_SPAN,
                 voodoo_path=VOODOO_PATH,  # NONSENSE PATH
                 data_path=DATA_PATH,
                 kind=KIND,
                 system=SYSTEM,
-                save=False,
-                n_channels=n_channels_
+                save=True,
+                n_channels=n_channels_,
+                cloudnet=CLOUDNET,
             )
 
-            if _masked.all(): continue  # if there are no datapoints
+            loggers[0].critical(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} from nc')
 
-            loggers[0].debug(f'min/max value in features = {np.min(_feature)},  maximum = {np.max(_feature)}')
-            loggers[0].debug(f'min/max value in targets  = {np.min(_target)},  maximum = {np.max(_target)}')
+        if _masked.all(): continue  # if there are no data points
 
         if len(_feature.shape) == 3: _feature = _feature[:, :, :, np.newaxis]
 
         if TASK == 'train':
+            """
+            select pixel satisfying the following expression:
+                training_mask = (   "Good radar & lidar echos" 
+                                  + "Ice & supercooled liquid" 
+                                  + "Cloud droplets only"       ) 
+                                - "Lidar echos only"
+            """
             training_mask = Loader.load_training_mask(_class, _status)
             idx_valid_samples = set_intersection(_masked, training_mask)
 
@@ -303,17 +378,28 @@ if __name__ == '__main__':
             _feature = _feature[idx_valid_samples, :, :, :]
             _target = _target[idx_valid_samples, :]
 
+            """
+            flip the CWT on the y-axis to generate a mirror image, 
+            the goal is to overcome the miss-classification of updrafts as liquid
+            """
+            if add_flipped:
+                _feature_flipped = np.zeros(_feature.shape)
+                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[3])):
+                    _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
+
+                _feature = np.concatenate((_feature, _feature_flipped), axis=0)
+                _target = np.concatenate((_target, _target), axis=0)
+
         feature_set.append(_feature)
         target_labels.append(_target)
         cloudnet_class.append(_class)
         cloudnet_status.append(_status)
         masked_total.append(_masked)
+        model_temp.append(_temperature)
 
     feature_set = np.concatenate(feature_set, axis=0)
     target_labels = np.concatenate(target_labels, axis=0)
-    masked_total = np.concatenate(masked_total, axis=0)
-    #cloudnet_class = np.concatenate(cloudnet_class, axis=0)
-    #cloudnet_status = np.concatenate(cloudnet_status, axis=0)
+    if TASK == 'predict': masked_total = np.concatenate(masked_total, axis=0)
 
     if TASK == 'train':
         # take every nth element from the training set for validation
@@ -328,19 +414,19 @@ if __name__ == '__main__':
         'Clear sky',
         'Cloud liquid droplets only',
         'Drizzle or rain.',
-        "Drizzle/rain & cloud droplets",
+        'Drizzle/rain & cloud droplet',
         'Ice particles.',
         'Ice coexisting with supercooled liquid droplets.',
         'Melting ice particles',
-        "Melting ice & cloud droplets",
+        'Melting ice & cloud droplets',
         'Insects or ground clutter.',
     ]
-    n_samples_totall = np.count_nonzero(target_labels, axis=0)
 
-    print('samples per class')
-    print(f'{feature_set.shape[0]:12d}   total')
+    n_samples_totall = np.count_nonzero(target_labels, axis=0)
+    loggers[0].info('samples per class')
+    loggers[0].info(f'{feature_set.shape[0]:12d}   total')
     for name, n_smp in zip(names, n_samples_totall):
-        print(f'{n_smp:12d}   {name}')
+        loggers[0].info(f'{n_smp:12d}   {name}')
 
     ########################################################################################################################################################
     #   ___ ____ ____ _ _  _ _ _  _ ____
@@ -404,11 +490,12 @@ if __name__ == '__main__':
             # create directory for plots
             fig, _ = Plot.History(history)
             idx = hyper_params["MODEL_PATH"].rfind('/')
-            Plot.save_figure(fig,
-                             path=f'{PLOTS_PATH}/training/',
-                             name=f'histo_loss-acc_{dt_str}__{hyper_params["MODEL_PATH"][idx + 1:-3]}.png',
-                             dpi=300
-                             )
+            Plot.save_figure(
+                fig,
+                path=f'{PLOTS_PATH}/training/',
+                name=f'histo_loss-acc_{dt_str}__{hyper_params["MODEL_PATH"][idx + 1:-3]}.png',
+                dpi=300
+            )
 
             model_list.append(hyper_params["MODEL_PATH"][idx + 1:-3])
 
@@ -419,7 +506,6 @@ if __name__ == '__main__':
     #   ___  ____ ____ ___  _ ____ ___ _ ____ _  _
     #   |__] |__/ |___ |  \ | |     |  | |  | |\ |
     #   |    |  \ |___ |__/ | |___  |  | |__| | \|
-    #
     #
     if TASK == 'predict':
 
@@ -446,29 +532,32 @@ if __name__ == '__main__':
             cnn_pred = Model.predict_classes(cnn_model, feature_set)
             prediction2D_classes = Model.one_hot_to_classes(cnn_pred, masked_total)
 
-            prediction_container = {}
-            prediction_container['dimlabel'] = ['time', 'range']
-            prediction_container['name'] = 'CLASS'
-            prediction_container['joints'] = ''
-            prediction_container['rg_unit'] = 'm'
-            prediction_container['colormap'] = 'ann_target_7class'
-            prediction_container['system'] = 'Voodoo'
-            prediction_container['ts'] = np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0)
-            prediction_container['rg'] = np.squeeze(cloudnet_class[0]['rg'])
-            prediction_container['var_lims'] = [0, 8]
-            prediction_container['var_unit'] = ''
-            prediction_container['mask'] = masked_total
-            prediction_container['var'] = prediction2D_classes
+            prediction_container = container_from_prediction(
+                np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0),
+                np.squeeze(cloudnet_class[0]['rg']),
+                prediction2D_classes,
+                masked_total
+            )
+
+            contour_T = get_isotherms(model_temp)
+
+            prediction_container = post_processor(prediction_container, contour_T)
 
             # create directory for plots
-            fig, _ = tr.plot_timeheight(prediction_container, title=f'preliminary results (ANN prediction) {kwargs["case"]}',
-                                        range_interval=case['range_interval'])  # , **plot_settings)
+            fig, _ = tr.plot_timeheight(
+                prediction_container,
+                title=f'preliminary results (ANN prediction) {kwargs["case"]}',
+                range_interval=case['range_interval'],
+                contour=contour_T,
+                fig_size=[18, 5]
+            )  # , **plot_settings)
 
-            Plot.save_figure(fig,
-                             path=f'{PLOTS_PATH}/training/{kwargs["case"]}/',
-                             name=f'prediction_{kwargs["case"]}__{model_name}.png',
-                             dpi=200
-                             )
+            Plot.save_figure(
+                fig,
+                path=f'{PLOTS_PATH}/training/{kwargs["case"]}/',
+                name=f'prediction_{kwargs["case"]}__{model_name}.png',
+                dpi=200
+            )
 
     ####################################################################################################################################
     Plot.print_elapsed_time(start_time, '\nDone, elapsed time = ')

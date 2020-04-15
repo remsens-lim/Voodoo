@@ -32,7 +32,7 @@ import voodoo.libVoodoo.Plot   as Plot
 import libVoodoo.Plot as Plot
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.CRITICAL)
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -164,7 +164,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
-    masked = np.all(np.any(spectra_mask, axis=3), axis=2)
+    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
     #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
     cwt_params = feature_info['cwt']
@@ -207,22 +207,29 @@ def load_features_and_labels(spectra, classes, **feature_info):
     feature_list = []
     target_labels = []
     cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
+    window_fcn = np.kaiser(n_Dbins, 5.0)
     print('\nFeature Extraction......')
     for iT in tqdm(range(n_time)):
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
 
             for iCh in range(n_chan):
-                spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
+                spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
                 cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
                 cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 
-            cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
-
-#            feature_list.append(cwt_matrix)
-
+            #_mean = np.mean(cwt_matrix, axis=2)
+            #_std  = np.std(cwt_matrix, axis=2)
+            #_std[_std < 1.0e-7] = 1.0e-7
             #cwt_tensor = [np.min(cwt_matrix, axis=2), np.max(cwt_matrix, axis=2), np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+            #cwt_tensor = [np.resize(np.mean(cwt_matrix, axis=2), (n_cwt_scales, n_cwt_scales)),
+            #              np.resize(np.std(cwt_matrix, axis=2), (n_cwt_scales, n_cwt_scales))]
+            #for iCh in range(n_chan):
+            #    cwt_matrix[:, :, iCh] = (cwt_matrix[:, :, iCh] - _mean)/_std
 
+            #cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
+
+            cwt_tensor = [np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
             feature_list.append(np.stack(cwt_tensor, axis=2))
 #
 #            # TRY THIS IF CWT WITH MINIMUM; MAXIMUM; MEAN; STD FAILS
@@ -524,8 +531,10 @@ def load_features_from_nc(
 
     TIME_SPAN_ = time_span
 
-    TIME_SPAN_2 = [TIME_SPAN_[0] - timedelta(seconds=35.0),
-                   TIME_SPAN_[1] + timedelta(seconds=35.0)]
+    TIME_SPAN_RADAR = [TIME_SPAN_[0] - timedelta(seconds=35.0), TIME_SPAN_[1] + timedelta(seconds=35.0)]
+    #TIME_SPAN_MODEL = [TIME_SPAN_[0] - timedelta(hours=2.0), TIME_SPAN_[1] + timedelta(hours=2.0)]
+    TIME_SPAN_MODEL = [datetime(TIME_SPAN_[0].year, TIME_SPAN_[0].month, TIME_SPAN_[0].day) + timedelta(minutes=1),
+                       datetime(TIME_SPAN_[0].year, TIME_SPAN_[0].month, TIME_SPAN_[0].day) + timedelta(minutes=1439)]
 
     begin_dt, end_dt = TIME_SPAN_
     dt_string = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}'
@@ -537,13 +546,6 @@ def load_features_from_nc(
     #   |___ |__| |  | |__/ /   ___] |  |  \/  |___    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
     #                      /
     #
-    cnpy94_model = load_data(larda_connected, cloudnet, TIME_SPAN_, ['T', 'P'])
-
-    if save:
-        h.change_dir(f'{data_path}/cloudnet/')
-        savemat(f'{dt_string}_{cloudnet}_model_T.mat', cnpy94_model.pop('T'), do_compression=True)
-        savemat(f'{dt_string}_{cloudnet}_model_P.mat', cnpy94_model.pop('P'), do_compression=True)
-        print(f'save :: {dt_string}_{cloudnet}_model_T/P')
 
     """
     " STATUS
@@ -576,9 +578,22 @@ def load_features_from_nc(
     ts_cnpy94, rg_cnpy94 = cnpy94_class['CLASS']['ts'], cnpy94_class['CLASS']['rg']
 
     if save:
-        savemat(f'{dt_string}_{cloudnet}_class.mat', cnpy94_class['CLASS'], do_compression=True)
-        savemat(f'{dt_string}_{cloudnet}_status.mat', cnpy94_class['detection_status'], do_compression=True)
+        h.change_dir(f'{data_path}/cloudnet/')
+        savemat(f'{dt_string}_{cloudnet}_class.mat', cnpy94_class['CLASS'])
+        savemat(f'{dt_string}_{cloudnet}_status.mat', cnpy94_class['detection_status'])
         print(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of cLoudnetpy94 Class & Status\n')
+
+    # temperature and pressure
+    cnpy94_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, ['T', 'P'])
+
+    cnpy94_model['T'] = tr.interpolate2d(cnpy94_model['T'], new_time=cnpy94_class['CLASS']['ts'], new_range=cnpy94_class['CLASS']['rg'])
+    cnpy94_model['P'] = tr.interpolate2d(cnpy94_model['P'], new_time=cnpy94_class['CLASS']['ts'], new_range=cnpy94_class['CLASS']['rg'])
+
+    if save:
+        h.change_dir(f'{data_path}/cloudnet/')
+        savemat(f'{dt_string}_{cloudnet}_model_T.mat', cnpy94_model['T'])
+        savemat(f'{dt_string}_{cloudnet}_model_P.mat', cnpy94_model['P'])
+        print(f'save :: !interpolated! {dt_string}_{cloudnet}_model_T/P')
 
     ########################################################################################################################################################
     #   _    ____ ____ ___     ____ ____ ___  ____ ____    ___  ____ ___ ____
@@ -589,13 +604,15 @@ def load_features_from_nc(
 
     # add more radar data lodaer later on
     if system == 'limrad94':
-        ZSpec = sp.load_spectra_rpgfmcw94(larda_connected, TIME_SPAN_2, **spec_settings['VSpec'])
+        ZSpec = sp.load_spectra_rpgfmcw94(larda_connected, TIME_SPAN_RADAR, **spec_settings['VSpec'])
     else:
         raise ValueError('Unknown system.', system)
 
     # interpolate time dimension of spectra
+    #artificial_minimum = np.full(ZSpec['SLv']['var'].shape, fill_value=1.e-7)
+    #ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], artificial_minimum)
     ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], ZSpec['SLv']['var'])
-    print(f'\nloaded :: {TIME_SPAN_2[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_2[1]:%H:%M:%S} of {system} VHSpectra')
+    print(f'\nloaded :: {TIME_SPAN_RADAR[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_RADAR[1]:%H:%M:%S} of {system} VHSpectra')
 
     quick_check(ZSpec['SLv'], f'pseudoZe-{kind}-High-res')
 
@@ -663,17 +680,17 @@ def load_features_from_nc(
         # save features (subfolders for different tensor dimension)
         FILE_NAME_1 = f'{dt_string}_{system}'
         try:
-            savemat(f'{FILE_NAME_1}_features_{kind}.mat', {'features': features}, do_compression=True)
+            savemat(f'{FILE_NAME_1}_features_{kind}.mat', {'features': features})
         except Exception as e:
             print('Data too large?', e)
 
         # same labels for different tensor dimensions
         h.change_dir(f'{data_path}/labels/')
-        savemat(f'{FILE_NAME_1}_labels.mat', {'labels': targets}, do_compression=True)
-        savemat(f'{FILE_NAME_1}_masked.mat', {'masked': masked}, do_compression=True)
+        savemat(f'{FILE_NAME_1}_labels.mat', {'labels': targets})
+        savemat(f'{FILE_NAME_1}_masked.mat', {'masked': masked})
         print(f'save :: {FILE_NAME_1}_limrad94_{kind}_features/labels.mat')
 
-    return features, targets, masked, cnpy94_class['CLASS'], cnpy94_class['detection_status']
+    return features, targets, masked, cnpy94_class['CLASS'], cnpy94_class['detection_status'], cnpy94_model['T']
 
 
 
@@ -718,7 +735,7 @@ if __name__ == '__main__':
     dt_string = f'{TIME_SPAN_[0]:%Y%m%d}_{TIME_SPAN_[0]:%H%M}-{TIME_SPAN_[1]:%H%M}'
 
     try:
-        features, targets, masked, cn_class, cn_status = load_features_from_nc(
+        features, targets, masked, cn_class, cn_status, cn_temperature = load_features_from_nc(
             time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,
@@ -732,6 +749,6 @@ if __name__ == '__main__':
     except Exception:
         exc_type, exc_value, exc_tb = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_tb)
-        print(ValueError(f'Something went wrong with this interval: {TIME_SPAN_}'))
+        logger.error(ValueError(f'Something went wrong with this interval: {TIME_SPAN_}'))
 
-    print('total elapsed time = {:.3f} sec.'.format(time() - start_time))
+    logger.critical(f'\n    {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} mat files generated')

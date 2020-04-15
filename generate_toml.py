@@ -13,6 +13,7 @@ def generate_multicase_trainingset(t_span, t_train, t_skip, path):
     skip = datetime.timedelta(minutes=t_skip)
     change_dir(f'{path}')
     t_span_str = f'{t_span[0]:%Y%m%d}-{t_span[1]:%Y%m%d}'
+    if t_span[1] == '0000': t_span[1] = '2359'
 
     with open(f'auto-trainingset-{t_span_str}.toml', 'w+') as f:
         cnt = 0

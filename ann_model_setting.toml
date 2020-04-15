@@ -34,7 +34,7 @@
 [tensorflow]
     window_dimension = [3, 3]
 
-    BATCH_SIZE   = 64
+    BATCH_SIZE   = 64   # √
     BATCH_NORM   = true
     EPOCHS       = 50
 
@@ -46,6 +46,8 @@
     KERNEL_SIZE  = [3, 3]
     STRIDE_SIZE  = [2, 1]
     POOL_SIZE    = [2, 2]
+    #STRIDE_SIZE  = [1, 1]
+    #POOL_SIZE    = [2, 2]
     NFILTERS     = [64, 128, 256]
 
     # binary classifier
@@ -54,7 +56,7 @@
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = ['CategoricalCrossentropy']
 
-    LEARNING_RATE = [1.0e-4]
+    LEARNING_RATE = [1.0e-3]
     DECAY_RATE = 1.0e-5
     MOMENTUM = 0.9
 
