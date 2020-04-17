@@ -22,7 +22,7 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow import keras
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Conv2D, MaxPool2D, Flatten, Input
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Conv1D, Conv2D, MaxPool1D, MaxPool2D, Flatten, Input
 from tensorflow.keras.losses import BinaryCrossentropy, SparseCategoricalCrossentropy, CategoricalCrossentropy
 from tensorflow.keras.models import Model as kmodel
 from tensorflow.keras.models import Sequential
@@ -56,20 +56,7 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
-
-########################################################################################################################
-########################################################################################################################
-#
-#
-#   _______ _______ _____ __   _       _____   ______  _____   ______  ______ _______ _______
-#   |  |  | |_____|   |   | \  |      |_____] |_____/ |     | |  ____ |_____/ |_____| |  |  |
-#   |  |  | |     | __|__ |  \_|      |       |    \_ |_____| |_____| |    \_ |     | |  |  |
-#
-#
-########################################################################################################################
-########################################################################################################################
-
-def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
+def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
     """Defining/loading a Tensorflow model.
 
     Args:
@@ -105,6 +92,7 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         print(f'Loaded model from disk:\n{MODEL_PATH}')
     else:
         CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
+        CONV_DIMENSION = hyper_params['CONV_DIMENSION'] if 'CONV_DIMENSION' in hyper_params else ValueError('CONV_DIMENSION missing!')
         DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
         DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
         NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
@@ -118,36 +106,79 @@ def define_cnn(n_input, n_output, MODEL_PATH='', **hyper_params):
         DEVICE = ID_GPU
 
         # create the model and add the input layer
-        # initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
-        # regularizers = tf.keras.regularizers.l2(l=0.01)
+        #initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+        #regularizers = tf.keras.regularizers.l2(l=0.01)
 
         mirrored_strategy = tf.distribute.MirroredStrategy(devices=[f"/gpu:{DEVICE}"])
 
         with mirrored_strategy.scope():
             model = Sequential()
 
-            model.add(Conv2D(NFILTERS[0], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, input_shape=n_input, padding="same",
-                             # kernel_initializer=initializer,
-                             # kernel_regularizer=regularizers
-                             ))
-            if BATCH_NORM: model.add(BatchNormalization())
-            if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
+            if CONV_DIMENSION == 'conv2d':
+                model.add(Conv2D(
+                    NFILTERS[0], KERNEL_SIZE,
+                    strides=STRIDE_SIZE,
+                    activation=ACTIVATION,
+                    input_shape=n_input,
+                    padding="same",
+                    # kernel_initializer=initializer,
+                    #kernel_regularizer=regularizers
+                ))
 
-            # add more conv layers
-            for idl in range(CONV_LAYERS - 1):
-                model.add(Conv2D(NFILTERS[idl + 1], KERNEL_SIZE, strides=STRIDE_SIZE, activation=ACTIVATION, padding="same",
-                                 # kernel_initializer=initializer,
-                                 # kernel_regularizer=regularizers
-                                 ))
                 if BATCH_NORM: model.add(BatchNormalization())
                 if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
+            elif CONV_DIMENSION == 'conv1d':
+                model.add(Conv1D(
+                    NFILTERS[0], KERNEL_SIZE,
+                    strides=STRIDE_SIZE,
+                    activation=ACTIVATION,
+                    input_shape=n_input,
+                    padding="same",
+                    # kernel_initializer=initializer,
+                    #kernel_regularizer=regularizers
+                ))
+
+                if BATCH_NORM: model.add(BatchNormalization())
+                if POOL_SIZE: model.add(MaxPool1D(pool_size=POOL_SIZE))
+            else:
+                raise ValueError(f'Wrong CONV_DIMENSION = {CONV_DIMENSION}')
+
+            # add more conv layers
+            for idl in range(1, CONV_LAYERS+1):
+                if CONV_DIMENSION == 'conv2d':
+                    model.add(Conv2D(
+                        NFILTERS[idl], KERNEL_SIZE,
+                        strides=STRIDE_SIZE,
+                        activation=ACTIVATION,
+                        padding="same",
+                        # kernel_initializer=initializer,
+                        #kernel_regularizer=regularizers
+                    ))
+                    if BATCH_NORM: model.add(BatchNormalization())
+                    if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
+
+                elif CONV_DIMENSION == 'conv1d':
+                    model.add(Conv1D(
+                        NFILTERS[idl], KERNEL_SIZE,
+                        strides=STRIDE_SIZE,
+                        activation=ACTIVATION,
+                        input_shape=n_input,
+                        padding="same",
+                        # kernel_initializer=initializer,
+                        # kernel_regularizer=regularizers
+                    ))
+                    if BATCH_NORM: model.add(BatchNormalization())
+                    if POOL_SIZE: model.add(MaxPool1D(pool_size=POOL_SIZE))
+
+                else:
+                    raise ValueError(f'Wrong CONV_DIMENSION = {CONV_DIMENSION}')
 
             model.add(Flatten())
 
             for idense in range(DENSE_LAYERS):
                 model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
                                 # kernel_initializer=initializer,
-                                # kernel_regularizer=regularizers
+                                #kernel_regularizer=regularizers
                                 ))
                 if BATCH_NORM:    model.add(BatchNormalization())
                 if DROPOUT > 0.0: model.add(Dropout(DROPOUT))

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# default values
+t_trn="15.0"
+t_skp="15.0" # change in loop
+
+kind="HSI"
+cloudnet="CLOUDNETpy94"
 
 if [[ $1 != "" ]]
     then
@@ -50,11 +56,6 @@ else
 
 fi
 
-t_trn="15.0"
-t_skp="15.0" # change in loop
-
-kind="HSI"
-cloudnet="CLOUDNETpy94"
 
 dt_start=$(date -d "$start_day $start_hour" +"%Y%m%d %H%M")
 dt_end=$(date -d "$end_day $end_hour" +"%Y%m%d %H%M")

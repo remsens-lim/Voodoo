@@ -28,6 +28,7 @@ import numpy as np
 import toml
 from scipy.io import loadmat
 from itertools import product
+from tqdm.auto import tqdm
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
@@ -55,6 +56,7 @@ CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
 VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
 SYSTEM = 'limrad94'
 CLOUDNET = 'CLOUDNETpy94'
+CONV_DIM = 'conv2d'
 
 DATA_PATH = f'{VOODOO_PATH}/data/'
 LOGS_PATH = f'{VOODOO_PATH}/logs/'
@@ -79,12 +81,12 @@ def get_logger(logger_list, status='info'):
 
 
 # get all loggers
-loggers = get_logger(['libVoodoo'])
+loggers = get_logger(['libVoodoo'], status='info')
 
 
-def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet=CLOUDNET):
-    if not os.path.isfile(f'{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'):
-        loggers[0].info(f"{data_path}/features/{kind}/{dt_str}_{system}_features_{kind}.mat'  not found!")
+def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet=CLOUDNET, conv_dim=CONV_DIM):
+    if not os.path.isfile(f'{data_path}/features/{kind}/{conv_dim}/{dt_str}_{system}_features_{kind}.mat'):
+        loggers[0].info(f"{data_path}/features/{kind}/{conv_dim}/{dt_str}_{system}_features_{kind}.mat'  not found!")
         return False
     if not os.path.isfile(f'{data_path}/labels/{dt_str}_{system}_labels.mat'):
         loggers[0].info(f"'{data_path}/labels/{dt_str}_{system}_labels.mat'  not found!")
@@ -116,9 +118,11 @@ def log_dimensions(spec_dim, cn_dim, *args):
 
 def create_filename(modelname, **kwargs):
     if not TRAINED_MODEL:
+        kernel_size = f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}' if len(kwargs["KERNEL_SIZE"]) == 2 else f'{kwargs["KERNEL_SIZE"][0]}'
         name = \
+            f'{kwargs["CONV_DIMENSION"]}-ANN--' \
             f'{kwargs["CONV_LAYERS"]}-cl--' \
-            f'{kwargs["KERNEL_SIZE"][0]}_{kwargs["KERNEL_SIZE"][1]}-ks--' \
+            f'{kernel_size}-ks--' \
             f'{kwargs["ACTIVATIONS"]}-af--' \
             f'{kwargs["OPTIMIZER"]}-opt--' \
             f'{kwargs["LOSS_FCNS"]}-loss--' \
@@ -243,7 +247,7 @@ def post_processor(data, contour):
 
     container['var'][(contour['data']['var'] > 0.0) * (container['var'] == 4)] = 2
     container['var'][(contour['data']['var'] > 0.0) * (container['var'] == 5)] = 3
-    # container['var'][(contour['data']['var'] < -40.0) * ((container['var'] == 1) + (container['var'] == 5))] = 4
+    container['var'][(contour['data']['var'] < -40.0) * ((container['var'] == 1) + (container['var'] == 5))] = 4
 
     loggers[0].info('Postprocessing done.')
 
@@ -271,14 +275,12 @@ if __name__ == '__main__':
     TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
     TASK = kwargs['task'] if 'task' in kwargs else 'train'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
-    CLOUDNET = 'CLOUDNETpy94'
 
     use_only_given = False
 
     n_channels_ = 6 if 'HSI' in KIND else 1
 
     add_flipped = True
-    loggers[0].info('Add flipped CWT to features')
 
     if TASK == 'predict' and not os.path.isfile(f'{MODELS_PATH}/{TRAINED_MODEL}'):
         raise FileNotFoundError(f'Trained model not found! {TRAINED_MODEL}')
@@ -310,7 +312,10 @@ if __name__ == '__main__':
     feature_set, target_labels, masked_total = [], [], []
     cloudnet_class, cloudnet_status, model_temp = [], [], []
 
-    for icase, case_str in enumerate(case_string_list):
+    CDIM = tf_settings["USE_MODEL"]
+
+    loggers[0].info(f'\nLoading {CDIM} neural network input......')
+    for icase, case_str in tqdm(enumerate(case_string_list), total=len(case_string_list), unit='files'):
 
         # gather time interval, etc.
         case = Loader.load_case_list(CASE_LIST, case_str)
@@ -328,7 +333,7 @@ if __name__ == '__main__':
             if flag: continue
             _temperature, flag = load_matv5(f'{DATA_PATH}/cloudnet/', f'{dt_str}_{CLOUDNET}_model_T.mat')
             if flag: continue
-            _feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
+            _feature, flag = load_matv5(f'{DATA_PATH}/features/{KIND}/{CDIM}/', f'{dt_str}_{SYSTEM}_features_{KIND}.mat')
             if flag: continue
             _target, flag = load_matv5(f'{DATA_PATH}/labels/', f'{dt_str}_{SYSTEM}_labels.mat')
             if flag: continue
@@ -339,7 +344,7 @@ if __name__ == '__main__':
             _target = _target['labels']
             _masked = _masked['masked']
 
-            loggers[0].critical(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files')
+            loggers[0].debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} mat files')
 
         else:
 
@@ -356,11 +361,11 @@ if __name__ == '__main__':
                 cloudnet=CLOUDNET,
             )
 
-            loggers[0].critical(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} from nc')
+            loggers[0].debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} from nc')
 
         if _masked.all(): continue  # if there are no data points
 
-        if len(_feature.shape) == 3: _feature = _feature[:, :, :, np.newaxis]
+        if len(_feature.shape) == 3 and CDIM == 'conv2d': _feature = _feature[:, :, :, np.newaxis]
 
         if TASK == 'train':
             """
@@ -375,7 +380,7 @@ if __name__ == '__main__':
 
             if len(idx_valid_samples) < 1: continue
 
-            _feature = _feature[idx_valid_samples, :, :, :]
+            _feature = _feature[idx_valid_samples, :, :, :] if CDIM == 'conv2d' else _feature[idx_valid_samples, :, :]
             _target = _target[idx_valid_samples, :]
 
             """
@@ -384,11 +389,16 @@ if __name__ == '__main__':
             """
             if add_flipped:
                 _feature_flipped = np.zeros(_feature.shape)
-                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[3])):
-                    _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
+                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[-1])):
+                    if CDIM == 'conv2d':
+                        _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
+                    else:
+                        _feature_flipped[ismpl, :, ichan] = np.flip(_feature[ismpl, :, ichan])
 
                 _feature = np.concatenate((_feature, _feature_flipped), axis=0)
                 _target = np.concatenate((_target, _target), axis=0)
+
+            loggers[0].debug(f'\n dim = {_feature.shape}')
 
         feature_set.append(_feature)
         target_labels.append(_target)
@@ -438,7 +448,7 @@ if __name__ == '__main__':
         model_list = []
 
         # loop through hyperparameter space
-        for cl, dl, af, il, op, lr in product(tf_settings['CONV_LAYERS'],
+        for cl, dl, af, il, op, lr in product(tf_settings[CDIM]['CONV_LAYERS'],
                                               tf_settings['DENSE_LAYERS'],
                                               tf_settings['ACTIVATIONS'],
                                               tf_settings['LOSS_FCNS'],
@@ -448,13 +458,14 @@ if __name__ == '__main__':
 
                 # Convolutional part of the model
                 'KIND': KIND,
+                'CONV_DIMENSION': CDIM,
                 'INPUT_DIMENSION': feature_set.shape,
                 'OUTPUT_DIMENSION': target_labels.shape,
                 'CONV_LAYERS': cl,
-                'NFILTERS': tf_settings['NFILTERS'],
-                'KERNEL_SIZE': tf_settings['KERNEL_SIZE'],
-                'STRIDE_SIZE': tf_settings['STRIDE_SIZE'],
-                'POOL_SIZE': tf_settings['POOL_SIZE'],
+                'NFILTERS': tf_settings[CDIM]['NFILTERS'],
+                'KERNEL_SIZE': tf_settings[CDIM]['KERNEL_SIZE'],
+                'STRIDE_SIZE': tf_settings[CDIM]['STRIDE_SIZE'],
+                'POOL_SIZE': tf_settings[CDIM]['POOL_SIZE'],
                 'ACTIVATIONS': af,
 
                 # fully connected layers
@@ -482,7 +493,7 @@ if __name__ == '__main__':
             hyper_params.update(create_filename(TRAINED_MODEL, **hyper_params))
 
             # define a new model or load an existing one
-            cnn_model = Model.define_cnn(feature_set.shape[1:], target_labels.shape[1:], **hyper_params)
+            cnn_model = Model.define_convnet(feature_set.shape[1:], target_labels.shape[1:], **hyper_params)
 
             # parse the training set to the optimizer
             history = Model.training(cnn_model, feature_set, target_labels, **hyper_params)
@@ -522,7 +533,7 @@ if __name__ == '__main__':
 
         for model_name in model_list:
             # define a new model or load an existing one
-            cnn_model = Model.define_cnn(
+            cnn_model = Model.define_convnet(
                 feature_set.shape[1:], target_labels.shape[1:],
                 MODEL_PATH=MODELS_PATH + model_name,
                 **hyper_params
@@ -551,6 +562,7 @@ if __name__ == '__main__':
                 contour=contour_T,
                 fig_size=[18, 5]
             )  # , **plot_settings)
+            fig.tight_layout(rect=[0, 0, 0.95, 1])
 
             Plot.save_figure(
                 fig,

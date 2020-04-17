@@ -32,23 +32,16 @@
         dpi = 200
 
 [tensorflow]
-    window_dimension = [3, 3]
 
-    BATCH_SIZE   = 64   # √
+    USE_MODEL = 'conv1d'
+
+    BATCH_SIZE   = 32   # √
     BATCH_NORM   = true
-    EPOCHS       = 50
+    EPOCHS       = 25
 
-    DENSE_LAYERS = [4]
-    DENSE_NODES  = [64, 64, 64, 32]
+    DENSE_LAYERS = [3]
+    DENSE_NODES  = [32, 32, 32]
     DROPOUT      = 0.70
-
-    CONV_LAYERS  = [3]
-    KERNEL_SIZE  = [3, 3]
-    STRIDE_SIZE  = [2, 1]
-    POOL_SIZE    = [2, 2]
-    #STRIDE_SIZE  = [1, 1]
-    #POOL_SIZE    = [2, 2]
-    NFILTERS     = [64, 128, 256]
 
     # binary classifier
     OPTIMIZERS   = ['adam']
@@ -56,18 +49,27 @@
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = ['CategoricalCrossentropy']
 
-    LEARNING_RATE = [1.0e-3]
+    LEARNING_RATE = [1.0e-4]
     DECAY_RATE = 1.0e-5
-    MOMENTUM = 0.9
+    MOMENTUM = 0.99
 
     # define paths
     VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
 
-    #TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191128-173950.h5'  # even better
-    #TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-2_4-kernelsize-leakyrelu--20191208-234138.h5' # ok
-    #TRAINED_MODEL = '3-conv-(32, 64, 128)-filter-8_8-kernelsize-leakyrelu--20191211-232527.h5'
-    #TRAINED_MODEL = '2-conv-(32, 64, 86)-filter-8_8-kernelsize-leakyrelu--20191228-210347.h5'
-    TRAINED_MODEL = ''
+    [tensorflow.conv2d]
+        CONV_LAYERS  = [3]
+        KERNEL_SIZE  = [3, 3]
+        STRIDE_SIZE  = [2, 1]
+        POOL_SIZE    = [2, 2]
+        NFILTERS     = [128, 256, 512]
+
+    [tensorflow.conv1d]
+        CONV_LAYERS  = [2]
+        KERNEL_SIZE  = [5]
+        STRIDE_SIZE  = [1]
+        POOL_SIZE    = [2]
+        NFILTERS     = [32, 64, 128]
+
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 [feature.info]

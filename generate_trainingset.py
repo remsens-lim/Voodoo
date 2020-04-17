@@ -32,7 +32,7 @@ import voodoo.libVoodoo.Plot   as Plot
 import libVoodoo.Plot as Plot
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.CRITICAL)
+logger.setLevel(logging.INFO)
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -124,7 +124,127 @@ def load_training_mask(classes, status):
     valid_samples[status['var'] == 3] = False
     return ~valid_samples
 
-def load_features_and_labels(spectra, classes, **feature_info):
+def load_features_and_labels_conv1d(spectra, classes, **feature_info):
+    """
+     For orientation
+
+    " status
+    \nValue 0: Clear sky.
+    \nValue 1: Good radar and lidar echos.
+    \nValue 2: Good radar echo only.
+    \nValue 3: Radar echo, corrected for liquid attenuation.
+    \nValue 4: Lidar echo only.
+    \nValue 5: Radar echo, uncorrected for liquid attenuation.
+    \nValue 6: Radar ground clutter.
+    \nValue 7: Lidar clear-air molecular scattering.";
+
+    " classes
+    \nValue 0: Clear sky.
+    \nValue 1: Cloud liquid droplets only.
+    \nValue 2: Drizzle or rain.
+    \nValue 3: Drizzle or rain coexisting with cloud liquid droplets.
+    \nValue 4: Ice particles.
+    \nValue 5: Ice coexisting with supercooled liquid droplets.
+    \nValue 6: Melting ice particles.
+    \nValue 7: Melting ice particles coexisting with cloud liquid droplets.
+    \nValue 8: Aerosol particles, no cloud or precipitation.
+    \nValue 9: Insects, no cloud or precipitation.
+    \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
+    """
+    t0 = time()
+
+    if len(spectra['var'].shape) == 3:
+        (n_time, n_range, n_Dbins), n_chan = spectra['var'].shape, 1
+        spectra_3d = spectra['var'].reshape((n_time, n_range, n_Dbins, n_chan)).astype('float32')
+        spectra_mask = spectra['mask'].reshape((n_time, n_range, n_Dbins, n_chan))
+    elif len(spectra['var'].shape) == 4:
+        n_time, n_range, n_Dbins, n_chan = spectra['var'].shape
+        spectra_3d = spectra['var'].astype('float32')
+        spectra_mask = spectra['mask']
+    else:
+        raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
+
+    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
+    #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
+    spec_params = feature_info['VSpec']
+
+    quick_check = feature_info['quick_check'] if 'quick_check' in feature_info else False
+    if quick_check:
+        ZE = np.sum(np.mean(spectra_3d, axis=3), axis=2)
+        ZE = h.put_in_container(ZE, classes)  # , **kwargs)
+        ZE['dimlabel'] = ['time', 'range']
+        ZE['name'] = 'pseudoZe'
+        ZE['joints'] = ''
+        ZE['rg_unit'] = ''
+        ZE['colormap'] = 'jet'
+        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
+        ZE['system'] = 'LIMRAD94'
+        # ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
+        ZE['var_lims'] = [-60, 20]
+        ZE['var_unit'] = 'dBZ'
+        ZE['mask'] = masked
+
+        fig, _ = tr.plot_timeheight(ZE, var_converter='lin2z', title='bla inside wavelett')  # , **plot_settings)
+        Plot.save_figure(fig, name=f'limrad_pseudoZe.png', dpi=200)
+
+    spectra_lims = np.array(spec_params['var_lims'])
+    # convert to logarithmic units
+    if 'var_converter' in spec_params and 'lin2z' in spec_params['var_converter']:
+        spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
+        spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
+
+    # load scaling functions
+    spectra_scaler = scaling(strat='normalize')
+    cnt = 0
+    feature_list = []
+    target_labels = []
+    spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
+    window_fcn = np.kaiser(n_Dbins, 5.0)
+    print('\nConv1d Feature Extraction......')
+    for iT in tqdm(range(n_time)):
+        for iR in range(n_range):
+            if masked[iT, iR]: continue  # skip masked values
+
+            spc_list = []
+            for iCh in range(n_chan):
+                spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
+                spc_list.append(spc_matrix[:, iCh])
+
+            #feature_list.append(np.stack([np.mean(spc_matrix, axis=1), np.std(spc_matrix, axis=1)], axis=1))
+            feature_list.append(np.stack(spc_list, axis=1))
+
+            # one hot encoding
+            if classes['var'][iT, iR] in [8, 9, 10]:
+                target_labels.append([0, 0, 0, 0, 0, 0, 0, 0, 1])  # Insects or ground clutter.
+            elif classes['var'][iT, iR] == 7:
+                target_labels.append([0, 0, 0, 0, 0, 0, 0, 1, 0])  # Melting ice particles coexisting with cloud liquid droplets.
+            elif classes['var'][iT, iR] == 6:
+                target_labels.append([0, 0, 0, 0, 0, 0, 1, 0, 0])  # Melting ice particles.
+            elif classes['var'][iT, iR] == 5:
+                target_labels.append([0, 0, 0, 0, 0, 1, 0, 0, 0])  # Ice coexisting with supercooled liquid droplets.
+            elif classes['var'][iT, iR] == 4:
+                target_labels.append([0, 0, 0, 0, 1, 0, 0, 0, 0])  # Ice particles.
+            elif classes['var'][iT, iR] == 3:
+                target_labels.append([0, 0, 0, 1, 0, 0, 0, 0, 0])  # Drizzle or rain coexisting with cloud liquid droplets.
+            elif classes['var'][iT, iR] == 2:
+                target_labels.append([0, 0, 1, 0, 0, 0, 0, 0, 0])  # Drizzle or rain.
+            elif classes['var'][iT, iR] == 1:
+                target_labels.append([0, 1, 0, 0, 0, 0, 0, 0, 0])  # Cloud liquid droplets only
+            else:
+                target_labels.append([1, 0, 0, 0, 0, 0, 0, 0, 0])  # Clear-sky
+            cnt += 1
+
+    Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
+
+    FEATURES = np.array(feature_list, dtype=np.float32)
+    LABELS = np.array(target_labels, dtype=np.float32)
+
+    logger.debug(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
+    logger.debug(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
+
+    return FEATURES, LABELS, masked
+
+def load_features_and_labels_conv2d(spectra, classes, **feature_info):
     """
      For orientation
 
@@ -208,7 +328,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     target_labels = []
     cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
     window_fcn = np.kaiser(n_Dbins, 5.0)
-    print('\nFeature Extraction......')
+    print('\nConv2d Feature Extraction......')
     for iT in tqdm(range(n_time)):
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
@@ -296,9 +416,9 @@ def load_radar_data(larda_connected, begin_dt, end_dt, **kwargs):
         stored in linear units [mm6 m-3]
     """
 
-    rm_prcp_ghst = kwargs['rm_precip_ghost'] if 'rm_precip_ghost' in kwargs else False
-    rm_crtn_ghst = kwargs['rm_curtain_ghost'] if 'rm_curtain_ghost' in kwargs else False
-    dspckl = kwargs['do_despeckle'] if 'do_despeckle' in kwargs else False
+    rm_prcp_ghst = kwargs['ghost_echo_1'] if 'ghost_echo_1' in kwargs else True
+    rm_crtn_ghst = kwargs['ghost_echo_2'] if 'ghost_echo_2' in kwargs else True
+    dspckl = kwargs['despeckle2D'] if 'despeckle2D' in kwargs else True
     dspckl3d = kwargs['do_despeckle3d'] if 'do_despeckle3d' in kwargs else 95.
     est_noise = kwargs['estimate_noise'] if 'estimate_noise' in kwargs else False
     NF = kwargs['noise_factor'] if 'noise_factor' in kwargs else 6.0
@@ -379,8 +499,7 @@ def average_time_dim(ts, rg, var, mask, **kwargs):
     return ip_var, ip_mask
 
 
-def hyperspectralimage(ts, var, mask, **kwargs):
-    assert 'new_time' in kwargs, ValueError('new_time key needs to be provided')
+def hyperspectralimage(ts, var, msk, **kwargs):
 
     new_ts = kwargs['new_time']
     n_channels = kwargs['n_channels'] if 'n_channels' in kwargs else 4
@@ -389,7 +508,7 @@ def hyperspectralimage(ts, var, mask, **kwargs):
     mid = n_channels//2
 
     ip_var = np.zeros((n_ts_new, n_rg, n_vel, n_channels), dtype=np.float32)
-    ip_mask = np.empty((n_ts_new, n_rg, n_vel, n_channels), dtype=np.bool)
+    ip_msk = np.empty((n_ts_new, n_rg, n_vel, n_channels), dtype=np.bool)
 
     print(f'\nConcatinate {n_channels} spectra to 1 sample:\n'
           f'    --> resulting tensor dimension (n_samples, n_velocity_bins, n_cwt_scales, n_channels) = (????, 256, 32, {n_channels}) ......')
@@ -399,10 +518,10 @@ def hyperspectralimage(ts, var, mask, **kwargs):
             iT_rd0 = h.argnearest(ts, new_ts[iT_cn])
             for itmp in range(-mid, mid):
                 iTdiff = itmp if iT_rd0 + itmp < n_ts else 0
-                ip_var[iT_cn,  :, iBin, iTdiff + mid] = var[iT_rd0 + iTdiff, :, iBin]
-                ip_mask[iT_cn, :, iBin, iTdiff + mid] = mask[iT_rd0 + iTdiff, :, iBin]
+                ip_var[iT_cn, :, iBin, iTdiff + mid] = var[iT_rd0 + iTdiff, :, iBin]
+                ip_msk[iT_cn, :, iBin, iTdiff + mid] = msk[iT_rd0 + iTdiff, :, iBin]
 
-    return ip_var, ip_mask
+    return ip_var, ip_msk
 
 
 def interpolate3d(data, mask_thres=0.1, **kwargs):
@@ -496,7 +615,7 @@ def load_features_from_nc(
         save=True,
         **kwargs
 ):
-    def quick_check(dummy_container, name_str):
+    def quick_check(dummy_container, name_str, path):
         if spec_settings['quick_check']:
             if len(ZSpec['VHSpec']['mask'].shape) == 4:
                 ZE =  h.put_in_container(np.sum(np.mean(ZSpec['VHSpec']['var'], axis=3), axis=2), dummy_container)
@@ -518,7 +637,7 @@ def load_features_from_nc(
             ZE['var_unit'] = 'dBZ'
 
             fig, _ = plot_timeheight(ZE, var_converter='lin2z', title=f'pseudo Ze ({name_str}) for testing interpolations')  # , **plot_settings)
-            Plot.save_figure(fig, name=f'limrad_{name_str}_{dt_string}.png', dpi=200)
+            Plot.save_figure(fig, name=f'{path}/limrad_{name_str}_{dt_string}.png', dpi=200)
 
     spec_settings = toml.load(voodoo_path + 'ann_model_setting.toml')['feature']['info']
 
@@ -532,7 +651,6 @@ def load_features_from_nc(
     TIME_SPAN_ = time_span
 
     TIME_SPAN_RADAR = [TIME_SPAN_[0] - timedelta(seconds=35.0), TIME_SPAN_[1] + timedelta(seconds=35.0)]
-    #TIME_SPAN_MODEL = [TIME_SPAN_[0] - timedelta(hours=2.0), TIME_SPAN_[1] + timedelta(hours=2.0)]
     TIME_SPAN_MODEL = [datetime(TIME_SPAN_[0].year, TIME_SPAN_[0].month, TIME_SPAN_[0].day) + timedelta(minutes=1),
                        datetime(TIME_SPAN_[0].year, TIME_SPAN_[0].month, TIME_SPAN_[0].day) + timedelta(minutes=1439)]
 
@@ -574,20 +692,21 @@ def load_features_from_nc(
     \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
 
     """
-    cnpy94_class = load_data(larda_connected, cloudnet, TIME_SPAN_, ['CLASS', 'detection_status'])
-    ts_cnpy94, rg_cnpy94 = cnpy94_class['CLASS']['ts'], cnpy94_class['CLASS']['rg']
+
+    cn_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, ['CLASS', 'detection_status'])
+    ts_cnpy94, rg_cnpy94 = cn_variables['CLASS']['ts'], cn_variables['CLASS']['rg']
 
     if save:
         h.change_dir(f'{data_path}/cloudnet/')
-        savemat(f'{dt_string}_{cloudnet}_class.mat', cnpy94_class['CLASS'])
-        savemat(f'{dt_string}_{cloudnet}_status.mat', cnpy94_class['detection_status'])
+        savemat(f'{dt_string}_{cloudnet}_class.mat', cn_variables['CLASS'])
+        savemat(f'{dt_string}_{cloudnet}_status.mat', cn_variables['detection_status'])
         print(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of cLoudnetpy94 Class & Status\n')
 
     # temperature and pressure
     cnpy94_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, ['T', 'P'])
 
-    cnpy94_model['T'] = tr.interpolate2d(cnpy94_model['T'], new_time=cnpy94_class['CLASS']['ts'], new_range=cnpy94_class['CLASS']['rg'])
-    cnpy94_model['P'] = tr.interpolate2d(cnpy94_model['P'], new_time=cnpy94_class['CLASS']['ts'], new_range=cnpy94_class['CLASS']['rg'])
+    cnpy94_model['T'] = tr.interpolate2d(cnpy94_model['T'], new_time=cn_variables['CLASS']['ts'], new_range=cn_variables['CLASS']['rg'])
+    cnpy94_model['P'] = tr.interpolate2d(cnpy94_model['P'], new_time=cn_variables['CLASS']['ts'], new_range=cn_variables['CLASS']['rg'])
 
     if save:
         h.change_dir(f'{data_path}/cloudnet/')
@@ -614,13 +733,17 @@ def load_features_from_nc(
     ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], ZSpec['SLv']['var'])
     print(f'\nloaded :: {TIME_SPAN_RADAR[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_RADAR[1]:%H:%M:%S} of {system} VHSpectra')
 
-    quick_check(ZSpec['SLv'], f'pseudoZe-{kind}-High-res')
+    quick_check(ZSpec['SLv'], f'pseudoZe-{kind}-High-res', '/home/sdig/code/larda3/voodoo/plots/training')
 
     if kind == 'HSI':
-        n_channels_ = kwargs['n_channels'] if 'n_channels' in kwargs else 6
-        ZSpec['VHSpec'] = interpolate3d(ZSpec['VHSpec'], new_time=ZSpec['VHSpec']['ts'], new_range=rg_cnpy94, method=interp)
+        ZSpec['VHSpec'] = interpolate3d(
+            ZSpec['VHSpec'],
+            new_time=ZSpec['VHSpec']['ts'],
+            new_range=rg_cnpy94,
+            method=interp
+        )
 
-        quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp')
+        quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp', '/home/sdig/code/larda3/voodoo/plots/training')
 
         # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
         interp_var, interp_mask = hyperspectralimage(
@@ -628,7 +751,7 @@ def load_features_from_nc(
             ZSpec['VHSpec']['var'],
             ZSpec['VHSpec']['mask'],
             new_time=ts_cnpy94,
-            n_channels=n_channels_
+            n_channels=kwargs['n_channels']
         )
 
         ZSpec['VHSpec']['ts'] = ts_cnpy94
@@ -637,7 +760,7 @@ def load_features_from_nc(
         ZSpec['VHSpec']['mask'] = interp_mask
         ZSpec['VHSpec']['dimlabel'] = ['time', 'range', 'vel', 'channel']
 
-        quick_check(cnpy94_class['CLASS'], 'pseudoZe_3spec-time-range-interp')
+        quick_check(cn_variables['CLASS'], 'pseudoZe_3spec-time-range-interp', '/home/sdig/code/larda3/voodoo/plots/training')
 
     elif kind == 'avg30sec':
         # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
@@ -653,10 +776,10 @@ def load_features_from_nc(
         ZSpec['VHSpec']['var'] = interp_var
         ZSpec['VHSpec']['mask'] = interp_mask
 
-        quick_check(cnpy94_class['CLASS'], 'pseudoZe_avg30spec-interp')
+        quick_check(cn_variables['CLASS'], 'pseudoZe_avg30spec-interp', '/home/sdig/code/larda3/voodoo/plots/training')
 
         ZSpec['VHSpec'] = interpolate3d(ZSpec['VHSpec'], new_time=ts_cnpy94, new_range=rg_cnpy94, method=interp)
-        quick_check(cnpy94_class['CLASS'], 'pseudoZe_avg30spec-range-interp')
+        quick_check(cn_variables['CLASS'], 'pseudoZe_avg30spec-range-interp', '/home/sdig/code/larda3/voodoo/plots/training')
 
     else:
         raise ValueError('Unknown KIND of preprocessing.', kind)
@@ -668,15 +791,25 @@ def load_features_from_nc(
     #
 
     config_global_model = toml.load(voodoo_path + 'ann_model_setting.toml')
+    USE_MODEL = config_global_model['tensorflow']['USE_MODEL']
 
-    features, targets, masked = load_features_and_labels(
-        ZSpec['VHSpec'],
-        cnpy94_class['CLASS'],
-        **config_global_model['feature']['info']
-    )
+    if USE_MODEL == 'conv2d':
+        features, targets, masked = load_features_and_labels_conv2d(
+            ZSpec['VHSpec'],
+            cn_variables['CLASS'],
+            **config_global_model['feature']['info']
+        )
+    elif USE_MODEL == 'conv1d':
+        features, targets, masked = load_features_and_labels_conv1d(
+            ZSpec['VHSpec'],
+            cn_variables['CLASS'],
+            **config_global_model['feature']['info']
+        )
+    else:
+        raise ValueError(f'Unkown "USE_MODEL" variable = {USE_MODEL}')
 
     if save:
-        h.change_dir(f'{data_path}/features/{kind}/')
+        h.change_dir(f'{data_path}/features/{kind}/{USE_MODEL}/')
         # save features (subfolders for different tensor dimension)
         FILE_NAME_1 = f'{dt_string}_{system}'
         try:
@@ -690,7 +823,7 @@ def load_features_from_nc(
         savemat(f'{FILE_NAME_1}_masked.mat', {'masked': masked})
         print(f'save :: {FILE_NAME_1}_limrad94_{kind}_features/labels.mat')
 
-    return features, targets, masked, cnpy94_class['CLASS'], cnpy94_class['detection_status'], cnpy94_model['T']
+    return features, targets, masked, cn_variables['CLASS'], cn_variables['detection_status'], cnpy94_model['T']
 
 
 
@@ -714,7 +847,7 @@ if __name__ == '__main__':
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
     SYSTEM = kwargs['system'] if 'system' in kwargs else 'limrad94'
-    CLOUDNET = kwargs['cloudnet'] if 'cloudnet' in kwargs else 'CLOUDNETpy94'
+    CLOUDNET = kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
     case_string = kwargs['case'] if 'case' in kwargs else '20190801-01'
     n_channels_ = 6 if 'HSI' in KIND else 1

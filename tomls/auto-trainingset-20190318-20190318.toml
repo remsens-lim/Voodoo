@@ -2,6 +2,8 @@
 t_train = 15.00
 t_skip = 15.00
 
+# 20190318-XX
+
 [case.20190318-24]
     time_interval = ['20190318-0600', '20190318-0615']
     range_interval = [0, 12000]
@@ -202,8 +204,7 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20190318-63/'
 
-t_train = 15.00
-t_skip = 15.00
+# 20190801-XX
 
 [case.20190801-0]
     time_interval = ['20190801-0000', '20190801-0015']
@@ -680,6 +681,9 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20190801-94/'
 
+
+# 20190904-XX
+
 [case.20190904-36]
     time_interval = ['20190904-0900', '20190904-0915']
     range_interval = [0, 12000]
@@ -860,6 +864,7 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20190904-71/'
 
+# 20190102-XX
 
 [case.20190102-0]
     time_interval = ['20190102-0000', '20190102-0015']
@@ -1342,6 +1347,8 @@ t_skip = 15.00
     plot_dir = 'plots/20190102-95/'
 
 
+# 20190131-XX
+
 [case.20190131-0]
     time_interval = ['20190131-0000', '20190131-0015']
     range_interval = [0, 12000]
@@ -1522,6 +1529,8 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20190131-35/'
 
+
+# 20181201-XX
 
 [case.20181201-0]
     time_interval = ['20181201-0000', '20181201-0015']
@@ -1998,7 +2007,8 @@ t_skip = 15.00
     range_interval = [0, 12000]
     plot_dir = 'plots/20181201-94/'
 
-###
+
+# 20181202-XX
 
 [case.20181202-0]
     time_interval = ['20181202-0000', '20181202-0015']
