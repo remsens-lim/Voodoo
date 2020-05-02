@@ -33,25 +33,20 @@
 
 [tensorflow]
 
-    USE_MODEL = 'conv2d'
+    USE_MODEL = 'conv1d'
 
     DEVICE = 0
 
-    BATCH_SIZE   = 32   # √
+    BATCH_SIZE   = 64   # √
     BATCH_NORM   = true
-    EPOCHS       = 25
+    EPOCHS       = 100
 
-    #KERNEL_INITIALIZER = 'random_normal'
-    #REGULARIZER = 'l1_l2'
-
-    DENSE_LAYERS  = [512, 256, 256]
-    DROPOUT      = 0.25
+    DENSE_LAYERS  = [128, 64, 64, 64, 32]
+    DROPOUT      = 0.15
 
     # binary classifier
     OPTIMIZER   = 'adam'
-
-    # why elu? --> https://arxiv.org/pdf/1511.07289.pdf
-    ACTIVATIONS  = 'elu'    # 'relu
+    ACTIVATIONS  = 'relu'
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = 'CategoricalCrossentropy'
 
@@ -62,16 +57,10 @@
     # define paths
     VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
 
-#    KERNEL_SIZE  = [[11, 5], [11, 5], [5, 3], [3, 3]]
-#    STRIDE_SIZE  = [[1, 1], [1, 1], [1, 1], [1, 1]]
-#    POOL_SIZE    = [[4, 2], [4, 2], [4, 2], [2, 2]]
-#    NFILTERS     = [32, 64, 128, 256]
-
-    KERNEL_SIZE  = [[5, 5], [5, 5], [3, 3], [3, 3]]
-    STRIDE_SIZE  = [[1, 1], [1, 1], [1, 1], [1, 1]]
-    POOL_SIZE    = [[4, 2], [4, 2], [4, 2], [2, 2]]
+    KERNEL_SIZE  = [11, 7, 5, 3]
+    STRIDE_SIZE  = [1, 1, 1, 1]
+    POOL_SIZE    = [2, 2, 2, 2]
     NFILTERS     = [64, 128, 256, 512]
-
 
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
@@ -91,31 +80,4 @@
         main_peak = true            #
         ghost_echo_1 = true         # reduces the domain (Nyquist velocitdy) by ± 2.5 [m/s], when signal > 0 [dBZ] within 200m above antenna
         ghost_echo_2 = true         #
-
-    [feature.cwt]
-        use = true
-        var_lims = [0.0, 1.0]
-        var_converter = []
-        scales = [1.25, 10.0, 32.0]
-        scaling = 'normalize'
-        plot = false
-
-
-
-# define normalization boundaries and conversion for radar (feature) and lidar (label) space
-[target.info]
-    [target.info.generic]
-        scaling = 'normalize'
-
-    [target.info.attbsc1064]
-        var_lims = [1.0e-7, 1.0e-3]
-        var_converter= 'log'
-        scaling = ''
-        use = false
-
-    [target.info.depol]
-        var_lims = [1.0e-7, 0.3]
-        var_converter= 'ldr2cdr'
-        scaling = ''
-        use = false
 

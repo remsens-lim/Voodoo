@@ -41,12 +41,15 @@ if __name__ == '__main__':
     if 'dt_start' in kwargs and 'dt_end' in kwargs:
         dt_begin = datetime.datetime.strptime(f'{kwargs["dt_start"]} 0000', '%Y%m%d %H%M')
         dt_end   = datetime.datetime.strptime(f'{kwargs["dt_end"]} 2359', '%Y%m%d %H%M')
-        time_span = [dt_begin, dt_end]
     else:
-        raise ValueError('Wrong dt_begin or dt_end')
+        dt_begin = datetime.datetime.strptime(f'20190410 0000', '%Y%m%d %H%M')
+        dt_end   = datetime.datetime.strptime(f'20190410 2359', '%Y%m%d %H%M')
+        #raise ValueError('Wrong dt_begin or dt_end')
 
-    t_train = float(kwargs['t_train']) if 't_train' in kwargs else 15.0   # minutes
-    t_skip = float(kwargs['t_skip']) if 't_skip' in kwargs else 15.0   # minutes
-
-    generate_multicase_trainingset(time_span, t_train, t_skip, '/home/sdig/code/larda3/voodoo/tomls/')
+    generate_multicase_trainingset(
+        [dt_begin, dt_end],
+        float(kwargs['t_train']) if 't_train' in kwargs else 15.0,   # minutes,
+        float(kwargs['t_skip']) if 't_skip' in kwargs else 15.0,   # minutes,
+        '/home/sdig/code/larda3/voodoo/tomls/',
+    )
     print('done\n')

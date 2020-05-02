@@ -26,7 +26,7 @@ import pyLARDA.helpers as h
 import pyLARDA.VIS_Colormaps as VIS_Colormaps
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.CRITICAL)
 logger.addHandler(logging.StreamHandler())
 
 __author__ = "Willi Schimmel"
@@ -506,7 +506,7 @@ def lidar_profiles(bsc, depol, fltr, **kwargs):
 
 
 def print_elapsed_time(t0, string='time = '):
-    print(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [min:sec]')
+    logger.info(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [min:sec]')
 
 
 def save_figure(fig, **kwargs):
@@ -555,44 +555,44 @@ def Histogram(data, **kwargs):
 
     if 'Ze_lims' in var_info:
         var_lims.update({'Ze': var_info['Ze_lims']})
-        print(f'min/max      Ze = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
-        print(f'boundaries   Ze = {var_lims["Ze"][0]:.4f}/{var_lims["Ze"][1]:.4f}')
+        logger.info(f'min/max      Ze = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
+        logger.info(f'boundaries   Ze = {var_lims["Ze"][0]:.4f}/{var_lims["Ze"][1]:.4f}')
         i_moments += 1
         n_variables += 1
         list_moments.append('Ze')
 
     if 'VEL_lims' in var_info:
         var_lims.update({'VEL': var_info['VEL_lims']})
-        print(f'min/max     VEL = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
-        print(f'boundaries  VEL = {var_lims["VEL"][0]:.4f}/{var_lims["VEL"][1]:.4f}')
+        logger.info(f'min/max     VEL = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
+        logger.info(f'boundaries  VEL = {var_lims["VEL"][0]:.4f}/{var_lims["VEL"][1]:.4f}')
         i_moments += 1
         n_variables += 1
         list_moments.append('VEL')
 
     if 'sw_lims' in var_info:
         var_lims.update({'sw': var_info['sw_lims']})
-        print(f'min/max      sw = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
-        print(f'boundaries   sw = {var_lims["sw"][0]:.4f}/{var_lims["sw"][1]:.4f}')
+        logger.info(f'min/max      sw = {var[:, i_moments].min():.4f}/{var[:, i_moments].max():.4f}')
+        logger.info(f'boundaries   sw = {var_lims["sw"][0]:.4f}/{var_lims["sw"][1]:.4f}')
         i_moments += 1
         n_variables += 1
         list_moments.append('sw')
 
     if 'spec_lims' in var_info:
         var_lims.update({'spec': var_info['spec_lims']})
-        print(f'min/max    spec = {var[:, i_moments:].min():.4f}/{var[:, i_moments:].max():.4f}')
-        print(f'boundaries spec = {0:.4f}/{1:.4f}')
+        logger.info(f'min/max    spec = {var[:, i_moments:].min():.4f}/{var[:, i_moments:].max():.4f}')
+        logger.info(f'boundaries spec = {0:.4f}/{1:.4f}')
         n_variables += 1
 
     if 'bsc_lims' in var_info:
         var_lims.update({'bsc': var_info['bsc_lims']})
-        print(f'min/max     bsc = {var[:, 0].min():.4f}/{var[:, 0].max():.4f}')
-        print(f'boundaries  bsc = {var_lims["bsc"][0]:.4f}/{var_lims["bsc"][1]:.4f}')
+        logger.info(f'min/max     bsc = {var[:, 0].min():.4f}/{var[:, 0].max():.4f}')
+        logger.info(f'boundaries  bsc = {var_lims["bsc"][0]:.4f}/{var_lims["bsc"][1]:.4f}')
         n_variables += 1
 
     if 'dpl_lims' in var_info:
         var_lims.update({'dpl': var_info['dpl_lims']})
-        print(f'min/max     dpl = {var[:, 1].min():.4f}/{var[:, 1].max():.4f}')
-        print(f'boundaries  dpl = {var_lims["dpl"][0]:.4f}/{var_lims["dpl"][1]:.4f}')
+        logger.info(f'min/max     dpl = {var[:, 1].min():.4f}/{var[:, 1].max():.4f}')
+        logger.info(f'boundaries  dpl = {var_lims["dpl"][0]:.4f}/{var_lims["dpl"][1]:.4f}')
         n_variables += 1
 
     fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [8, n_variables * 5]

@@ -8,14 +8,13 @@ from itertools import product
 
 import numpy as np
 
-
 # Nvidia-smi GPU memory parsing.
 # Tested on nvidia-smi 370.23
 
 import libVoodoo.Utils as util
+
 os.environ["CUDA_VISIBLE_DEVICES"] = str(util.pick_gpu_lowest_memory())
 ID_GPU = os.environ["CUDA_VISIBLE_DEVICES"]
-
 
 # neural network imports
 import tensorflow as tf
@@ -56,6 +55,7 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
+
 def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
     """Defining/loading a Tensorflow model.
 
@@ -91,14 +91,14 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
         model = keras.models.load_model(MODEL_PATH)
         print(f'Loaded model from disk:\n{MODEL_PATH}')
     else:
-        CONV_LAYERS = hyper_params['CONV_LAYERS'] if 'CONV_LAYERS' in hyper_params else ValueError('CONV_LAYERS missing!')
         CONV_DIMENSION = hyper_params['CONV_DIMENSION'] if 'CONV_DIMENSION' in hyper_params else ValueError('CONV_DIMENSION missing!')
         DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
-        DENSE_NODES = hyper_params['DENSE_NODES'] if 'DENSE_NODES' in hyper_params else ValueError('DENSE_NODES missing!')
         NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
         KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
         STRIDE_SIZE = hyper_params['STRIDE_SIZE'] if 'STRIDE_SIZE' in hyper_params else ValueError('STRIDE_SIZE missing!')
         POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else False
+        KERNEL_INITIALIZER = hyper_params['KERNEL_INITIALIZER'] if 'KERNEL_INITIALIZER' in hyper_params else ''
+        REGULARIZER = hyper_params['REGULARIZER'] if 'REGULARIZER' in hyper_params else ''
         ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
         ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
         BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
@@ -106,80 +106,59 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
         DEVICE = ID_GPU
 
         # create the model and add the input layer
-        #initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
-        #regularizers = tf.keras.regularizers.l2(l=0.01)
+
+        if KERNEL_INITIALIZER == 'random_normal':
+            initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+        else:
+            initializer = None
+
+
+        if REGULARIZER == 'l1':
+            regularizers = tf.keras.regularizers.l1(l=0.1)
+        elif REGULARIZER == 'l2':
+            regularizers = tf.keras.regularizers.l2(l=0.01)
+        elif REGULARIZER == 'l1_l2':
+            regularizers = tf.keras.regularizers.l1_l2(l1=0.1, l2=0.01)
+        else:
+            regularizers = None
 
         mirrored_strategy = tf.distribute.MirroredStrategy(devices=[f"/gpu:{DEVICE}"])
+
+        if CONV_DIMENSION == 'conv2d':
+            ConvLayer, Pooling = Conv2D, MaxPool2D
+        elif CONV_DIMENSION == 'conv1d':
+            ConvLayer, Pooling = Conv1D, MaxPool1D
+        else:
+            raise ValueError(f'Unknown CONV_DIMENSION = {CONV_DIMENSION}')
 
         with mirrored_strategy.scope():
             model = Sequential()
 
-            if CONV_DIMENSION == 'conv2d':
-                model.add(Conv2D(
-                    NFILTERS[0], KERNEL_SIZE,
-                    strides=STRIDE_SIZE,
-                    activation=ACTIVATION,
-                    input_shape=n_input,
-                    padding="same",
-                    # kernel_initializer=initializer,
-                    #kernel_regularizer=regularizers
-                ))
+            # add convolutional layers
+            for i, (ifilt, ikern, istrd, ipool) in enumerate(zip(NFILTERS, KERNEL_SIZE, STRIDE_SIZE, POOL_SIZE)):
+                conv_layer_settings = {
+                    'strides': istrd,
+                    'activation': ACTIVATION,
+                    'padding': "same",
+                    'kernel_initializer': initializer,
+                    'kernel_regularizer': regularizers,
+                }
+                if i == 0: conv_layer_settings['input_shape'] = n_input
+
+                model.add(ConvLayer(ifilt, ikern, **conv_layer_settings))
 
                 if BATCH_NORM: model.add(BatchNormalization())
-                if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
-            elif CONV_DIMENSION == 'conv1d':
-                model.add(Conv1D(
-                    NFILTERS[0], KERNEL_SIZE,
-                    strides=STRIDE_SIZE,
-                    activation=ACTIVATION,
-                    input_shape=n_input,
-                    padding="same",
-                    # kernel_initializer=initializer,
-                    #kernel_regularizer=regularizers
-                ))
-
-                if BATCH_NORM: model.add(BatchNormalization())
-                if POOL_SIZE: model.add(MaxPool1D(pool_size=POOL_SIZE))
-            else:
-                raise ValueError(f'Wrong CONV_DIMENSION = {CONV_DIMENSION}')
-
-            # add more conv layers
-            for idl in range(1, CONV_LAYERS+1):
-                if CONV_DIMENSION == 'conv2d':
-                    model.add(Conv2D(
-                        NFILTERS[idl], KERNEL_SIZE,
-                        strides=STRIDE_SIZE,
-                        activation=ACTIVATION,
-                        padding="same",
-                        # kernel_initializer=initializer,
-                        #kernel_regularizer=regularizers
-                    ))
-                    if BATCH_NORM: model.add(BatchNormalization())
-                    if POOL_SIZE: model.add(MaxPool2D(pool_size=POOL_SIZE))
-
-                elif CONV_DIMENSION == 'conv1d':
-                    model.add(Conv1D(
-                        NFILTERS[idl], KERNEL_SIZE,
-                        strides=STRIDE_SIZE,
-                        activation=ACTIVATION,
-                        input_shape=n_input,
-                        padding="same",
-                        # kernel_initializer=initializer,
-                        # kernel_regularizer=regularizers
-                    ))
-                    if BATCH_NORM: model.add(BatchNormalization())
-                    if POOL_SIZE: model.add(MaxPool1D(pool_size=POOL_SIZE))
-
-                else:
-                    raise ValueError(f'Wrong CONV_DIMENSION = {CONV_DIMENSION}')
+                if POOL_SIZE: model.add(Pooling(pool_size=ipool))
 
             model.add(Flatten())
 
-            for idense in range(DENSE_LAYERS):
-                model.add(Dense(DENSE_NODES[idense], activation=ACTIVATION,
-                                # kernel_initializer=initializer,
-                                #kernel_regularizer=regularizers
-                                ))
+            for idense in DENSE_LAYERS:
+                dense_layer_settings = {
+                    'activation': ACTIVATION,
+                    'kernel_initializer': initializer,
+                    'kernel_regularizer': regularizers
+                }
+                model.add(Dense(idense, **dense_layer_settings))
                 if BATCH_NORM:    model.add(BatchNormalization())
                 if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
@@ -258,17 +237,17 @@ def training(model, train_set, train_label, **hyper_params):
     # initialize tqdm callback with default parameters
     tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
-    #with tf.device(f'/gpu:{DEVICE}'):
+    # with tf.device(f'/gpu:{DEVICE}'):
     history = model.fit(
         train_set, train_label,
         batch_size=BATCH_SIZE,
         epochs=EPOCHS,
         shuffle=True,
         callbacks=[
-            #tensorboard_callback,
+            tensorboard_callback,
             tqdm_callback,
-            #lr_callback
-            ],
+            # lr_callback
+        ],
         # validation_split=0.1,
         validation_data=VALID_SET,
         # callbacks=[PrintDot()],
@@ -311,9 +290,9 @@ def one_hot_to_classes(cnn_pred, mask):
     for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
         if mask[iT, iR]: continue
         predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
-#        if predicted_classes[iT, iR] in [1, 5]:
-#            if np.max(cnn_pred[cnt]) < 0.5:
-#                predicted_classes[iT, iR] = 4
+        #        if predicted_classes[iT, iR] in [1, 5]:
+        #            if np.max(cnn_pred[cnt]) < 0.5:
+        #                predicted_classes[iT, iR] = 4
         cnt += 1
 
     return predicted_classes

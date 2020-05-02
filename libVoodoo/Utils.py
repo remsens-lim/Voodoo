@@ -1,4 +1,10 @@
 import subprocess, re
+import pyLARDA.helpers as h
+
+from pprint import pprint
+
+from jinja2 import Template
+
 
 def run_command(cmd):
     """Run command, return output as string."""
@@ -13,7 +19,7 @@ def list_available_gpus():
     result = []
     for line in output.strip().split("\n"):
         m = gpu_regex.match(line)
-        assert m, "Couldnt parse "+line
+        assert m, "Couldnt parse " + line
         result.append(int(m.group("gpu_id")))
     return result
 
@@ -42,3 +48,83 @@ def pick_gpu_lowest_memory():
     memory_gpu_map = [(memory, gpu_id) for (gpu_id, memory) in gpu_memory_map().items()]
     best_memory, best_gpu = sorted(memory_gpu_map)[0]
     return best_gpu
+
+def write_ann_config_file(**kwargs):
+    """
+    Creates at folder and saves a matplotlib figure.
+
+    Args:
+        fig (matplotlib figure): figure to save as png
+
+    Keyword Args:
+        dpi (int): dots per inch
+        name (string): name of the png
+        path (string): path where the png is stored
+
+    Returns:    0
+
+    """
+    path = kwargs['path'] if 'path' in kwargs else ''
+    name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
+    if len(path) > 0: h.change_dir(path)
+
+    import json
+    with open(f"{name}", 'wt', encoding='utf8') as out:
+        json.dump(kwargs, out, sort_keys=True, indent=4, ensure_ascii=False)
+    print(f'Saved ann configure file :: {name}')
+    return 0
+
+def read_ann_config_file(**kwargs):
+    """
+    Creates at folder and saves a matplotlib figure.
+
+    Args:
+        fig (matplotlib figure): figure to save as png
+
+    Keyword Args:
+        dpi (int): dots per inch
+        name (string): name of the png
+        path (string): path where the png is stored
+
+    Returns:    0
+
+    """
+    path = kwargs['path'] if 'path' in kwargs else ''
+    name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
+    if len(path) > 0: h.change_dir(path)
+
+    import json
+    with open(f"{name}", 'r', encoding='utf8') as json_file:
+        data = json.load(json_file)
+    print(f'Loaded ann configure file :: {name}')
+    return data
+
+def make_html_overview(template_loc, case_study_info, png_names):
+    print('case_config', case_study_info)
+    print('savenames', png_names.keys())
+
+    with open(f'{template_loc}/static_template.html.jinja2') as file_:
+        template = Template(file_.read())
+
+        with open(case_study_info['plot_dir'] + 'overview.html', 'w') as f:
+            f.write(
+                template.render(
+                    png_names=png_names,
+                    case_study_info=case_study_info,
+                )
+            )
+
+
+        """
+        <!--
+        {% for key, value in data.items() %}
+            <li>{{ key }}: {{ value['file_history'] }}</li>
+        {% endfor %}
+        -->
+        """
+
+def get_explorer_link(campaign, time_interval, range_interval, params):
+    s = "http://larda.tropos.de/larda3/explorer/{}?interval={}-{}%2C{}-{}&params={}".format(
+        campaign, h.dt_to_ts(time_interval[0]), h.dt_to_ts(time_interval[1]),
+        *range_interval, ",".join(params))
+    return s
