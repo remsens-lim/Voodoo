@@ -286,16 +286,18 @@ def one_hot_to_classes(cnn_pred, mask):
         predicted_classes (numpy.array): predicted values converted to Cloudnet classes
     """
     predicted_classes = np.zeros(mask.shape, dtype=np.float32)
+    predicted_probability = np.zeros(mask.shape, dtype=np.float32)
     cnt = 0
     for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
         if mask[iT, iR]: continue
         predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
+        predicted_probability[iT, iR] = np.max(cnn_pred[cnt])
         #        if predicted_classes[iT, iR] in [1, 5]:
         #            if np.max(cnn_pred[cnt]) < 0.5:
         #                predicted_classes[iT, iR] = 4
         cnt += 1
 
-    return predicted_classes
+    return predicted_classes, predicted_probability
 
 
 # copy from https://github.com/jg-fisher/autoencoder/blob/master/ffae.py

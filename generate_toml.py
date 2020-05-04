@@ -2,7 +2,7 @@
 import datetime, sys
 sys.path.append('../larda/')
 sys.path.append('.')
-from larda.pyLARDA.helpers import change_dir, _method_info_from_argv
+import pyLARDA.helpers as h
 
 def generate_multicase_trainingset(t_span, t_train, t_skip, path):
     """
@@ -12,7 +12,7 @@ def generate_multicase_trainingset(t_span, t_train, t_skip, path):
     """
     training_span = datetime.timedelta(minutes=t_train)
     skip = datetime.timedelta(minutes=t_skip)
-    change_dir(f'{path}')
+    h.change_dir(f'{path}')
     t_span_str = f'{t_span[0]:%Y%m%d}-{t_span[1]:%Y%m%d}'
     if t_span[1] == '0000': t_span[1] = '2359'
 
@@ -32,19 +32,19 @@ def generate_multicase_trainingset(t_span, t_train, t_skip, path):
     print(f'Number of cases = {cnt}')
 
 
-# dt_start=20181213 dt_end=20181213 t_train=15.0 t_skip=15.0
+# python generate_toml.py dt_start=20181213 dt_end=20181213 t_train=15.0 t_skip=15.0
 
 if __name__ == '__main__':
     # gather command line arguments
-    method_name, args, kwargs = _method_info_from_argv(sys.argv)
+    method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
     if 'dt_start' in kwargs and 'dt_end' in kwargs:
         dt_begin = datetime.datetime.strptime(f'{kwargs["dt_start"]} 0000', '%Y%m%d %H%M')
         dt_end   = datetime.datetime.strptime(f'{kwargs["dt_end"]} 2359', '%Y%m%d %H%M')
     else:
-        dt_begin = datetime.datetime.strptime(f'20190410 0000', '%Y%m%d %H%M')
-        dt_end   = datetime.datetime.strptime(f'20190410 2359', '%Y%m%d %H%M')
-        #raise ValueError('Wrong dt_begin or dt_end')
+        dt_begin = datetime.datetime.strptime(f'20190813 0000', '%Y%m%d %H%M')
+        dt_end   = datetime.datetime.strptime(f'20190813 2359', '%Y%m%d %H%M')
+        #raise ValueError('Wrong dt_begin or dt_end'
 
     generate_multicase_trainingset(
         [dt_begin, dt_end],

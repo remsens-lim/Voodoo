@@ -39,7 +39,7 @@
 
     BATCH_SIZE   = 64   # √
     BATCH_NORM   = true
-    EPOCHS       = 10
+    EPOCHS       = 25
 
     #KERNEL_INITIALIZER = 'random_normal'
     #REGULARIZER = 'l1_l2'
@@ -49,7 +49,7 @@
 
     # binary classifier
     OPTIMIZER   = 'adam'
-    ACTIVATIONS  = 'relu'
+    ACTIVATIONS  = 'elu'
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = 'CategoricalCrossentropy'
 

@@ -34,6 +34,7 @@ from tqdm.auto import tqdm
 os.environ['KMP_WARNINGS'] = 'off'
 sys.path.append('../larda/')
 
+from numba import jit
 import pyLARDA.helpers as h
 import pyLARDA.Transformations as tr
 
@@ -61,11 +62,23 @@ PLOT_RANGE_ = [0, 12000]
 
 CLOUDNETs = ['CLOUDNETpy94', 'CLOUDNET_LIMRAD']
 
-ANN_MODEL_TOML = 'ann_model_setting.toml'
+ANN_MODEL_TOML = 'ann_model_setting3.toml'
 DATA_PATH = f'{VOODOO_PATH}/data/'
 LOGS_PATH = f'{VOODOO_PATH}/logs/'
 MODELS_PATH = f'{VOODOO_PATH}/models/'
 PLOTS_PATH = f'{VOODOO_PATH}/plots/'
+
+CLOUDNET_LABELS_ = [
+    'Clear sky',
+    'Cloud liquid droplets only',
+    'Drizzle or rain.',
+    'Drizzle/rain & cloud droplet',
+    'Ice particles.',
+    'Ice coexisting with supercooled liquid droplets.',
+    'Melting ice particles',
+    'Melting ice & cloud droplets',
+    'Insects or ground clutter.',
+]
 
 
 def get_logger(logger_list, status='info'):
@@ -83,8 +96,10 @@ def get_logger(logger_list, status='info'):
 
     return log
 
+
 # get all loggers
 loggers = get_logger(['libVoodoo'], status='info')
+
 
 def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet='unkown', conv_dim='unknown'):
     if not os.path.isfile(f'{data_path}/features/{kind}/{conv_dim}/{dt_str}_{system}_features_{kind}.mat'):
@@ -107,6 +122,7 @@ def check_mat_file_availability(data_path, kind, dt_str, system=SYSTEM, cloudnet
         return False
     return True
 
+
 def log_dimensions(spec_dim, cn_dim, *args):
     loggers[0].info(f'Radar-Input  :: LIMRAD94\n'
                     f'      (n_ts, n_rg, n_vel) = ({spec_dim["n_ts"]}, {spec_dim["n_rg"]}, {spec_dim["n_vel"]})')
@@ -116,6 +132,7 @@ def log_dimensions(spec_dim, cn_dim, *args):
         loggers[0].info(f'Target-Input :: PollyNET\n'
                         f'      (n_ts, n_rg)        = ({args[0]["n_ts"]}, {args[0]["n_rg"]})')
 
+
 def create_filename(modelname, **kwargs):
     if not TRAINED_MODEL:
         name = f"{kwargs['time_str']}_ann-model-weights_{kwargs['CONV_DIMENSION']}.h5"
@@ -123,9 +140,11 @@ def create_filename(modelname, **kwargs):
     else:
         return {'MODEL_PATH': MODELS_PATH + modelname, 'LOG_PATH': LOGS_PATH + modelname}
 
+
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return np.array(lst3)
+
 
 def set_intersection(mask0, mask1):
     mask_flt = np.where(~mask0.astype(np.bool).flatten())
@@ -142,6 +161,7 @@ def set_intersection(mask0, mask1):
 
     return idx_list
 
+
 def load_matv5(path, file):
     h.change_dir(path)
     try:
@@ -157,21 +177,23 @@ def load_matv5(path, file):
 
     return data, False
 
-def container_from_prediction(ts, rg, var, mask):
+
+def container_from_prediction(ts, rg, var, mask, **kwargs):
     prediction_container = {}
     prediction_container['dimlabel'] = ['time', 'range']
-    prediction_container['name'] = 'CLASS'
+    prediction_container['name'] = kwargs['name'] if 'name' in kwargs else 'CLASS'
     prediction_container['joints'] = ''
     prediction_container['rg_unit'] = 'm'
-    prediction_container['colormap'] = 'ann_target_7class'
+    prediction_container['colormap'] = kwargs['colormap'] if 'colormap' in kwargs else 'ann_target_7class'
     prediction_container['system'] = 'Voodoo'
     prediction_container['ts'] = ts
     prediction_container['rg'] = rg
-    prediction_container['var_lims'] = [0, 8]
-    prediction_container['var_unit'] = ''
+    prediction_container['var_lims'] = kwargs['var_lims'] if 'var_lims' in kwargs else [0, 8]
+    prediction_container['var_unit'] = '1'
     prediction_container['mask'] = mask
     prediction_container['var'] = var
     return prediction_container
+
 
 def get_isotherms(temperature_list, **kwargs):
     def toC(datalist):
@@ -195,6 +217,7 @@ def get_isotherms(temperature_list, **kwargs):
 
     return {'data': tr.combine(toC, [T], {'var_unit': "C"}), 'levels': np.arange(-40, 16, 5)}
 
+
 def variable_to_container(list, **kwargs):
     container = {}
     container['dimlabel'] = ['time', 'range']
@@ -213,6 +236,7 @@ def variable_to_container(list, **kwargs):
     container['var'] = np.concatenate([np.squeeze(itemp['var']) for itemp in list], axis=0)
     return container
 
+
 def post_processor_temperature(data, contour):
     import copy
     container = copy.deepcopy(data)
@@ -226,6 +250,7 @@ def post_processor_temperature(data, contour):
 
     return container
 
+
 def get_good_radar_and_lidar_index(version):
     if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
         return 1
@@ -233,6 +258,7 @@ def get_good_radar_and_lidar_index(version):
         return 3
     else:
         raise ValueError(f'Wrong Cloudnet Version: {version}')
+
 
 def post_processor_cloudnet_quality_flag(data, cloudnet_status, clodudnet_class, cloudnet_type=''):
     import copy
@@ -245,6 +271,7 @@ def post_processor_cloudnet_quality_flag(data, cloudnet_status, clodudnet_class,
     loggers[0].info('Postprocessing status flag done.')
     return container
 
+
 def post_processor_cloudnet_classes(data, cloudnet_class):
     import copy
     container = copy.deepcopy(data)
@@ -256,6 +283,75 @@ def post_processor_cloudnet_classes(data, cloudnet_class):
 
     loggers[0].info('Postprocessing cloudnet classes done.')
     return container
+
+
+def post_processor_homogenize(data):
+    """
+    Homogenization a la Shupe 2007:
+        Remove small patches (speckle) from any given mask by checking 5x5 box
+        around each pixel, more than half of the points in the box need to be 1
+        to keep the 1 at current pixel
+
+    Args:
+        data (dict): larda like container containing predicted classes
+
+    Return:
+        container (dict): larda like container containing homogenized data
+
+    """
+
+    def gen_one_hot(classes):
+        one_hot = np.zeros(len(CLOUDNET_LABELS_))
+        for class_ in classes[iT:iT + WSIZE, iR:iR + WSIZE].flatten():
+            one_hot[int(class_)] = 1
+        return one_hot
+
+    import copy
+    container = copy.deepcopy(data)
+    classes = container['var']
+
+    mask = classes == 0
+    mask_pad = np.pad(mask, (3, 3), 'constant', constant_values=(0, 0))
+    mask_out = mask.copy()
+    classes_out = classes.copy()
+
+    WSIZE = 7  # 7x7 window
+    min_percentage = 0.7
+    n_bins = WSIZE * WSIZE
+    min_bins = int(min_percentage * n_bins)
+    n_ts_pad, n_rg_pad = mask_pad.shape
+
+    loggers[0].info(f'Start Homogenizing')
+    for iT, iR in tqdm(product(range(n_ts_pad - WSIZE), range(n_rg_pad - WSIZE)), total=(n_ts_pad - WSIZE) * (n_rg_pad - WSIZE), unit='pixel'):
+        if mask[iT, iR]:
+            continue  # skip clear sky pixel
+        else:
+            # If more than 35 of 49 pixels are classified
+            # as clear, then the central pixel is set to clear
+            if np.sum(mask_pad[iT:iT + WSIZE, iR:iR + WSIZE]) > min_bins:
+                mask_out[iT, iR] = True
+                continue  # skip isolated pixel (rule 7a shupe 2007)
+
+        # Homogenize
+        n_samples_total = np.count_nonzero(gen_one_hot(classes[iT:iT + WSIZE, iR:iR + WSIZE]), axis=0)
+
+        if n_samples_total == 0: continue
+
+        # If the central pixel is not set to clear and there are
+        # more than 7 of 49 pixels with the same type as the central
+        # pixel, it is left unchanged. (rule 7b shupe 2007)
+        if np.any(n_samples_total > 7): continue
+
+        # Otherwise, the central pixel is set
+        # to the classification type that is most plentiful in the box.
+        # (rule 7c shupe 2007) change to dominant type
+        classes_out[iT, iR] = np.argmax(n_samples_total)
+
+    classes_out[mask_out] = 0
+    container['mask'], container['var'] = mask_out, classes_out
+
+    return container
+
 
 def plot_quicklooks(variables, **kwargs):
     import pyLARDA
@@ -285,27 +381,17 @@ def plot_quicklooks(variables, **kwargs):
 
     return savenames
 
+
+def print_number_of_classes(labels, text='', names=CLOUDNET_LABELS_):
+    # numer of samples per class afer removing ice
+    n_samples_total = np.count_nonzero(labels, axis=0)
+    loggers[0].info(text)
+    loggers[0].info(f'{labels.shape[0]:12d}   total')
+    for name, n_smp in zip(names, n_samples_total):
+        loggers[0].info(f'{n_smp:12d}   {name}')
+
+
 def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', **kwargs):
-
-    def print_number_of_classes(labels, text=''):
-        names = [
-            'Clear sky',
-            'Cloud liquid droplets only',
-            'Drizzle or rain.',
-            'Drizzle/rain & cloud droplet',
-            'Ice particles.',
-            'Ice coexisting with supercooled liquid droplets.',
-            'Melting ice particles',
-            'Melting ice & cloud droplets',
-            'Insects or ground clutter.',
-        ]
-        # numer of samples per class afer removing ice
-        n_samples_totall = np.count_nonzero(labels, axis=0)
-        loggers[0].info(text)
-        loggers[0].info(f'{labels.shape[0]:12d}   total')
-        for name, n_smp in zip(names, n_samples_totall):
-            loggers[0].info(f'{n_smp:12d}   {name}')
-
     def load_cloudnet_specific_features_labels(case_string_list, case_list_path, **kwargs):
 
         feature_set, target_labels, masked_total = [], [], []
@@ -411,7 +497,7 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
         cloudnet_data = [load_cloudnet_specific_features_labels(
             case_string_list, case_list_path, DATA_PATH=f'{data_root}/{cn}', CLOUDNET=cn, **kwargs)
             for cn in ['CLOUDNETpy94', 'CLOUDNET_LIMRAD']
-            ]
+        ]
 
     feature_set = np.concatenate([i for icn in cloudnet_data for i in icn[0]], axis=0)
     target_labels = np.concatenate([i for icn in cloudnet_data for i in icn[1]], axis=0)
@@ -452,6 +538,9 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
 
     return feature_set, target_labels, validation_set, cloudnet_class, cloudnet_status, masked_total, model_temp
 
+
+def seconds_to_fstring(time_diff):
+    return datetime.datetime.fromtimestamp(time_diff).strftime("%M:%S")
 
 
 ########################################################################################################################################################
@@ -506,7 +595,6 @@ if __name__ == '__main__':
     config_global_model = toml.load(VOODOO_PATH + ANN_MODEL_TOML)
     radar_input_setting = config_global_model['feature']['VSpec']
     tf_settings = config_global_model['tensorflow']
-
 
     CDIM = tf_settings["USE_MODEL"]
 
@@ -573,7 +661,7 @@ if __name__ == '__main__':
         fig, _ = Plot.History(history)
         Plot.save_figure(
             fig,
-            path=f'{PLOTS_PATH}/trainin/',
+            path=f'{PLOTS_PATH}/training/',
             name=f'histo_loss-acc_{time_str}__{hyper_params["MODEL_PATH"][idx + 1:-3]}.png',
             dpi=300
         )
@@ -585,121 +673,134 @@ if __name__ == '__main__':
     #
     if TASK == 'predict':
 
-        if TRAINED_MODEL:
-            model_list = [TRAINED_MODEL]
-        else:
-            model_list = [
-                '3-cl--3_3-ks--tanh-af--adam-opt--CategoricalCrossentropy-loss--4-bs--50-ep--0.0001-lr--1e-05-dr--1-dl--[64, 32]-dn--20200227-203634.h5',
-            ]
+        hyper_params = {'DEVICE': 0}
 
-        hyper_params = {
-            'DEVICE': 0
+        # make predictions using the following model
+        from json2html import *
+
+        ann_params_info = Utils.read_ann_config_file(name=f'{TRAINED_MODEL[:-3]}.json', path=MODELS_PATH, **hyper_params)
+        case_study_info = {'html_params': json2html.convert(json=ann_params_info)}
+        traning_data_info = case_study_info['html_params'].find('')
+
+        # define a new model or load an existing one
+        cnn_model = Model.define_convnet(feature_set.shape[1:], target_labels.shape[1:], MODEL_PATH=MODELS_PATH + TRAINED_MODEL, **hyper_params)
+        cnn_pred = Model.predict_classes(cnn_model, feature_set)
+
+        prediction2D_classes, prediction2D_probs = Model.one_hot_to_classes(cnn_pred, masked_total)
+
+        prediction_container = container_from_prediction(
+            np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0),
+            np.squeeze(cloudnet_class[0]['rg']),
+            prediction2D_classes,
+            masked_total
+        )
+
+        prediction_probabilities = container_from_prediction(
+            np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0),
+            np.squeeze(cloudnet_class[0]['rg']),
+            prediction2D_probs,
+            masked_total,
+            name='probability',
+            colormap='viridis',
+            var_lims=[0.5, 1.0]
+        )
+
+        dt_interval = [h.ts_to_dt(prediction_container['ts'][0]), h.ts_to_dt(prediction_container['ts'][-1])]
+        case_plot_path = f'{PLOTS_PATH}/training/{kwargs["case"]}/'
+        h.change_dir(case_plot_path)
+
+        contour_T = get_isotherms(model_temp, name='Temperature')
+        cloudnet_status_container = variable_to_container(cloudnet_status, name='detection_status')
+        cloudnet_class_container = variable_to_container(cloudnet_class, name='CLASS')
+
+        analyser_vars = {
+            'campaign': 'lacros_dacapo_gpu',
+            'system': ['CLOUDNETpy94', 'CLOUDNET_LIMRAD'],
+            'var_name': ['Z', 'VEL', 'width', 'LDR', 'beta', 'CLASS', 'detection_status'],
+            'var_converter': ['none', 'none', 'none', 'lin2z', 'log', 'none', 'none'],
+            'time_interval': dt_interval,
+            'range_interval': PLOT_RANGE_,
+            'contour': contour_T,
+            'plot_dir': case_plot_path,
+            'case_name': kwargs["case"],
         }
 
-        for model_name in model_list:
-            # define a new model or load an existing one
-            cnn_model = Model.define_convnet(
-                feature_set.shape[1:], target_labels.shape[1:],
-                MODEL_PATH=MODELS_PATH + model_name,
-                **hyper_params
-            )
+        # POST PROCESSOR OFF
+        prediction_plot_name_PPoff = f'{kwargs["case"]}-{TRAINED_MODEL}-classification--{"-".join(x for x in CLOUDNETs)}-postprocessor-off.png'
+        fig, _ = tr.plot_timeheight(prediction_container, title='', range_interval=PLOT_RANGE_, contour=contour_T, fig_size=FIG_SIZE_)
+        fig.savefig(f'{case_plot_path}/{prediction_plot_name_PPoff}', dpi=DPI_)
+        loggers[0].info(f'plot saved -->  {prediction_plot_name_PPoff}')
 
-            # make predictions
-            #masked_total = np.concatenate(masked_total, axis=0)
-            from json2html import *
-            ann_params_info = Utils.read_ann_config_file(name=f'{model_name[:-3]}.json', path=MODELS_PATH, **hyper_params)
-            case_study_info = {'html_params': json2html.convert(json=ann_params_info)}
-            traning_data_info = case_study_info['html_params'].find('')
+        # POST PROCESSOR OFF, class probabilities
+        predprobab_plot_name_PPoff = f'{kwargs["case"]}-{TRAINED_MODEL}-class-probabilities--{"-".join(x for x in CLOUDNETs)}-postprocessor-off.png'
+        fig, _ = tr.plot_timeheight(prediction_probabilities, title='', range_interval=PLOT_RANGE_, contour=contour_T, fig_size=FIG_SIZE_)
+        fig.savefig(f'{case_plot_path}/{predprobab_plot_name_PPoff}', dpi=DPI_)
+        loggers[0].info(f'plot saved -->  {predprobab_plot_name_PPoff}')
 
-            cnn_pred = Model.predict_classes(cnn_model, feature_set)
-            prediction2D_classes = Model.one_hot_to_classes(cnn_pred, masked_total)
+        # POST PROCESSOR ON
+        prediction_container = post_processor_temperature(
+            prediction_container,
+            contour_T
+        )
 
-            prediction_container = container_from_prediction(
-                np.concatenate([np.squeeze(iclass['ts']) for iclass in cloudnet_class], axis=0),
-                np.squeeze(cloudnet_class[0]['rg']),
-                prediction2D_classes,
-                masked_total
-            )
+        prediction_container = post_processor_homogenize(
+            prediction_container,
+        )
 
-            dt_interval = [h.ts_to_dt(prediction_container['ts'][0]), h.ts_to_dt(prediction_container['ts'][-1])]
-            case_plot_path = f'{PLOTS_PATH}/training/{kwargs["case"]}/'
+        prediction_container = post_processor_cloudnet_quality_flag(
+            prediction_container,
+            cloudnet_status_container['var'],
+            cloudnet_class_container['var'],
+            cloudnet_type=CLOUDNET
+        )
 
-            contour_T = get_isotherms(model_temp, name='Temperature')
-            cloudnet_status_container = variable_to_container(cloudnet_status, name='detection_status')
-            cloudnet_class_container = variable_to_container(cloudnet_class, name='CLASS')
+        prediction_container = post_processor_cloudnet_classes(
+            prediction_container,
+            cloudnet_class_container['var']
+        )
 
-            analyser_vars = {
-                'campaign': 'lacros_dacapo_gpu',
-                'system': ['CLOUDNETpy94', 'CLOUDNET_LIMRAD'],
-                'var_name': ['Z', 'VEL', 'width', 'LDR', 'beta', 'CLASS', 'detection_status'],
-                'var_converter': ['none', 'none', 'none', 'lin2z', 'log', 'none', 'none'],
-                'time_interval': dt_interval,
-                'range_interval': PLOT_RANGE_,
-                'contour': contour_T,
-                'plot_dir': case_plot_path,
-                'case_name': kwargs["case"],
-            }
+        if CLOUDNET == 'CLOUDNET_LIMRAD':
+            # the matlab/polly version missclassifies a lot drizzle as aerosol and insects
+            prediction_container['var'][cloudnet_class_container['var'] == 10] = 2
 
-            # POST PROCESSOR OFF
-            prediction_plot_name_PPoff = f'{kwargs["case"]}-{model_name}-classification--{"-".join(x for x in CLOUDNETs)}-postprocessor-off.png'
-            fig, _ = tr.plot_timeheight(prediction_container, title='', range_interval=PLOT_RANGE_, contour=contour_T, fig_size=FIG_SIZE_)
-            fig.savefig(f'{case_plot_path}/{prediction_plot_name_PPoff}', dpi=DPI_)
-            loggers[0].info(f'plot saved -->  {prediction_plot_name_PPoff}')
+        prediction_plot_name_PPon = f'{kwargs["case"]}-{TRAINED_MODEL}-classification--{"-".join(x for x in CLOUDNETs)}-postprocessor-on.png'
 
-            # POST PROCESSOR ON
-            prediction_container = post_processor_temperature(
-                prediction_container,
-                contour_T
-            )
+        # create directory for plots
+        fig, _ = tr.plot_timeheight(prediction_container, title='', range_interval=PLOT_RANGE_, contour=contour_T, fig_size=FIG_SIZE_)
+        fig.savefig(f'{case_plot_path}/{prediction_plot_name_PPon}', dpi=DPI_)
+        loggers[0].info(f'plot saved --> {case_plot_path}/{prediction_plot_name_PPon}')
 
-            prediction_container = post_processor_cloudnet_quality_flag(
-                prediction_container,
-                cloudnet_status_container['var'],
-                cloudnet_class_container['var'],
-                cloudnet_type=CLOUDNET
-            )
+        case_study_info['link'] = Utils.get_explorer_link(
+            'lacros_dacapo', dt_interval, PLOT_RANGE_,
+            ["CLOUDNET|CLASS", "CLOUDNET|Z", "POLLY|attbsc1064", "POLLY|depol"]
+        )
+        case_study_info['location'] = 'Punta-Arenas, Chile'
+        case_study_info['coordinates'] = [-53.1354, -70.8845]
+        case_study_info['plot_dir'] = analyser_vars['plot_dir']
+        case_study_info['case_name'] = analyser_vars['case_name']
+        case_study_info['time_interval'] = analyser_vars['time_interval']
+        case_study_info['range_interval'] = analyser_vars['range_interval']
 
-            prediction_container = post_processor_cloudnet_classes(
-                prediction_container,
-                cloudnet_class_container['var']
-            )
+        png_names_cloudnet = plot_quicklooks(analyser_vars)
 
-            prediction_plot_name_PPon = f'{kwargs["case"]}-{model_name}-classification--{"-".join(x for x in CLOUDNETs)}-postprocessor-on.png'
+        analyser_vars_polly = {
+            'campaign': 'lacros_dacapo_gpu',
+            'system': ['POLLYNET'],
+            'var_name': ['attbsc1064', 'attbsc532', 'attbsc355', 'voldepol532'],
+            'var_converter': ['log', 'log', 'log', 'none'],
+            'time_interval': dt_interval,
+            'range_interval': PLOT_RANGE_,
+            'contour': contour_T,
+            'plot_dir': case_plot_path,
+            'case_name': kwargs["case"]
+        }
+        png_names_polly = plot_quicklooks(analyser_vars_polly)
 
-            # create directory for plots
-            fig, _ = tr.plot_timeheight(prediction_container, title='', range_interval=PLOT_RANGE_, contour=contour_T, fig_size=FIG_SIZE_)
-            fig.savefig(f'{case_plot_path}/{prediction_plot_name_PPon}', dpi=DPI_)
-            loggers[0].info(f'plot saved --> {case_plot_path}/{prediction_plot_name_PPon}')
+        png_names = {**png_names_cloudnet, **png_names_polly}
+        png_names['prediction_PPoff'] = prediction_plot_name_PPoff
+        png_names['prediction_PPon'] = prediction_plot_name_PPon
 
-            case_study_info['link'] = Utils.get_explorer_link('lacros_dacapo', dt_interval, PLOT_RANGE_,
-                                                              ["CLOUDNET|CLASS", "CLOUDNET|Z", "POLLY|attbsc1064", "POLLY|depol"])
-            case_study_info['location'] = 'Punta-Arenas, Chile'
-            case_study_info['coordinates'] = [-53.1354, -70.8845]
-            case_study_info['plot_dir'] = analyser_vars['plot_dir']
-            case_study_info['case_name'] = analyser_vars['case_name']
-            case_study_info['time_interval'] = analyser_vars['time_interval']
-            case_study_info['range_interval'] = analyser_vars['range_interval']
-
-            png_names_cloudnet = plot_quicklooks(analyser_vars)
-
-            analyser_vars_polly = {
-                'campaign': 'lacros_dacapo_gpu',
-                'system': ['POLLYNET'],
-                'var_name': ['attbsc1064', 'attbsc532', 'attbsc355', 'voldepol532'],
-                'var_converter': ['log', 'log', 'log', 'none'],
-                'time_interval': dt_interval,
-                'range_interval': PLOT_RANGE_,
-                'contour': contour_T,
-                'plot_dir': case_plot_path,
-                'case_name': kwargs["case"]
-            }
-            png_names_polly = plot_quicklooks(analyser_vars_polly)
-
-            png_names = {**png_names_cloudnet, **png_names_polly}
-            png_names['prediction_PPoff'] = prediction_plot_name_PPoff
-            png_names['prediction_PPon'] = prediction_plot_name_PPon
-
-            Utils.make_html_overview(VOODOO_PATH, case_study_info, png_names)
+        Utils.make_html_overview(VOODOO_PATH, case_study_info, png_names)
 
     ####################################################################################################################################
     loggers[0].info(f'\n        *****Done*****, elapsed time = {datetime.timedelta(seconds=int(time.time() - start_time))} [min:sec]')

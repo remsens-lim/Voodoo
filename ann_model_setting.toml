@@ -37,7 +37,7 @@
 
     DEVICE = 0
 
-    BATCH_SIZE   = 32   # √
+    BATCH_SIZE   = 64   # √
     BATCH_NORM   = true
     EPOCHS       = 25
 

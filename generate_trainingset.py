@@ -745,7 +745,7 @@ def load_features_from_nc(
         cloudnet_model['P'] = tr.interpolate2d(cloudnet_model['P'], new_time=cloudnet_variables['CLASS']['ts'], new_range=cloudnet_variables['CLASS']['rg'])
 
         if save:
-            h.change_dir(f'{data_path}/cloudnet/')
+            h.change_dir(f'{data_path}/{cloudnet}/cloudnet/')
             if 'interp_ts' in kwargs and 'interp_rg' in kwargs:
                 cloudnet_model['T'] =  tr.interpolate2d(cloudnet_model['T'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
                 cloudnet_model['P'] = tr.interpolate2d(cloudnet_model['P'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
@@ -776,7 +776,7 @@ def load_features_from_nc(
     ts_polly, rg_polly = polly_variables['attbsc1064']['ts'], polly_variables['depol']['rg']
 
     if save:
-        h.change_dir(f'{data_path}/lidar/')
+        h.change_dir(f'{data_path}/{cloudnet}/lidar/')
         savemat(f'{dt_string}_{lidar}_attbsc1064.mat', polly_variables['attbsc1064'])
         savemat(f'{dt_string}_{lidar}_voldepol532.mat', polly_variables['depol'])
         logger.info(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of PollyXT attbsc1064 & depol\n')
@@ -876,7 +876,7 @@ def load_features_from_nc(
         raise ValueError(f'Unkown "USE_MODEL" variable = {USE_MODEL}')
 
     if save:
-        h.change_dir(f'{data_path}/features/{kind}/{USE_MODEL}/')
+        h.change_dir(f'{data_path}/{cloudnet}/features/{kind}/{USE_MODEL}/')
         # save features (subfolders for different tensor dimension)
         FILE_NAME_1 = f'{dt_string}_{system}'
         try:
@@ -885,7 +885,7 @@ def load_features_from_nc(
             logger.info('Data too large?', e)
 
         # same labels for different tensor dimensions
-        h.change_dir(f'{data_path}/labels/')
+        h.change_dir(f'{data_path}/{cloudnet}/labels/')
         savemat(f'{FILE_NAME_1}_labels.mat', {'labels': targets})
         savemat(f'{FILE_NAME_1}_masked.mat', {'masked': masked})
         logger.info(f'save :: {FILE_NAME_1}_limrad94_{kind}_features/labels.mat')
@@ -944,7 +944,7 @@ if __name__ == '__main__':
             cloudnet=CLOUDNET,
             save=True,
             n_channels=n_channels_,
-            ann_settings_file='ann_model_setting.toml',
+            ann_settings_file='ann_model_setting3.toml',
         )
 
     except Exception:
