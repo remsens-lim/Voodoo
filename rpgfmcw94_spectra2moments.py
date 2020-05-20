@@ -12,7 +12,8 @@ sys.path.append('.')
 
 import logging
 import numpy as np
-import time
+from time import time
+from datetime import timedelta
 
 
 import pyLARDA
@@ -20,6 +21,7 @@ import pyLARDA.helpers as h
 import pyLARDA.SpectraProcessing as sp
 
 import voodoo.libVoodoo.Plot   as Plot
+import voodoo.generate_trainingset as genT
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     PATH = '/home/sdig/code/larda3/voodoo/plots/spectra2moments_v2/'
     NCPATH = '/home/sdig/code/larda3/voodoo/nc-files/spectra/'
 
-    start_time = time.time()
+    start_time = time()
 
     log = logging.getLogger('pyLARDA')
     log.setLevel(logging.CRITICAL)
@@ -106,8 +108,8 @@ if __name__ == '__main__':
         # end_dt = datetime.datetime(2019, 1, 21, 15, 59)
 
         # save spectra test case
-        begin_dt = datetime.datetime(2019, 4, 10, 20, 59)
-        end_dt = datetime.datetime(2019, 4, 10, 21, 31)
+        begin_dt = datetime.datetime(2019, 8, 1, 6, 43)
+        end_dt = datetime.datetime(2019, 8, 1, 6, 45)
 
     TIME_SPAN_ = [begin_dt, end_dt]
 
@@ -208,13 +210,24 @@ if __name__ == '__main__':
 
     if make_mat_file:
         h.change_dir(NCPATH)
-        from scipy.io import savemat
-        FILE_NAME_1 = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}_limrad94_spectra.mat'
-        savemat(f'{FILE_NAME_1}', limrad94_Zspec.pop('VHSpec'))  # store spectra separately from other arrays
-        print(f'save :: {FILE_NAME_1}')
 
-        FILE_NAME_2 = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}_limrad94_spectra_extra.mat'
-        savemat(FILE_NAME_2, limrad94_Zspec)
-        print(f'save :: {FILE_NAME_1}')
+        # Create a new xarray dataset
+        ds = genT.VoodooXR(limrad94_Zspec['VHSpec']['ts'], limrad94_Zspec['VHSpec']['rg'],
+                           limrad94_Zspec['VHSpec']['vel'], limrad94_Zspec['VHSpec']['vel_ch2'], limrad94_Zspec['VHSpec']['vel_ch2'],)
+        ds._add_nD_variable('VHSpec', ('ts', 'rg', 'vel'), limrad94_Zspec['VHSpec']['var'],
+                            **{key: limrad94_Zspec['VHSpec'][key] for key in genT.larda_params})
+        ds._add_nD_variable('SLv', ('ts', 'rg'), limrad94_Zspec['SLv']['var'],
+                            **{key: limrad94_Zspec['SLv'][key] for key in genT.larda_params})
 
-    print('total elapsed time = {:.3f} sec.'.format(time.time() - start_time))
+        FILE_NAME = f'{begin_dt:%Y%m%d_%H%M}-{end_dt:%H%M}_limrad94_spectra.nc'
+        try:
+            ds.to_netcdf(path=FILE_NAME, mode='w')
+            print(f'save :: {FILE_NAME}')
+        except Exception as e:
+            print('Data too large?', e)
+        finally:
+            print(f'DONE :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} nc files generated, elapsed time = '
+                            f'{timedelta(seconds=int(time() - start_time))} min')
+
+
+    print('total elapsed time = {:.3f} sec.'.format(time() - start_time))

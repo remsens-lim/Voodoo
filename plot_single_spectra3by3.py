@@ -21,6 +21,7 @@ import pyLARDA
 import pyLARDA.helpers as h
 import voodoo.libVoodoo.Loader as Loader
 import voodoo.libVoodoo.Plot as Plot
+import voodoo.generate_trainingset as genT
 from larda.pyLARDA.spec2mom_limrad94 import build_extended_container
 
 __author__ = "Willi Schimmel"

@@ -1,25 +1,25 @@
 #!/home/sdig/anaconda3/bin/python3
 """
 Short description:
-    Creating a .mat file containing input features and labels for the VOOODOO neural network.
+    Creating a *.zarr file containing input features and labels for the voodoo neural network.
 """
 
 import sys
 from datetime import timedelta, datetime
-
-sys.path.append('../larda/')
-sys.path.append('.')
-
 from time import time
+import traceback
 
-from scipy.io import savemat
+import numpy as np
+import xarray as xr
+from scipy import signal
 from scipy.interpolate import RectBivariateSpline, LinearNDInterpolator, interp2d, NearestNDInterpolator
 
 import logging
 import toml
-from scipy import signal
-import numpy as np
 from tqdm.auto import tqdm
+
+sys.path.append('../larda/')
+sys.path.append('.')
 
 import pyLARDA
 import pyLARDA.SpectraProcessing as sp
@@ -28,11 +28,11 @@ import pyLARDA.helpers as h
 from larda.pyLARDA.Transformations import plot_timeheight
 from larda.pyLARDA.SpectraProcessing import spectra2moments, load_spectra_rpgfmcw94
 
-import voodoo.libVoodoo.Plot   as Plot
-import libVoodoo.Plot as Plot
+import voodoo.libVoodoo.Plot as Plot
+import voodoo.libVoodoo.Utils as Utils
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.CRITICAL)
 
 __author__ = "Willi Schimmel"
 __copyright__ = "Copyright 2019, The Voodoo Project"
@@ -42,6 +42,55 @@ __version__ = "0.2.2"
 __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
+
+
+# resolution of python version is master
+class VoodooXR(xr.Dataset):
+
+    def __init__(self, _time, _range, *_vel):
+        # build xarray dataset
+        super().__init__()
+
+        # set metadata
+        self.attrs['ts_unit'], self.attrs['ts_unit_long'] = 'sec', 'Unix time, seconds since Jan 1. 1979'
+        self.attrs['rg_unit'], self.attrs['rg_unit_long'] = 'm', 'Meter'
+        self.attrs['dt_unit'], self.attrs['dt_unit_long'] = 'date', 'Datetime format'
+
+        # use cloudnet time and range resolution as default
+        self.coords['ts'] = _time
+        self.coords['rg'] = _range
+        if len(_vel) > 0: self.coords['vel'] = _vel[0]
+        if len(_vel) > 1: self.coords.update({f'vel_{ic+1}': _vel[ic] for ic in range(1, len(_vel))})
+        self.coords['dt'] = [h.ts_to_dt(ts) for ts in _time]
+
+    def _add_coordinate(self, name, unit, val):
+        """
+        Adding a coordinate to an xarray structure.
+        Args:
+            name (dict): key = variable name of the new coordinate, item = long name of the variable
+            unit (string): variable unit
+            val (numpy.array): values
+
+        """
+        for key, item in name.items():
+            self.attrs[key] = item
+            self.attrs[f'{key}_unit'] = unit
+            self.coords[key] = val
+
+    def _add_nD_variable(self, name, dims, val, **kwargs):
+        self[name] = (dims, val)
+        for key, item in kwargs.items():
+            self[name].attrs[key] = item
+
+_DEFAULT_CHANNELS = 6
+_DEFAULT_DOPPBINS = 256
+
+QUICKLOOK_PATH = '/home/sdig/code/larda3/voodoo/plots/'
+lidar = 'POLLY'
+cloudnet_vars = ['CLASS', 'detection_status']
+model_vars = ['T', 'P']
+lidar_vars = ['attbsc1064', 'attbsc532', 'depol']
+larda_params = ['filename', 'system', 'colormap', 'rg_unit', 'var_unit']
 
 
 def load_case_list(path, case_name):
@@ -99,16 +148,26 @@ def replace_fill_value(data, newfill):
                 var[iT, iR, var[iT, iR, :] <= 0.0] = newfill[iT, iR]
     return var
 
-def load_training_mask(classes, status, cloudnet_type):
-    if cloudnet_type in ['CLOUDNETpy94', 'CLOUDNETpy35']:
-        idx_good_radar_and_lidar = 1
-        idx_good_lidar_only =  3
-    elif cloudnet_type in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        idx_good_radar_and_lidar =  3
-        idx_good_lidar_only =  1
-
+def get_good_radar_and_lidar_index(version):
+    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+        return 1
+    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
+        return 3
     else:
-        raise ValueError(f'Wrong cloutnet type :: {cloudnet_type}')
+        raise ValueError(f'Wrong Cloudnet Version: {version}')
+
+def get_good_lidar_only_index(version):
+    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+        return 3
+    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
+        return 1
+    else:
+        raise ValueError(f'Wrong Cloudnet Version: {version}')
+
+def load_training_mask(classes, status, cloudnet_type):
+
+    idx_good_radar_and_lidar = get_good_radar_and_lidar_index(cloudnet_type)
+    idx_good_lidar_only = get_good_lidar_only_index(cloudnet_type)
 
     """
     CLOUDNET
@@ -124,6 +183,7 @@ def load_training_mask(classes, status, cloudnet_type):
     9: Insects\n
     10: Aerosol & insects";
     
+    (CLOUDNET MATLAB VERSION)
     "0: Clear sky\n
     1: Lidar echo only\n
     2: Radar echo but uncorrected atten.\n
@@ -137,23 +197,23 @@ def load_training_mask(classes, status, cloudnet_type):
     
     """
     # create mask
-    valid_samples = np.full(status['var'].shape, False)
-    valid_samples[status['var'] == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
-    # valid_samples[status['var'] == 2]  = True   # add good radar only
-    valid_samples[classes['var'] == 5] = True  # add mixed-phase class pixel
-    # valid_samples[classes['var'] == 6] = True   # add melting layer class pixel
-    # valid_samples[classes['var'] == 7] = True   # add melting layer + SCL class pixel
-    valid_samples[classes['var'] == 1] = True  # add cloud droplets only class
+    valid_samples = np.full(status.shape, False)
+    valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
+    # valid_samples[status == 2]  = True   # add good radar only
+    valid_samples[classes == 5] = True  # add mixed-phase class pixel
+    # valid_samples[classes == 6] = True   # add melting layer class pixel
+    # valid_samples[classes == 7] = True   # add melting layer + SCL class pixel
+    valid_samples[classes == 1] = True  # add cloud droplets only class
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
-    valid_samples[status['var'] == idx_good_lidar_only] = False
+    valid_samples[status == idx_good_lidar_only] = False
 
     # if polly processing, remove aerosol and insects (most actually drizzle)
     if cloudnet_type in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        valid_samples[classes['var'] == 10] = False
+        valid_samples[classes == 10] = False
     return ~valid_samples
 
-def load_features_and_labels_conv1d(spectra, classes, **feature_info):
+def load_features_and_labels(spectra, classes, **feature_info):
     """
      For orientation
 
@@ -196,149 +256,21 @@ def load_features_and_labels_conv1d(spectra, classes, **feature_info):
     masked = np.all(np.all(spectra_mask, axis=3), axis=2)
     #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
     spec_params = feature_info['VSpec']
+    dimensions = feature_info['USE_MODEL']
+    if dimensions == 'conv2d':
+        cwt_params = feature_info['cwt']
 
-    quick_check = feature_info['quick_check'] if 'quick_check' in feature_info else False
-    if quick_check:
-        ZE = np.sum(np.mean(spectra_3d, axis=3), axis=2)
-        ZE = h.put_in_container(ZE, classes)  # , **kwargs)
-        ZE['dimlabel'] = ['time', 'range']
-        ZE['name'] = 'pseudoZe'
-        ZE['joints'] = ''
-        ZE['rg_unit'] = ''
-        ZE['colormap'] = 'jet'
-        # ZE['paraminfo'] = dict(ZE['paraminfo'][0])
-        ZE['system'] = 'LIMRAD94'
-        # ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
-        ZE['var_lims'] = [-60, 20]
-        ZE['var_unit'] = 'dBZ'
-        ZE['mask'] = masked
-
-        fig, _ = tr.plot_timeheight(ZE, var_converter='lin2z', title='bla inside wavelett')  # , **plot_settings)
-        Plot.save_figure(fig, name=f'limrad_pseudoZe.png', dpi=200)
-
-    spectra_lims = np.array(spec_params['var_lims'])
-    # convert to logarithmic units
-    if 'var_converter' in spec_params and 'lin2z' in spec_params['var_converter']:
-        spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
-        spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
-
-    # load scaling functions
-    spectra_scaler = scaling(strat='normalize')
-    cnt = 0
-    feature_list = []
-    target_labels = []
-    spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
-    window_fcn = np.kaiser(n_Dbins, 5.0)
-    logger.info('\nConv1d Feature Extraction......')
-    iterator = range(n_time) if logger.level < 30 else tqdm(range(n_time))
-    for iT in iterator:
-        for iR in range(n_range):
-            if masked[iT, iR]: continue  # skip masked values
-
-            spc_list = []
-            for iCh in range(n_chan):
-                spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
-                spc_list.append(spc_matrix[:, iCh])
-
-            feature_list.append(np.stack([np.mean(spc_matrix, axis=1), np.std(spc_matrix, axis=1)], axis=1))
-            #feature_list.append(np.stack(spc_list, axis=1))
-
-            # one hot encoding
-            if classes['var'][iT, iR] in [8, 9, 10]:
-                target_labels.append([0, 0, 0, 0, 0, 0, 0, 0, 1])  # Insects or ground clutter.
-            elif classes['var'][iT, iR] == 7:
-                target_labels.append([0, 0, 0, 0, 0, 0, 0, 1, 0])  # Melting ice particles coexisting with cloud liquid droplets.
-            elif classes['var'][iT, iR] == 6:
-                target_labels.append([0, 0, 0, 0, 0, 0, 1, 0, 0])  # Melting ice particles.
-            elif classes['var'][iT, iR] == 5:
-                target_labels.append([0, 0, 0, 0, 0, 1, 0, 0, 0])  # Ice coexisting with supercooled liquid droplets.
-            elif classes['var'][iT, iR] == 4:
-                target_labels.append([0, 0, 0, 0, 1, 0, 0, 0, 0])  # Ice particles.
-            elif classes['var'][iT, iR] == 3:
-                target_labels.append([0, 0, 0, 1, 0, 0, 0, 0, 0])  # Drizzle or rain coexisting with cloud liquid droplets.
-            elif classes['var'][iT, iR] == 2:
-                target_labels.append([0, 0, 1, 0, 0, 0, 0, 0, 0])  # Drizzle or rain.
-            elif classes['var'][iT, iR] == 1:
-                target_labels.append([0, 1, 0, 0, 0, 0, 0, 0, 0])  # Cloud liquid droplets only
-            else:
-                target_labels.append([1, 0, 0, 0, 0, 0, 0, 0, 0])  # Clear-sky
-            cnt += 1
-
-#            fig, ax = tr.plot_spectra_cwt(spectra, spc_matrix, iT=iT, iR=iR, legend=True,
-#                                          z_lim=[0, 20],
-#                                          x_lim=[-4, 2],
-#                                          y_lim=[-50, ])
-#
-#            widths = kwargs['scales'] if 'scales' in kwargs else [0.0, 7.00]
-#            z_lim = kwargs['z_lim'] if 'z_lim' in kwargs else [scalesmatr.min(), scalesmatr.max()]
-#            x_lim = kwargs['x_lim'] if 'x_lim' in kwargs else [data['vel'][0], data['vel'][-1]]
-#            y_lim = kwargs['y_lim'] if 'y_lim' in kwargs else [-60, 20]
-#
-#            colormap = kwargs['colormap'] if 'colormap' in kwargs else 'cloudnet_jet'
-#            fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [10, 5.625]
-#            features = kwargs['features'] if 'features' in kwargs else np.nan
-
-    Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
-
-    FEATURES = np.array(feature_list, dtype=np.float32)
-    LABELS = np.array(target_labels, dtype=np.float32)
-
-    logger.debug(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
-    logger.debug(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
-
-    return FEATURES, LABELS, masked
-
-def load_features_and_labels_conv2d(spectra, classes, **feature_info):
-    """
-     For orientation
-
-    " status
-    \nValue 0: Clear sky.
-    \nValue 1: Good radar and lidar echos.
-    \nValue 2: Good radar echo only.
-    \nValue 3: Radar echo, corrected for liquid attenuation.
-    \nValue 4: Lidar echo only.
-    \nValue 5: Radar echo, uncorrected for liquid attenuation.
-    \nValue 6: Radar ground clutter.
-    \nValue 7: Lidar clear-air molecular scattering.";
-
-    " classes
-    \nValue 0: Clear sky.
-    \nValue 1: Cloud liquid droplets only.
-    \nValue 2: Drizzle or rain.
-    \nValue 3: Drizzle or rain coexisting with cloud liquid droplets.
-    \nValue 4: Ice particles.
-    \nValue 5: Ice coexisting with supercooled liquid droplets.
-    \nValue 6: Melting ice particles.
-    \nValue 7: Melting ice particles coexisting with cloud liquid droplets.
-    \nValue 8: Aerosol particles, no cloud or precipitation.
-    \nValue 9: Insects, no cloud or precipitation.
-    \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
-    """
-    t0 = time()
-
-    if len(spectra['var'].shape) == 3:
-        (n_time, n_range, n_Dbins), n_chan = spectra['var'].shape, 1
-        spectra_3d = spectra['var'].reshape((n_time, n_range, n_Dbins, n_chan)).astype('float32')
-        spectra_mask = spectra['mask'].reshape((n_time, n_range, n_Dbins, n_chan))
-    elif len(spectra['var'].shape) == 4:
-        n_time, n_range, n_Dbins, n_chan = spectra['var'].shape
-        spectra_3d = spectra['var'].astype('float32')
-        spectra_mask = spectra['mask']
+        assert len(cwt_params['scales']) == 3, 'The list of scaling parameters 3 values!'
+        n_cwt_scales = int(cwt_params['scales'][2])
+        scales = np.linspace(cwt_params['scales'][0], cwt_params['scales'][1], n_cwt_scales)
+        cwt_scaler = scaling(strat='normalize')
+        cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
+        window_fcn = np.kaiser(n_Dbins, 5.0)
     else:
-        raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
-
-    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
-    #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
-    spec_params = feature_info['VSpec']
-    cwt_params = feature_info['cwt']
-
-    assert len(cwt_params['scales']) == 3, 'The list of scaling parameters 3 values!'
-    n_cwt_scales = int(cwt_params['scales'][2])
-    scales = np.linspace(cwt_params['scales'][0], cwt_params['scales'][1], n_cwt_scales)
+        spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
 
     quick_check = feature_info['quick_check'] if 'quick_check' in feature_info else False
-    if quick_check:
+    if quick_check and classes != []:
         ZE = np.sum(np.mean(spectra_3d, axis=3), axis=2)
         ZE = h.put_in_container(ZE, classes)  # , **kwargs)
         ZE['dimlabel'] = ['time', 'range']
@@ -364,47 +296,41 @@ def load_features_and_labels_conv2d(spectra, classes, **feature_info):
 
     # load scaling functions
     spectra_scaler = scaling(strat='normalize')
-    cwt_scaler = scaling(strat='normalize')
     cnt = 0
-    feature_list = []
-    target_labels = []
-    cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
-    window_fcn = np.kaiser(n_Dbins, 5.0)
-    logger.info('\nConv2d Feature Extraction......')
-    iterator = range(n_time) if logger.level < 30 else tqdm(range(n_time))
+    feature_list, target_labels = [], []
+
+    logger.info(f'\n{dimensions} Feature Extraction......')
+    iterator = range(n_time) if logger.level > 20 else tqdm(range(n_time))
     for iT in iterator:
         for iR in range(n_range):
             if masked[iT, iR]: continue  # skip masked values
 
-            for iCh in range(n_chan):
-                spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
-                cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
-                cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
+            if dimensions == 'conv2d':
+                for iCh in range(n_chan):
+                    spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
+                    cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
+                    cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
 
-            #cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
+                #cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
 
-            cwt_tensor = [np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
-            feature_list.append(np.stack(cwt_tensor, axis=2))
+                cwt_tensor = [np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
+                feature_list.append(np.stack(cwt_tensor, axis=2))
 
-            # one hot encoding
-            if classes['var'][iT, iR] in [8, 9, 10]:
-                target_labels.append([0, 0, 0, 0, 0, 0, 0, 0, 1])  # Insects or ground clutter.
-            elif classes['var'][iT, iR] == 7:
-                target_labels.append([0, 0, 0, 0, 0, 0, 0, 1, 0])  # Melting ice particles coexisting with cloud liquid droplets.
-            elif classes['var'][iT, iR] == 6:
-                target_labels.append([0, 0, 0, 0, 0, 0, 1, 0, 0])  # Melting ice particles.
-            elif classes['var'][iT, iR] == 5:
-                target_labels.append([0, 0, 0, 0, 0, 1, 0, 0, 0])  # Ice coexisting with supercooled liquid droplets.
-            elif classes['var'][iT, iR] == 4:
-                target_labels.append([0, 0, 0, 0, 1, 0, 0, 0, 0])  # Ice particles.
-            elif classes['var'][iT, iR] == 3:
-                target_labels.append([0, 0, 0, 1, 0, 0, 0, 0, 0])  # Drizzle or rain coexisting with cloud liquid droplets.
-            elif classes['var'][iT, iR] == 2:
-                target_labels.append([0, 0, 1, 0, 0, 0, 0, 0, 0])  # Drizzle or rain.
-            elif classes['var'][iT, iR] == 1:
-                target_labels.append([0, 1, 0, 0, 0, 0, 0, 0, 0])  # Cloud liquid droplets only
             else:
-                target_labels.append([1, 0, 0, 0, 0, 0, 0, 0, 0])  # Clear-sky
+                spc_list = []
+                for iCh in range(n_chan):
+                    spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
+                    spc_list.append(spc_matrix[:, iCh])
+
+                #feature_list.append(np.stack([np.mean(spc_matrix, axis=1), np.std(spc_matrix, axis=1)], axis=1))
+                feature_list.append(np.stack(spc_list, axis=1))
+
+            if classes != []:
+                # sparse one hot encoding
+                target_labels.append(classes['var'][iT, iR] if classes['var'][iT, iR] < 8 else 8)
+            else:
+                target_labels.append(-999)
+
             cnt += 1
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
@@ -503,7 +429,7 @@ def average_time_dim(ts, rg, var, mask, **kwargs):
 
     logger.info('Averaging over N radar spectra time-steps (30 sec avg)...')
     # for iBin in range(n_vel):
-    iterator = range(n_vel) if logger.level < 30 else tqdm(range(n_vel))
+    iterator = range(n_vel) if logger.level > 20 else tqdm(range(n_vel))
     for iBin in iterator:
 
         for iT_cn in range(n_ts_new - 1):
@@ -527,7 +453,7 @@ def average_time_dim(ts, rg, var, mask, **kwargs):
 def hyperspectralimage(ts, var, msk, **kwargs):
 
     new_ts = kwargs['new_time']
-    n_channels = kwargs['n_channels'] if 'n_channels' in kwargs else 4
+    n_channels = kwargs['n_channels'] if 'n_channels' in kwargs else _DEFAULT_CHANNELS
     n_ts_new = len(new_ts) if len(new_ts) > 0  else ValueError('Needs new_time array!')
     n_ts, n_rg, n_vel = var.shape
     mid = n_channels//2
@@ -538,7 +464,7 @@ def hyperspectralimage(ts, var, msk, **kwargs):
     logger.info(f'\nConcatinate {n_channels} spectra to 1 sample:\n'
           f'    --> resulting tensor dimension (n_samples, n_velocity_bins, n_cwt_scales, n_channels) = (????, 256, 32, {n_channels}) ......')
     # for iBin in range(n_vel):
-    iterator = range(n_vel) if logger.level < 30 else tqdm(range(n_vel))
+    iterator = range(n_vel) if logger.level > 20 else tqdm(range(n_vel))
     for iBin in iterator:
         for iT_cn in range(n_ts_new):
             iT_rd0 = h.argnearest(ts, new_ts[iT_cn])
@@ -579,7 +505,7 @@ def interpolate3d(data, mask_thres=0.1, **kwargs):
 
     logger.info('Start interpolation......')
 
-    iterator = range(data['vel'].size) if logger.level < 30 else tqdm(range(data['vel'].size))
+    iterator = range(data['vel'].size) if logger.level > 20 else tqdm(range(data['vel'].size))
     for iBin in iterator:
         var, mask = all_var_bins[:, :, iBin], all_mask_bins[:, :, iBin]
         if method == 'rectbivar':
@@ -630,7 +556,6 @@ def interpolate3d(data, mask_thres=0.1, **kwargs):
 
     return interp_data
 
-
 def load_features_from_nc(
         time_span,
         voodoo_path='',
@@ -641,6 +566,7 @@ def load_features_from_nc(
         interp='rectbivar',
         ann_settings_file='ann_model_settings.toml',
         save=True,
+        site='lacros_dacapo_gpu',
         **kwargs
 ):
     def quick_check(dummy_container, name_str, path):
@@ -667,6 +593,8 @@ def load_features_from_nc(
             fig, _ = plot_timeheight(ZE, var_converter='lin2z', title=f'pseudo Ze ({name_str}) for testing interpolations')  # , **plot_settings)
             Plot.save_figure(fig, name=f'{path}/limrad_{name_str}_{dt_string}.png', dpi=200)
 
+
+    start_time = time()
     spec_settings = toml.load(voodoo_path + ann_settings_file)['feature']
 
     log = logging.getLogger('pyLARDA')
@@ -674,7 +602,7 @@ def load_features_from_nc(
     log.addHandler(logging.StreamHandler())
 
     # Load LARDA
-    larda_connected = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=True)
+    larda_connected = pyLARDA.LARDA().connect(site, build_lists=True)
 
     TIME_SPAN_ = time_span
 
@@ -688,146 +616,101 @@ def load_features_from_nc(
     data_path = f'{data_path}/'
 
     ########################################################################################################################################################
-    #
-    #   _    ____ ____ ___    / ____ ____ _  _ ____    ____ _    ____ _  _ ___  _  _ ____ ___    ___  ____ ___ ____
-    #   |    |  | |__| |  \  /  [__  |__| |  | |___    |    |    |  | |  | |  \ |\ | |___  |     |  \ |__|  |  |__|
-    #   |___ |__| |  | |__/ /   ___] |  |  \/  |___    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
-    #                      /
-    #
-
-    """
-    " STATUS
-
-    \nValue 0: Clear sky.
-    \nValue 1: Good radar and lidar echos.
-    \nValue 2: Good radar echo only.
-    \nValue 3: Radar echo, corrected for liquid attenuation.
-    \nValue 4: Lidar echo only.
-    \nValue 5: Radar echo, uncorrected for liquid attenuation.
-    \nValue 6: Radar ground clutter.
-    \nValue 7: Lidar clear-air molecular scattering.";
-
-    " CLASSES
-
-    \nValue 0: Clear sky.
-    \nValue 1: Cloud liquid droplets only.
-    \nValue 2: Drizzle or rain.
-    \nValue 3: Drizzle or rain coexisting with cloud liquid droplets.
-    \nValue 4: Ice particles.
-    \nValue 5: Ice coexisting with supercooled liquid droplets.
-    \nValue 6: Melting ice particles.
-    \nValue 7: Melting ice particles coexisting with cloud liquid droplets.
-    \nValue 8: Aerosol particles, no cloud or precipitation.
-    \nValue 9: Insects, no cloud or precipitation.
-    \nValue 10: Aerosol coexisting with insects, no cloud or precipitation.";
-
-    """
-    def load_cloudnet_data(larda_connected, cloudnet, TIME_SPAN_, dt_string='', data_path='', **kwargs):
-
-        cloudnet_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, ['CLASS', 'detection_status'])
-
-        if save:
-            h.change_dir(f'{data_path}/{cloudnet}/cloudnet/')
-            if 'interp_ts' in kwargs and 'interp_rg' in kwargs:
-                cloudnet_variables['CLASS'] =  tr.interpolate2d(
-                    cloudnet_variables['CLASS'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
-                cloudnet_variables['detection_status'] =  tr.interpolate2d(
-                    cloudnet_variables['detection_status'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
-
-            savemat(f'{dt_string}_{cloudnet}_class.mat', cloudnet_variables['CLASS'])
-            savemat(f'{dt_string}_{cloudnet}_status.mat', cloudnet_variables['detection_status'])
-            logger.info(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of {cloudnet} Class & Status\n')
-
-        # temperature and pressure
-        cloudnet_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, ['T', 'P'])
-
-        cloudnet_model['T'] = tr.interpolate2d(cloudnet_model['T'], new_time=cloudnet_variables['CLASS']['ts'], new_range=cloudnet_variables['CLASS']['rg'])
-        cloudnet_model['P'] = tr.interpolate2d(cloudnet_model['P'], new_time=cloudnet_variables['CLASS']['ts'], new_range=cloudnet_variables['CLASS']['rg'])
-
-        if save:
-            h.change_dir(f'{data_path}/{cloudnet}/cloudnet/')
-            if 'interp_ts' in kwargs and 'interp_rg' in kwargs:
-                cloudnet_model['T'] =  tr.interpolate2d(cloudnet_model['T'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
-                cloudnet_model['P'] = tr.interpolate2d(cloudnet_model['P'], new_time=kwargs['interp_ts'], new_range=kwargs['interp_rg'], method='nearest')
-
-            savemat(f'{dt_string}_{cloudnet}_model_T.mat', cloudnet_model['T'])
-            savemat(f'{dt_string}_{cloudnet}_model_P.mat', cloudnet_model['P'])
-            logger.info(f'save :: !interpolated! {dt_string}_{cloudnet}_model_T/P')
-
-        return cloudnet_variables, cloudnet_model
-
-    cloudnet_variables, cloudnet_model = load_cloudnet_data(larda_connected, cloudnet, TIME_SPAN_, dt_string=dt_string, data_path=data_path)
-
-    # resolution of python version is master
-    ts_cloudnet, rg_cloudnet = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
-#
-#    _, _ = load_cloudnet_data(
-#        larda_connected, 'CLOUDNET_LIMRAD', TIME_SPAN_, dt_string=dt_string, data_path=data_path, interp_ts=ts_cloudnet, interp_rg=rg_cloudnet)
-
-    ########################################################################################################################################################
-    #  _    ____ ____ ___     _    _ ___  ____ ____    ___  ____ ___ ____
-    #  |    |  | |__| |  \    |    | |  \ |__| |__/    |  \ |__|  |  |__|
-    #  |___ |__| |  | |__/    |___ | |__/ |  | |  \    |__/ |  |  |  |  |
-    #
-    #
-    lidar = 'POLLY'
-
-    polly_variables = load_data(larda_connected, lidar, TIME_SPAN_LIDAR, ['attbsc1064', 'depol'])
-    ts_polly, rg_polly = polly_variables['attbsc1064']['ts'], polly_variables['depol']['rg']
-
-    if save:
-        h.change_dir(f'{data_path}/{cloudnet}/lidar/')
-        savemat(f'{dt_string}_{lidar}_attbsc1064.mat', polly_variables['attbsc1064'])
-        savemat(f'{dt_string}_{lidar}_voldepol532.mat', polly_variables['depol'])
-        logger.info(f'\nloaded :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} of PollyXT attbsc1064 & depol\n')
-
-    ########################################################################################################################################################
     #   _    ____ ____ ___     ____ ____ ___  ____ ____    ___  ____ ___ ____
     #   |    |  | |__| |  \    |__/ |__| |  \ |__| |__/    |  \ |__|  |  |__|
     #   |___ |__| |  | |__/    |  \ |  | |__/ |  | |  \    |__/ |  |  |  |  |
     #
-    #
-
-    # add more radar data lodaer later on
     if system == 'limrad94':
         ZSpec = sp.load_spectra_rpgfmcw94(larda_connected, TIME_SPAN_RADAR, **spec_settings['VSpec'])
     else:
         raise ValueError('Unknown system.', system)
 
     # interpolate time dimension of spectra
-    #artificial_minimum = np.full(ZSpec['SLv']['var'].shape, fill_value=1.e-7)
+    # not sure if this has an effect, when using a masked layer in the neural network
+    #artificial_minimum = np.full(ZSpec['SLv']['var'].shape, fill_value=0.0)
     #ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], artificial_minimum)
     ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], ZSpec['SLv']['var'])
     logger.info(f'\nloaded :: {TIME_SPAN_RADAR[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_RADAR[1]:%H:%M:%S} of {system} VHSpectra')
 
-    quick_check(ZSpec['SLv'], f'pseudoZe-{kind}-High-res', '/home/sdig/code/larda3/voodoo/plots/training')
+    quick_check(ZSpec['SLv'], f'pseudoZe-{kind}-High-res', QUICKLOOK_PATH)
 
+    ########################################################################################################################################################
+    #
+    #   _    ____ ____ ___     ____ _    ____ _  _ ___  _  _ ____ ___    ___  ____ ___ ____
+    #   |    |  | |__| |  \    |    |    |  | |  | |  \ |\ | |___  |     |  \ |__|  |  |__|
+    #   |___ |__| |  | |__/    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
+    #
+    try:
+        cloudnet_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, cloudnet_vars)
+        cloudnet_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, model_vars)
+        ts_master, rg_master = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
+        cn_available = True
+
+    except Exception as e:
+        logger.warning('WARNING :: Skipped Cloudnet Data --> set 30 sec time res. as master')
+        ts_master, rg_master = np.arange(ZSpec['VHSpec']['ts'][0], ZSpec['VHSpec']['ts'][-1], 30.0), ZSpec['VHSpec']['rg']
+        cn_available = False
+        cloudnet_variables, cloudnet_model = {'CLASS': [], 'detection_status': []}, {'T': []}
+
+    # Create a new xarray dataset
+    ds = VoodooXR(ts_master, rg_master)
+
+    # Add cloudnet data if available
+    if cn_available:
+        for ivar in cloudnet_vars:
+            ds._add_nD_variable(ivar, ('ts', 'rg'), cloudnet_variables[ivar]['var'], **{key: cloudnet_variables[ivar][key] for key in larda_params})
+        for ivar in model_vars:
+            cloudnet_model[ivar] = tr.interpolate2d(cloudnet_model[ivar], new_time=ts_master, new_range=rg_master)
+            ds._add_nD_variable(ivar, ('ts', 'rg'), cloudnet_model[ivar]['var'], **{key: cloudnet_model[ivar][key] for key in larda_params})
+
+    ########################################################################################################################################################
+    #
+    #   ____ ____ ____ ___     _    _ ___  ____ ____    ___  ____ ___ ____
+    #   |__/ |___ |__| |  \    |    | |  \ |__| |__/    |  \ |__|  |  |__|
+    #   |  \ |___ |  | |__/    |___ | |__/ |  | |  \    |__/ |  |  |  |  |
+    #
+    try:
+        polly_variables = load_data(larda_connected, lidar, TIME_SPAN_LIDAR, lidar_vars)
+
+        for ivar in lidar_vars:
+            polly_variables[ivar] = tr.interpolate2d(polly_variables[ivar], new_time=ts_master, new_range=rg_master)
+            ds._add_nD_variable(ivar, ('ts', 'rg'), polly_variables[ivar]['var'], **{key: polly_variables[ivar][key] for key in larda_params})
+
+    except Exception as e:
+        logger.warning('WARNING :: Skipped Lidar Data --> set 30 sec time.')
+
+    ########################################################################################################################################################
+    #
+    #   ___  ____ ____ ___  ____ ____ ____    ____ ___  ____ ____ ___ ____ ____
+    #   |__] |__/ |___ |__] |__| |__/ |___    [__  |__] |___ |     |  |__/ |__|
+    #   |    |  \ |___ |    |  | |  \ |___    ___] |    |___ |___  |  |  \ |  |
+    #
     if 'HSI' in kind:
-        ZSpec['VHSpec'] = interpolate3d(
-            ZSpec['VHSpec'],
-            new_time=ZSpec['VHSpec']['ts'],
-            new_range=rg_cloudnet,
-            method=interp
-        )
 
-        quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp', '/home/sdig/code/larda3/voodoo/plots/training')
+        if len(ZSpec['VHSpec']['rg']) != len(rg_master):
+            ZSpec['VHSpec'] = interpolate3d(
+                ZSpec['VHSpec'],
+                new_time=ZSpec['VHSpec']['ts'],
+                new_range=rg_master,
+                method=interp
+            )
+
+        quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp', QUICKLOOK_PATH)
 
         # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
         interp_var, interp_mask = hyperspectralimage(
             ZSpec['VHSpec']['ts'],
             ZSpec['VHSpec']['var'],
             ZSpec['VHSpec']['mask'],
-            new_time=ts_cloudnet,
+            new_time=ts_master,
             n_channels=kwargs['n_channels']
         )
 
-        ZSpec['VHSpec']['ts'] = ts_cloudnet
-        ZSpec['VHSpec']['rg'] = rg_cloudnet
+        ZSpec['VHSpec']['ts'] = ts_master
+        ZSpec['VHSpec']['rg'] = rg_master
         ZSpec['VHSpec']['var'] = interp_var
         ZSpec['VHSpec']['mask'] = interp_mask
         ZSpec['VHSpec']['dimlabel'] = ['time', 'range', 'vel', 'channel']
-
-        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_3spec-time-range-interp', '/home/sdig/code/larda3/voodoo/plots/training')
 
     elif kind == 'avg30sec':
         # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
@@ -836,63 +719,68 @@ def load_features_from_nc(
             ZSpec['VHSpec']['rg'],
             ZSpec['VHSpec']['var'],
             ZSpec['VHSpec']['mask'],
-            new_time=ts_cloudnet
+            new_time=ts_master
         )
 
-        ZSpec['VHSpec']['ts'] = ts_cloudnet
+        ZSpec['VHSpec']['ts'] = ts_master
         ZSpec['VHSpec']['var'] = interp_var
         ZSpec['VHSpec']['mask'] = interp_mask
 
-        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-interp', '/home/sdig/code/larda3/voodoo/plots/training')
+        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-interp', QUICKLOOK_PATH)
 
-        ZSpec['VHSpec'] = interpolate3d(ZSpec['VHSpec'], new_time=ts_cloudnet, new_range=rg_cloudnet, method=interp)
-        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-range-interp', '/home/sdig/code/larda3/voodoo/plots/training')
+        ZSpec['VHSpec'] = interpolate3d(ZSpec['VHSpec'], new_time=ts_master, new_range=rg_master, method=interp)
+        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-range-interp', QUICKLOOK_PATH)
 
     else:
-        raise ValueError('Unknown KIND of preprocessing.', kind)
+        raise ValueError(f'Unknown KIND of pre-processing. {kind}')
 
     ############################################################################################################################################################
     #   _    ____ ____ ___     ___ ____ ____ _ _  _ _ _  _ ____ ____ ____ ___
     #   |    |  | |__| |  \     |  |__/ |__| | |\ | | |\ | | __ [__  |___  |
     #   |___ |__| |  | |__/     |  |  \ |  | | | \| | | \| |__] ___] |___  |
     #
-
     config_global_model = toml.load(voodoo_path + ann_settings_file)
     USE_MODEL = config_global_model['tensorflow']['USE_MODEL']
 
-    if USE_MODEL == 'conv2d':
-        features, targets, masked = load_features_and_labels_conv2d(
+    if USE_MODEL in ['conv1d', 'conv2d']:
+        features, targets, masked = load_features_and_labels(
             ZSpec['VHSpec'],
             cloudnet_variables['CLASS'],
-            **config_global_model['feature']
-        )
-    elif USE_MODEL == 'conv1d':
-        features, targets, masked = load_features_and_labels_conv1d(
-            ZSpec['VHSpec'],
-            cloudnet_variables['CLASS'],
+            USE_MODEL=USE_MODEL,
             **config_global_model['feature']
         )
     else:
         raise ValueError(f'Unkown "USE_MODEL" variable = {USE_MODEL}')
 
+    ############################################################################################################################################################
+    #   ____ ____ _  _ ____    ___  ____ ____ ____    ____ _ _    ____ ____
+    #   [__  |__| |  | |___      /  |__| |__/ |__/    |___ | |    |___ [__
+    #   ___] |  |  \/  |___     /__ |  | |  \ |  \    |    | |___ |___ ___]
+    #
     if save:
         h.change_dir(f'{data_path}/{cloudnet}/features/{kind}/{USE_MODEL}/')
         # save features (subfolders for different tensor dimension)
-        FILE_NAME_1 = f'{dt_string}_{system}'
+        ds._add_coordinate({'nsamples':  'Number of samples'}, '-', np.arange(features.shape[0]))
+        ds._add_coordinate({'nvelocity': 'Number of velocity bins'}, '-', np.arange(features.shape[1]))
+        ds._add_coordinate({'nchannels': 'Number of stacked spectra'}, '-', np.arange(features.shape[2]))
+
+        ds._add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels'), features, **{})
+        ds._add_nD_variable('targets', ('nsamples'), targets, **{})
+        ds._add_nD_variable('masked', ('ts', 'rg'), masked, **{})
+
+        h.change_dir(f'{data_path}/{cloudnet}/xarray/')
+
+        FILE_NAME = f'{data_path}/{cloudnet}/xarray/{dt_string}_{system}.zarr'
         try:
-            savemat(f'{FILE_NAME_1}_features_{kind}.mat', {'features': features})
+            ds.to_zarr(store=FILE_NAME, mode='w', compute=True)
+            logger.info(f'save :: {FILE_NAME}')
         except Exception as e:
             logger.info('Data too large?', e)
-
-        # same labels for different tensor dimensions
-        h.change_dir(f'{data_path}/{cloudnet}/labels/')
-        savemat(f'{FILE_NAME_1}_labels.mat', {'labels': targets})
-        savemat(f'{FILE_NAME_1}_masked.mat', {'masked': masked})
-        logger.info(f'save :: {FILE_NAME_1}_limrad94_{kind}_features/labels.mat')
+        finally:
+            logger.critical(f'DONE :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} zarr files generated, elapsed time = '
+                            f'{timedelta(seconds=int(time() - start_time))} min')
 
     return features, targets, masked, cloudnet_variables['CLASS'], cloudnet_variables['detection_status'], cloudnet_model['T']
-
-
 
 
 ########################################################################################################################
@@ -904,20 +792,15 @@ def load_features_from_nc(
 #
 
 if __name__ == '__main__':
-    import traceback
-    start_time = time()
 
     VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
     DATA_PATH = '/home/sdig/code/larda3/voodoo/data/'
     CASE_LIST = '/home/sdig/code/larda3/case2html/dacapo_case_studies.toml'
+    ANN_INI_FILE = 'ann_model_setting3.toml'
 
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
-    SYSTEM = kwargs['system'] if 'system' in kwargs else 'limrad94'
-    CLOUDNET = kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94'
-    KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
     case_string = kwargs['case'] if 'case' in kwargs else '20190801-01'
-    n_channels_ = 6 if 'HSI' in KIND else 1
     load_from_toml = True if 'case' in kwargs else False
 
     # load case information
@@ -930,7 +813,10 @@ if __name__ == '__main__':
             dt_end   = dt_begin + timedelta(minutes=float(kwargs['t_train']))
             TIME_SPAN_ = [dt_begin, dt_end]
         else:
-            raise ValueError('Wrong dt_begin or dt_end')
+            dt_begin = datetime.strptime('20200513-1900', '%Y%m%d-%H%M')
+            dt_end   = dt_begin + timedelta(minutes=15.0)
+            TIME_SPAN_ = [dt_begin, dt_end]
+            #raise ValueError('Wrong dt_begin or dt_end')
 
     dt_string = f'{TIME_SPAN_[0]:%Y%m%d}_{TIME_SPAN_[0]:%H%M}-{TIME_SPAN_[1]:%H%M}'
 
@@ -939,17 +825,14 @@ if __name__ == '__main__':
             time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,
-            kind=KIND,
-            system=SYSTEM,
-            cloudnet=CLOUDNET,
+            kind=kwargs['kind'] if 'kind' in kwargs else 'HSI',
+            system=kwargs['system'] if 'system' in kwargs else 'limrad94',
+            cloudnet=kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94',
             save=True,
-            n_channels=n_channels_,
-            ann_settings_file='ann_model_setting3.toml',
+            n_channels=kwargs['nchannels'] if 'nchannels' in kwargs else _DEFAULT_CHANNELS,
+            ann_settings_file=ANN_INI_FILE,
+            site=kwargs['site'] if 'site' in kwargs else 'limtower',
         )
 
     except Exception:
-        exc_type, exc_value, exc_tb = sys.exc_info()
-        traceback.print_exception(exc_type, exc_value, exc_tb)
-        logger.error(ValueError(f'Something went wrong with this interval: {TIME_SPAN_}'))
-
-    logger.critical(f'\n    {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} mat files generated')
+        Utils.traceback_error(TIME_SPAN_)

@@ -23,6 +23,7 @@ import itertools
 
 import pyLARDA
 import pyLARDA.helpers as h
+import pyLARDA.Transformations as tr
 import pyLARDA.VIS_Colormaps as VIS_Colormaps
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,14 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
+FIG_SIZE_ = [12, 7]
+DPI_ = 200
+_FONT_SIZE = 12
+_FONT_WEIGHT = 'normal'
 
 def History(history):
-    """This routine generates a history quicklook for a trained Tensoflow ANN model.
+    """This routine generates a history quicklook for a trained Tensoflow ANN model. The figure contains the in-sample-loss/accuracy and
+    out-of-sample-loss/accuracy.
 
     Args:
         - history (tensorflow object) : contains the training history
@@ -201,7 +207,6 @@ def Quicklooks(RPG_moments, polly_var, begin_dt, end_dt, **kwargs):
     RPG_moments['VEL']['mask'] = orig_masks['VEL']
     RPG_moments['sw']['mask'] = orig_masks['sw']
 
-
 def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
     scales = kwargs['scales'] if 'scales' in kwargs else ValueError('Scales not given! Check call to spectra_wavelettransform')
     ts = kwargs['ts'] if 'ts' in kwargs else 0
@@ -270,7 +275,6 @@ def spectra_wavelettransform(vel, spectrum, cwt_matrix, **kwargs):
     fig.subplots_adjust(hspace=0.25)
 
     return fig, ax
-
 
 def lidar_profile_range_spectra(lidar, spec, **kwargs):
     fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [13, 8]
@@ -504,10 +508,8 @@ def lidar_profiles(bsc, depol, fltr, **kwargs):
 
     return fig, ax
 
-
 def print_elapsed_time(t0, string='time = '):
     logger.info(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [min:sec]')
-
 
 def save_figure(fig, **kwargs):
     """
@@ -531,7 +533,6 @@ def save_figure(fig, **kwargs):
     fig.savefig(name, dpi=dotsperinch)
     logger.info(f'Save figure :: {name}')
     return 0
-
 
 def Histogram(data, **kwargs):
     from copy import copy
@@ -692,7 +693,6 @@ def Histogram(data, **kwargs):
 
     return fig, ax
 
-
 def get_ave_values(xvalues, yvalues, n=5):
     signal_length = len(xvalues)
     if signal_length % n == 0:
@@ -709,7 +709,6 @@ def get_ave_values(xvalues, yvalues, n=5):
     y_ave = np.nanmean(yarr_reshaped, axis=1)
     return x_ave, y_ave
 
-
 def plot_signal_plus_average(ax, time, signal, average_over=5):
     # time_ave, signal_ave = get_ave_values(time, signal, average_over)
     ax.plot(time, signal, label='signal')
@@ -719,14 +718,12 @@ def plot_signal_plus_average(ax, time, signal, average_over=5):
     ax.set_title('signal', fontsize=16)
     ax.legend(loc='upper right')
 
-
 def get_fft_values(y_values, T, N, f_s):
     N2 = 2 ** (int(np.log2(N)) + 1)  # round up to next highest power of 2
     f_values = np.linspace(0.0, 1.0 / (2.0 * T), N2 // 2)
     fft_values_ = fft(y_values)
     fft_values = 2.0 / N2 * np.abs(fft_values_[0:N2 // 2])
     return f_values, fft_values
-
 
 def plot_fft_plus_power(ax, time, signal, plot_direction='horizontal', yticks=None, ylim=None):
     dt = time[1] - time[0]
@@ -749,7 +746,6 @@ def plot_fft_plus_power(ax, time, signal, plot_direction='horizontal', yticks=No
         ax.invert_yaxis()
         ax.set_ylim(ylim[0], -1)
     ax.legend()
-
 
 def plot_wavelet(ax, time, signal, scales, waveletname='mexh',
                  cmap=plt.cm.seismic, title='', ylabel='', xlabel=''):
@@ -774,7 +770,6 @@ def plot_wavelet(ax, time, signal, scales, waveletname='mexh',
     ax.set_ylim(scales[-1], 1)
     return yticks, ylim
 
-
 def spectra_wavelettransform2(time, signal, scales):
     fig = plt.figure(figsize=(9, 9))
     spec = gridspec.GridSpec(ncols=6, nrows=6)
@@ -790,7 +785,6 @@ def spectra_wavelettransform2(time, signal, scales):
     plt.tight_layout()
 
     return fig, (top_ax, bottom_left_ax, bottom_right_ax)
-
 
 def spectra_3by3(data, *args, **kwargs):
     """Finds the closest match to a given point in time and height and plot Doppler spectra.
@@ -960,3 +954,50 @@ def spectra_3by3(data, *args, **kwargs):
             if ifig != n_figs + 1: plt.close(fig)
 
     return fig, ax
+
+def _plot_bar_data(fig, ax, data, time, mask_value=0.0):
+    """Plots 1D variable as bar plot.
+    Args:
+        ax (obj): Axes object.
+        data (ndarray): 1D data array.
+        time (ndarray): 1D time array.
+    """
+    data = np.ma.masked_less_equal(data, mask_value)
+    pos0 = ax.get_position()
+    ax_new = fig.add_axes([0., 0., 1., 1.])
+    ax_new.bar(time, data.filled(0), width=1 / 1200, align='center', alpha=0.5, color='royalblue')
+    ax_new.set(
+        ylim=[-10, 200], ylabel='mwr-lwp [g m-2]',
+        xlim=[time[0], time[-1]],
+        position=[pos0.x0, pos0.height + pos0.height * 0.125, pos0.width, pos0.height / 2],
+        # fontweight='semibold'
+    )
+    ax_new.tick_params(labelbottom=False, labeltop=True)
+    ax_new.grid(True)
+
+    time_extend = time[-1] - time[0]
+    ax_new = tr.set_xticks_and_xlabels(ax_new, time_extend)
+    ax_new.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+    ax_new.tick_params(axis='both', which='both', right=True, top=True)
+    ax_new.tick_params(axis='both', which='major', labelsize=_FONT_SIZE, width=3, length=5.5)
+    ax_new.tick_params(axis='both', which='minor', width=2, length=3)
+    return ax_new
+
+def plot_ll_thichkness(ax, t, l1, l2):
+    y_lim = [-0.12, 2.5]
+
+    ax1 = ax.twinx()
+    ax1.plot(t, l1 / 1000., color='#E64A23', alpha=0.75, label='neural network (nn)')
+    ax1.set_ylim(y_lim)
+    ax1.plot(t, l2 / 1000., color='navy', alpha=0.75, label='cloudnet (cn)')
+    # ax1.plot(dt_list, sum_ll_thickness[nn_varname], color='red', linestyle='-', alpha=0.75, label=nn_varname)
+
+    ax1.set(ylim=y_lim, ylabel='liquid layer thickness [km]')
+    ax1.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+    ax1.tick_params(axis='both', which='both', right=True)
+    ax1.tick_params(axis='both', which='major', labelsize=_FONT_SIZE, width=3, length=5.5)
+    ax1.tick_params(axis='both', which='minor', width=2, length=3)
+    ax1 = tr.set_xticks_and_xlabels(ax1, t[-1] - t[0])
+    ax1.legend(loc='best')
+
+    return ax1

@@ -35,23 +35,25 @@
 
     USE_MODEL = 'conv1d'
 
+    NCHANNELS = 6
+
     DEVICE = 0
 
-    BATCH_SIZE   = 64   # √
+    BATCH_SIZE   = 32   # √
     BATCH_NORM   = true
-    EPOCHS       = 25
+    EPOCHS       = 150
 
     #KERNEL_INITIALIZER = 'random_normal'
     #REGULARIZER = 'l1_l2'
 
-    DENSE_LAYERS  = [512, 256, 256]
+    DENSE_LAYERS  = [256, 256, 256, 128]
     DROPOUT      = 0.25
 
     # binary classifier
     OPTIMIZER   = 'adam'
     ACTIVATIONS  = 'elu'
     ACTIVATIONS_OL  = 'softmax'
-    LOSS_FCNS    = 'CategoricalCrossentropy'
+    LOSS_FCNS    = 'SparseCategoricalCrossentropy'
 
     LEARNING_RATE = 1.0e-4
     DECAY_RATE = 1.0e-5
@@ -60,10 +62,10 @@
     # define paths
     VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
 
-    KERNEL_SIZE  = [5, 5, 3, 3]
-    STRIDE_SIZE  = [1, 1, 1, 1]
-    POOL_SIZE    = [4, 4, 4, 2]
-    NFILTERS     = [64, 128, 256, 512]
+    KERNEL_SIZE  = [3, 3, 3, 3, 3]
+    STRIDE_SIZE  = [1, 1, 1, 1, 1]
+    POOL_SIZE    = [2, 2, 2, 2, 2]
+    NFILTERS     = [32, 64, 128, 256, 512]
 
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space

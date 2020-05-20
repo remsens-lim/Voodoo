@@ -30,6 +30,7 @@ def generate_multicase_trainingset(t_span, t_train, t_skip, path):
             cnt += 1
 
     print(f'Number of cases = {cnt}')
+    print(f'Filename = {path}/auto-trainingset-{t_span_str}.toml')
 
 
 # python generate_toml.py dt_start=20181213 dt_end=20181213 t_train=15.0 t_skip=15.0
@@ -42,14 +43,14 @@ if __name__ == '__main__':
         dt_begin = datetime.datetime.strptime(f'{kwargs["dt_start"]} 0000', '%Y%m%d %H%M')
         dt_end   = datetime.datetime.strptime(f'{kwargs["dt_end"]} 2359', '%Y%m%d %H%M')
     else:
-        dt_begin = datetime.datetime.strptime(f'20190813 0000', '%Y%m%d %H%M')
-        dt_end   = datetime.datetime.strptime(f'20190813 2359', '%Y%m%d %H%M')
+        dt_begin = datetime.datetime.strptime(f'20190223 0000', '%Y%m%d %H%M')
+        dt_end   = datetime.datetime.strptime(f'20190223 2359', '%Y%m%d %H%M')
         #raise ValueError('Wrong dt_begin or dt_end'
 
     generate_multicase_trainingset(
         [dt_begin, dt_end],
-        float(kwargs['t_train']) if 't_train' in kwargs else 15.0,   # minutes,
-        float(kwargs['t_skip']) if 't_skip' in kwargs else 15.0,   # minutes,
+        float(kwargs['t_train']) if 't_train' in kwargs else 60.0,   # minutes,
+        float(kwargs['t_skip']) if 't_skip' in kwargs else 60.0,   # minutes,
         '/home/sdig/code/larda3/voodoo/tomls/',
     )
     print('done\n')

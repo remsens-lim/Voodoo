@@ -4,6 +4,13 @@ import pyLARDA.helpers as h
 from pprint import pprint
 
 from jinja2 import Template
+import sys
+import traceback
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.CRITICAL)
+logger.addHandler(logging.StreamHandler())
 
 
 def run_command(cmd):
@@ -128,3 +135,8 @@ def get_explorer_link(campaign, time_interval, range_interval, params):
         campaign, h.dt_to_ts(time_interval[0]), h.dt_to_ts(time_interval[1]),
         *range_interval, ",".join(params))
     return s
+
+def traceback_error(time_span):
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    traceback.print_exception(exc_type, exc_value, exc_tb)
+    logger.error(ValueError(f'Something went wrong with this interval: {time_span}'))

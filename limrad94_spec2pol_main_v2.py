@@ -72,7 +72,7 @@ if __name__ == '__main__':
                      'filter_ghost_C1': False,   #
                      }
 
-    PATH = '/home/sdig/code/larda3/voodoo/plots/spectra_png/'
+    PATH = '/home/sdig/code/larda3/voodoo/plots/'
 
     start_time = time.time()
 
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     log.addHandler(logging.StreamHandler())
 
     # Load LARDA
-    larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu')
+    larda = pyLARDA.LARDA().connect('lacros_limtower_gpu', build_lists=True)
 
     # gather command line arguments
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
@@ -95,8 +95,8 @@ if __name__ == '__main__':
         # date = '2019050'
         #begin_dt = datetime.datetime(2019, 1, 10, 12, 15)
         #end_dt = datetime.datetime(2019, 1, 10, 12, 57)
-        begin_dt = datetime.datetime(2019, 8, 1, 6, 44,)
-        end_dt = datetime.datetime(2019, 8, 1, 7, 20)
+        begin_dt = datetime.datetime(2020, 5, 14, 0, 1)
+        end_dt = datetime.datetime(2020, 5, 14, 23, 59)
 
     TIME_SPAN_ = [begin_dt, end_dt]
     RANGE_ = [0, 12000]
@@ -104,20 +104,20 @@ if __name__ == '__main__':
 
     limrad94_Zspec = sp.load_spectra_rpgfmcw94(larda, TIME_SPAN_, **spec_settings)
     limrad94_mom = sp.spectra2moments(limrad94_Zspec, larda.connectors['LIMRAD94'].system_info['params'], **spec_settings)
-    limrad94_pol = sp.spectral_polarimetric_products(limrad94_Zspec, larda.connectors['LIMRAD94'].system_info['params'], **spec_settings)
-
-    for iC in range(len(limrad94_Zspec)):
-        limrad94_Zspec[iC].update(
-            {varname: h.put_in_container(limrad94_pol[iC][varname], limrad94_Zspec[iC]['VHSpec'], name=varname) for varname in limrad94_pol[iC].keys()})
-
-    # loading cloudnet temperature data
-    T = larda.read("CLOUDNET_LIMRAD", "T", [begin_dt, end_dt], [0, 'max'])
-
-    def toC(datalist):
-        return datalist[0]['var'] - 273.15, datalist[0]['mask']
-
-    T = pyLARDA.Transformations.combine(toC, [T], {'var_unit': "C"})
-    contour = {'data': T, 'levels': np.arange(-35, 1, 10)}
+#    limrad94_pol = sp.spectral_polarimetric_products(limrad94_Zspec, larda.connectors['LIMRAD94'].system_info['params'], **spec_settings)
+#
+#    for iC in range(len(limrad94_Zspec)):
+#        limrad94_Zspec[iC].update(
+#            {varname: h.put_in_container(limrad94_pol[iC][varname], limrad94_Zspec[iC]['VHSpec'], name=varname) for varname in limrad94_pol[iC].keys()})
+#
+#    # loading cloudnet temperature data
+#    T = larda.read("CLOUDNET_LIMRAD", "T", [begin_dt, end_dt], [0, 'max'])
+#
+#    def toC(datalist):
+#        return datalist[0]['var'] - 273.15, datalist[0]['mask']
+#
+#    T = pyLARDA.Transformations.combine(toC, [T], {'var_unit': "C"})
+#    contour = {'data': T, 'levels': np.arange(-35, 1, 10)}
 
     ########################################################################################################FONT=CYBERMEDIUM
     #
@@ -125,9 +125,9 @@ if __name__ == '__main__':
     #   |__] |    |  |  |   |  | |\ | | __    |__/ |__| |  \ |__| |__/    |\/| |  | |\/| |___ |\ |  |  [__
     #   |    |___ |__|  |   |  | | \| |__]    |  \ |  | |__/ |  | |  \    |  | |__| |  | |___ | \|  |  ___]
     #
-    plot_remsen_ql = False
+    plot_remsen_ql = True
     plot_radar_moments = False
-    fig_size = [9, 6]
+    fig_size = [9, 12]
     # create folder for subfolders if it doesn't exist already
     h.change_dir(f'{PATH}/{begin_dt:%Y%m%d-%H%M}-{end_dt:%H%M}/')
 
@@ -139,7 +139,7 @@ if __name__ == '__main__':
         ZE['colormap'] = 'jet'
         ZE['var_lims'] = [-50, 20]
         fig, _ = pyLARDA.Transformations.plot_timeheight(ZE, fig_size=fig_size, range_interval=RANGE_,
-                                                         z_converter='lin2z', contour=contour, rg_converter=True)
+                                                         z_converter='lin2z', contour={}, rg_converter=True)
         fig_name = 'limrad_Ze' + f'{begin_dt:%Y%m%d_%H%M%S_}{end_dt:%H%M%S}.png'
         fig.tight_layout()
         fig.savefig(fig_name, dpi=300, transparent=False)
@@ -223,9 +223,17 @@ if __name__ == '__main__':
         #    fig_name = 'limrad_sw' + f'{begin_dt:%Y%m%d_%H%M%S_}{end_dt:%H%M%S_}' + '0-12000' + '_filter..png'
         #    fig.savefig(fig_name, dpi=250)
 
+    if plot_remsen_ql:
+        fig, ax = pyLARDA.Transformations.remsens_limrad_quicklooks(limrad94_mom)
+        fig_name = f'{begin_dt:%Y%m%d}_QL_LIMRAD94.png'
 
-    sensitivity_limit = larda.read("LIMRAD94", "SLv", TIME_SPAN_, RANGE_)
-    RPG_spectra_interp = Loader.equalize_rpg_radar_chirps(limrad94_Zspec, 'VHSpec')
+        # fig, ax = pyLARDA.Transformations.remsens_limrad_quicklooks(MIRA_moments)
+        # fig_name = f'{begin_dt:%Y%m%d}_QL_MIRA35.png'
+
+        fig.savefig(fig_name, dpi=300)
+
+    #sensitivity_limit = larda.read("LIMRAD94", "SLv", TIME_SPAN_, RANGE_)
+    #RPG_spectra_interp = Loader.equalize_rpg_radar_chirps(limrad94_Zspec, 'VHSpec')
     #RPG_sldr_spectra = Loader.equalize_rpg_radar_chirps(limrad94_Zspec, 'ZDR')
     #RPG_spectra_interp['var'] = Loader.replace_fill_value(RPG_spectra_interp['var'], sensitivity_limit['var'])
     #RPG_spectra_interp['mask'][:, :] = False
@@ -234,65 +242,65 @@ if __name__ == '__main__':
     FONTS = 12
     FIGS  = [6, 6]
 
-    for its, ts in enumerate(RPG_spectra_interp['ts']):
-        fig_name = f'limrad_{str(its).zfill(4)}_{begin_dt:%Y%m%d}'
-
-        intervall = {'time': [ts], 'range': RANGE_}
-
-        spectrogram_LIMRAD = pyLARDA.Transformations.slice_container(RPG_spectra_interp, value=intervall)
-        spectrogram_LIMRAD['colormap'] = 'cloudnet_jet'
-        spectrogram_LIMRAD['var_lims'] = [-60, 20]
-        spectrogram_LIMRAD['var_unit'] = 'dBZ'
-        spectrogram_LIMRAD['rg_unit'] = 'km'
-        spectrogram_LIMRAD['rg'] = spectrogram_LIMRAD['rg'] / 1000.
-
-
-        fig_sp, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_LIMRAD,
-                                                                            z_converter='lin2z',
-                                                                            fig_size=FIGS, v_lims=[-4, 4], grid='both', cbar=True)
-        # additional spectrogram settings
-        axspec.patch.set_facecolor('#E0E0E0')
-        axspec.patch.set_alpha(0.7)
-        axspec.set_ylim(np.array(RANGE_) / 1000.)
-        axspec.grid(b=True, which='major', color='white', linestyle='--')
-        axspec.grid(b=True, which='minor', color='white', linestyle=':')
-        axspec.grid(linestyle=':', color='white')
-        axspec.set_ylabel('Height [km]', fontsize=FONTS, fontweight=FONTW)
-        axspec.tick_params(axis='y', which='both', right=True, top=True)
-        plt.tight_layout()
-        Plot.save_figure(fig_sp, name=f'rgspec-{fig_name}-a.png', dpi=200)
-
-        from scipy import signal
-        var_dBZ = h.lin2z(spectrogram_LIMRAD['var'])
-
-        f, t, FFT = signal.stft(var_dBZ, fs=1.0, window='parzen', nperseg=256, noverlap=None, nfft=None,
-                                detrend=False, return_onesided=True, boundary='zeros', padded=True, axis=1)
-
-        #_, FFT = signal.istft(var_dBZ, fs=1.0, window='parzen', nperseg=256, noverlap=None, nfft=None, time_axis=0, freq_axis=1)
-
-        Amp = abs(FFT)
-        Amp[:, :4, 1] = 0.0
-
-        Phase = np.angle(FFT)
-        kwargs = {'vmin': 1.e-2, 'vmax': 1.e0,
-                  # 'z_converter': 'lin2z',
-                  'colormap': 'viridis'}
-
-        Amp_norm = (Amp[:, :, 1] - Amp[:, :, 1].min()) / (Amp[:, :, 1].max() - Amp[:, :, 1].min())
-        fig_fft, _ = Plot.rangespectrogramFFT(f, spectrogram_LIMRAD['rg'], Amp_norm, **kwargs)
-        plt.tight_layout()
-        Plot.save_figure(fig_fft, name=f'rgspec-{fig_name}-b.png', dpi=200)
-
-#        Phase_norm = (Phase[:, :, 1] - Phase[:, :, 1].min()) / (Phase[:, :, 1].max() - Phase[:, :, 1].min())
-#        fig_fft, _ = Plot.rangespectrogramFFT(f, spectrogram_LIMRAD['rg'], Phase_norm, **kwargs)
+#    for its, ts in enumerate(RPG_spectra_interp['ts']):
+#        fig_name = f'limrad_{str(its).zfill(4)}_{begin_dt:%Y%m%d}'
+#
+#        intervall = {'time': [ts], 'range': RANGE_}
+#
+#        spectrogram_LIMRAD = pyLARDA.Transformations.slice_container(RPG_spectra_interp, value=intervall)
+#        spectrogram_LIMRAD['colormap'] = 'cloudnet_jet'
+#        spectrogram_LIMRAD['var_lims'] = [-60, 20]
+#        spectrogram_LIMRAD['var_unit'] = 'dBZ'
+#        spectrogram_LIMRAD['rg_unit'] = 'km'
+#        spectrogram_LIMRAD['rg'] = spectrogram_LIMRAD['rg'] / 1000.
+#
+#
+#        fig_sp, (axspec, pcmesh) = pyLARDA.Transformations.plot_spectrogram(spectrogram_LIMRAD,
+#                                                                            z_converter='lin2z',
+#                                                                            fig_size=FIGS, v_lims=[-4, 4], grid='both', cbar=True)
+#        # additional spectrogram settings
+#        axspec.patch.set_facecolor('#E0E0E0')
+#        axspec.patch.set_alpha(0.7)
+#        axspec.set_ylim(np.array(RANGE_) / 1000.)
+#        axspec.grid(b=True, which='major', color='white', linestyle='--')
+#        axspec.grid(b=True, which='minor', color='white', linestyle=':')
+#        axspec.grid(linestyle=':', color='white')
+#        axspec.set_ylabel('Height [km]', fontsize=FONTS, fontweight=FONTW)
+#        axspec.tick_params(axis='y', which='both', right=True, top=True)
 #        plt.tight_layout()
-#        Plot.save_figure(fig_fft, name=f'rgspec-{fig_name}-c.png', dpi=200)
-
-        im1 = Image.open(f'rgspec-{fig_name}-a.png')
-        im2 = Image.open(f'rgspec-{fig_name}-b.png')
-        #im3 = Image.open(f'rgspec-{fig_name}-c.png')
-        get_concat_h(im1, im2).save(f'rgfft-{fig_name}.png')
-
-        print(its)
-        dummy = 5
+#        Plot.save_figure(fig_sp, name=f'rgspec-{fig_name}-a.png', dpi=200)
+#
+#        from scipy import signal
+#        var_dBZ = h.lin2z(spectrogram_LIMRAD['var'])
+#
+#        f, t, FFT = signal.stft(var_dBZ, fs=1.0, window='parzen', nperseg=256, noverlap=None, nfft=None,
+#                                detrend=False, return_onesided=True, boundary='zeros', padded=True, axis=1)
+#
+#        #_, FFT = signal.istft(var_dBZ, fs=1.0, window='parzen', nperseg=256, noverlap=None, nfft=None, time_axis=0, freq_axis=1)
+#
+#        Amp = abs(FFT)
+#        Amp[:, :4, 1] = 0.0
+#
+#        Phase = np.angle(FFT)
+#        kwargs = {'vmin': 1.e-2, 'vmax': 1.e0,
+#                  # 'z_converter': 'lin2z',
+#                  'colormap': 'viridis'}
+#
+#        Amp_norm = (Amp[:, :, 1] - Amp[:, :, 1].min()) / (Amp[:, :, 1].max() - Amp[:, :, 1].min())
+#        fig_fft, _ = Plot.rangespectrogramFFT(f, spectrogram_LIMRAD['rg'], Amp_norm, **kwargs)
+#        plt.tight_layout()
+#        Plot.save_figure(fig_fft, name=f'rgspec-{fig_name}-b.png', dpi=200)
+#
+##        Phase_norm = (Phase[:, :, 1] - Phase[:, :, 1].min()) / (Phase[:, :, 1].max() - Phase[:, :, 1].min())
+##        fig_fft, _ = Plot.rangespectrogramFFT(f, spectrogram_LIMRAD['rg'], Phase_norm, **kwargs)
+##        plt.tight_layout()
+##        Plot.save_figure(fig_fft, name=f'rgspec-{fig_name}-c.png', dpi=200)
+#
+#        im1 = Image.open(f'rgspec-{fig_name}-a.png')
+#        im2 = Image.open(f'rgspec-{fig_name}-b.png')
+#        #im3 = Image.open(f'rgspec-{fig_name}-c.png')
+#        get_concat_h(im1, im2).save(f'rgfft-{fig_name}.png')
+#
+#        print(its)
+#        dummy = 5
     print('total elapsed time = {:.3f} sec.'.format(time.time() - start_time))

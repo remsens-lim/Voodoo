@@ -133,6 +133,7 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
 
         with mirrored_strategy.scope():
             model = Sequential()
+            model.add(tf.keras.layers.Masking(mask_value=0., input_shape=n_input))
 
             # add convolutional layers
             for i, (ifilt, ikern, istrd, ipool) in enumerate(zip(NFILTERS, KERNEL_SIZE, STRIDE_SIZE, POOL_SIZE)):
@@ -142,8 +143,11 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
                     'padding': "same",
                     'kernel_initializer': initializer,
                     'kernel_regularizer': regularizers,
+                    'name': f'{CONV_DIMENSION}-layer-{i}'
                 }
-                if i == 0: conv_layer_settings['input_shape'] = n_input
+                if i == 0:
+                    conv_layer_settings['input_shape'] = n_input
+                    conv_layer_settings['name'] = f'{CONV_DIMENSION}-input-layer'
 
                 model.add(ConvLayer(ifilt, ikern, **conv_layer_settings))
 
@@ -152,17 +156,19 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
 
             model.add(Flatten())
 
-            for idense in DENSE_LAYERS:
+            for i, idense in enumerate(DENSE_LAYERS):
                 dense_layer_settings = {
                     'activation': ACTIVATION,
                     'kernel_initializer': initializer,
-                    'kernel_regularizer': regularizers
+                    'kernel_regularizer': regularizers,
+                    'name': f'dense-layer-{i}'
                 }
                 model.add(Dense(idense, **dense_layer_settings))
                 if BATCH_NORM:    model.add(BatchNormalization())
                 if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
-            model.add(Dense(n_output[0], activation=ACTIVATION_OL))
+            model.add(Dense(n_output, activation=ACTIVATION_OL, name='prediction'))
+            #model.add(Dense(n_output[0], activation=ACTIVATION_OL, name='prediction'))
             print(f"Created model {MODEL_PATH}")
 
             LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
@@ -193,8 +199,17 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
             else:
                 raise ValueError('Unknown LOSS_FCNS!', LOSSES)
 
-            model.compile(optimizer=opt, loss=loss, metrics=['CategoricalAccuracy'])
+            model.compile(optimizer=opt, loss=loss, metrics=['sparse_categorical_accuracy'])
     model.summary()
+
+    """
+    import sys
+    import pyLARDA.helpers as h
+    h.change_dir(sys.path[0])
+    os.environ["PATH"] += os.pathsep + '/home/sdig/anaconda3/pkgs/graphviz-2.40.1-h21bd128_2/bin/'
+    tf.keras.utils.plot_model(model, show_shapes=True, to_file='quicklook.png')
+    """
+
 
     return model
 
@@ -239,7 +254,8 @@ def training(model, train_set, train_label, **hyper_params):
 
     # with tf.device(f'/gpu:{DEVICE}'):
     history = model.fit(
-        train_set, train_label,
+        train_set,
+        train_label,
         batch_size=BATCH_SIZE,
         epochs=EPOCHS,
         shuffle=True,
