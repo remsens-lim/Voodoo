@@ -32,6 +32,7 @@ from tqdm.auto import tqdm
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
+from densenet import densenet_model
 sys.path.append('../larda/')
 import pyLARDA
 import matplotlib
@@ -60,13 +61,15 @@ VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
 SYSTEM = 'limrad94'
 PLOT_RANGE_ = [0, 12000]
 USE_ONLY_GIVEN = True
-add_flipped = False
-N_VAL = 10
+add_flipped = True
+N_VAL = 20
 
-FIG_SIZE_ = [12, 7]
-DPI_ = 200
+
+FIG_SIZE_ = [14, 7]
+DPI_ = 450
 _FONT_SIZE = 12
 _FONT_WEIGHT = 'semibold'
+
 
 # list of cloudnet data sets used for training
 CLOUDNETs = ['CLOUDNETpy94']
@@ -385,9 +388,10 @@ def print_number_of_classes(labels, text='', names=_CLOUDNET_LABELS):
         loggers[0].info(f'{np.sum(labels == i):12d}   {name}')
 
 
-def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', remove_ice=0.0, **kwargs):
+def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', remove_ice=0.0, remove_drizzle=0.0, **kwargs):
     def load_cloudnet_specific_features_labels(case_string_list, case_list_path, **kwargs):
 
+        N_NOT_AVAILABLE = 0
         feature_set, target_labels, masked_total = [], [], []
         cloudnet_class, cloudnet_status, model_temp, ts_cloudnet, rg_cloundet = [], [], [], [], []
 
@@ -413,6 +417,7 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
                     loggers[0].debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} zarr files')
 
             except FileNotFoundError:
+                N_NOT_AVAILABLE += 1
                 loggers[0].info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['SYSTEM']}.zarr  not found!")
                 loggers[0].info(f'USE_ONLY_GIVEN: {USE_ONLY_GIVEN}')
 
@@ -436,6 +441,8 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
                 else:
                     loggers[0].info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['SYSTEM']}.zarr  some value is missing!")
                     loggers[0].info(f"{e}")
+
+                N_NOT_AVAILABLE += 1
                 continue
 
             except Exception as e:
@@ -444,6 +451,7 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
                 traceback.print_exception(exc_type, exc_value, exc_tb)
                 loggers[0].critical(f'Exception: Check ~/{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["SYSTEM"]}.zarr)')
                 loggers[0].critical(f'{e}')
+                N_NOT_AVAILABLE += 1
                 continue
 
             if _masked.all(): continue  # if there are no data points
@@ -487,6 +495,7 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
                     _target = np.concatenate((_target, _target), axis=0)
 
             loggers[0].debug(f'\n dim = {_feature.shape}')
+            loggers[0].debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
 
             feature_set.append(_feature)
             target_labels.append(_target)
@@ -530,18 +539,24 @@ def import_dataset(case_string_list, case_list_path, data_root='', cloudnet='', 
 
     print_number_of_classes(target_labels, text=f'\nsamples per class')
 
-    # removing X % of ice pixels
-    if kwargs['TASK'] == 'train' and remove_ice > 0:
-        idx_ice = np.where(target_labels == 4)[0]
-        rand_choice = np.random.choice(idx_ice, int(idx_ice.size * remove_ice))
-        feature_set = np.delete(feature_set, rand_choice, axis=0)
-        target_labels = np.delete(target_labels, rand_choice, axis=0)
-        print_number_of_classes(target_labels, text=f'\nsamples per class after removing {remove_ice * 100.:.2f}% of ice pixels')
-
-    # splitting into training and validation set
     validation_set = ()
     if kwargs['TASK'] == 'train':
-        # take every nth element from the training set for validation
+
+        if remove_ice > 0:
+            idx_ice = np.where(target_labels == 4)[0]
+            rand_choice = np.random.choice(idx_ice, int(idx_ice.size * remove_ice/100.))
+            feature_set = np.delete(feature_set, rand_choice, axis=0)
+            target_labels = np.delete(target_labels, rand_choice, axis=0)
+            print_number_of_classes(target_labels, text=f'\nsamples per class after removing {remove_ice:.2f}% of ice pixels')
+
+        if remove_drizzle > 0:
+            idx_drizzle = np.where(target_labels == 2)[0]
+            rand_choice = np.random.choice(idx_drizzle, int(idx_drizzle.size * remove_drizzle/100.))
+            feature_set = np.delete(feature_set, rand_choice, axis=0)
+            target_labels = np.delete(target_labels, rand_choice, axis=0)
+            print_number_of_classes(target_labels, text=f'\nsamples per class after removing {remove_drizzle:.2f}% of drizzle pixels')
+
+        # splitting into training and validation set, use every n-th element from the training set for validation
         validation_set = (feature_set[::N_VAL], target_labels[::N_VAL])
         feature_set = np.array([item for index, item in enumerate(feature_set) if (index + 1) % N_VAL != 0])
         target_labels = np.array([item for index, item in enumerate(target_labels) if (index + 1) % N_VAL != 0])
@@ -570,7 +585,7 @@ def ma_corr_coef(X1, X2):
 def add_lwp_to_classification(prediction, classification, fig, ax, cloudnet=''):
     # add the lwp ontop
     larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
-    lwp_container = larda.read(cloudnet, 'LWP', dt_interval, PLOT_RANGE_)
+    lwp_container = larda.read(cloudnet, 'LWP', dt_interval)
     lwp_container = tr.interpolate1d(lwp_container, new_time=prediction['ts'], new_rg=prediction['rg'])
     dt_lwp = [h.ts_to_dt(ts) for ts in lwp_container['ts']]
 
@@ -632,7 +647,7 @@ if __name__ == '__main__':
     TRAINED_MODEL = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
     TASK = kwargs['task'] if 'task' in kwargs else 'train'
     KIND = kwargs['kind'] if 'kind' in kwargs else 'HSI'
-    CLOUDNET = kwargs['cloudnet'] if 'cloudnet' in kwargs else ''
+    CLOUDNET = kwargs['cloudnet'] if 'cloudnet' in kwargs else 'CLOUDNETpy94'
     PLOT_RANGE_[1] = float(kwargs['range']) if 'range' in kwargs else PLOT_RANGE_[1]
 
     n_channels_ = 6 if 'HSI' in KIND else 1
@@ -671,7 +686,9 @@ if __name__ == '__main__':
         'SAVE': True,
         'n_channels': n_channels_,
         'CDIM': CDIM,
-        'TASK': TASK
+        'TASK': TASK,
+        'remove_ice': 50.,
+        'remove_drizzle': 50.,
     }
 
     feature_set, target_labels, validation_set, cloudnet_class, cloudnet_status, masked_total, model_temp, cloudnet_ts, cloudnet_rg = import_dataset(
@@ -716,6 +733,10 @@ if __name__ == '__main__':
 
         # define a new model or load an existing one
         cnn_model = Model.define_convnet(feature_set.shape[1:], 9, **hyper_params)
+
+#        cnn_model = densenet_model(growth_rate=32, nb_filter=64, nb_layers = [6,12,24,16], reduction=0.0,
+#                   dropout_rate=0.0, classes=9, shape=feature_set.shape[1:], batch_size=32,
+#                   with_output_block=True, with_se_layers=True)
 
         # parse the training set to the optimizer
         history = Model.training(cnn_model, feature_set, target_labels, validation=validation_set, **hyper_params)

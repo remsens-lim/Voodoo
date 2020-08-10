@@ -67,7 +67,6 @@
     POOL_SIZE    = [2, 2, 2, 2, 2]
     NFILTERS     = [32, 64, 128, 256, 512]
 
-
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 [feature]
     quick_check = false

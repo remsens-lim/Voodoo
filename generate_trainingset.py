@@ -758,7 +758,6 @@ def load_features_from_nc(
     #   ___] |  |  \/  |___     /__ |  | |  \ |  \    |    | |___ |___ ___]
     #
     if save:
-        h.change_dir(f'{data_path}/{cloudnet}/features/{kind}/{USE_MODEL}/')
         # save features (subfolders for different tensor dimension)
         ds._add_coordinate({'nsamples':  'Number of samples'}, '-', np.arange(features.shape[0]))
         ds._add_coordinate({'nvelocity': 'Number of velocity bins'}, '-', np.arange(features.shape[1]))
