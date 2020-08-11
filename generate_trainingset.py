@@ -92,17 +92,6 @@ model_vars = ['T', 'P']
 lidar_vars = ['attbsc1064', 'attbsc532', 'depol']
 larda_params = ['filename', 'system', 'colormap', 'rg_unit', 'var_unit']
 
-
-def load_case_list(path, case_name):
-    # gather command line arguments
-    config_case_studies = toml.load(path)
-    return config_case_studies['case'][case_name]
-
-def load_case_file(path):
-    # gather command line arguments
-    config_case_studies = toml.load(path)
-    return config_case_studies['case']
-
 def scaling(strat='none'):
     def ident(x):
         return x
@@ -148,71 +137,6 @@ def replace_fill_value(data, newfill):
                 var[iT, iR, var[iT, iR, :] <= 0.0] = newfill[iT, iR]
     return var
 
-def get_good_radar_and_lidar_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
-        return 1
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 3
-    else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
-
-def get_good_lidar_only_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
-        return 3
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 1
-    else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
-
-def load_training_mask(classes, status, cloudnet_type):
-
-    idx_good_radar_and_lidar = get_good_radar_and_lidar_index(cloudnet_type)
-    idx_good_lidar_only = get_good_lidar_only_index(cloudnet_type)
-
-    """
-    CLOUDNET
-    "0: Clear sky\n
-    1: Cloud droplets only\n
-    2: Drizzle or rain\n
-    3: Drizzle/rain & cloud droplets\n
-    4: Ice\n
-    5: Ice & supercooled droplets\n
-    6: Melting ice\n
-    7: Melting ice & cloud droplets\n
-    8: Aerosol\n
-    9: Insects\n
-    10: Aerosol & insects";
-    
-    (CLOUDNET MATLAB VERSION)
-    "0: Clear sky\n
-    1: Lidar echo only\n
-    2: Radar echo but uncorrected atten.\n
-    3: Good radar & lidar echos\n
-    4: No radar but unknown attenuation\n
-    5: Good radar echo only\n
-    6: No radar but known attenuation\n
-    7: Radar corrected for liquid atten.\n
-    8: Radar ground clutter\n
-    9: Lidar molecular scattering";
-    
-    """
-    # create mask
-    valid_samples = np.full(status.shape, False)
-    valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
-    # valid_samples[status == 2]  = True   # add good radar only
-    valid_samples[classes == 5] = True  # add mixed-phase class pixel
-    # valid_samples[classes == 6] = True   # add melting layer class pixel
-    # valid_samples[classes == 7] = True   # add melting layer + SCL class pixel
-    valid_samples[classes == 1] = True  # add cloud droplets only class
-
-    # at last, remove lidar only pixel caused by adding cloud droplets only class
-    valid_samples[status == idx_good_lidar_only] = False
-
-    # if polly processing, remove aerosol and insects (most actually drizzle)
-    if cloudnet_type in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        valid_samples[classes == 10] = False
-    return ~valid_samples
-
 def load_features_and_labels(spectra, classes, **feature_info):
     """
      For orientation
@@ -253,21 +177,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
-    masked = np.all(np.all(spectra_mask, axis=3), axis=2)
-    #masked = np.all(np.any(spectra_mask, axis=3), axis=2)
-    spec_params = feature_info['VSpec']
-    dimensions = feature_info['USE_MODEL']
-    if dimensions == 'conv2d':
-        cwt_params = feature_info['cwt']
-
-        assert len(cwt_params['scales']) == 3, 'The list of scaling parameters 3 values!'
-        n_cwt_scales = int(cwt_params['scales'][2])
-        scales = np.linspace(cwt_params['scales'][0], cwt_params['scales'][1], n_cwt_scales)
-        cwt_scaler = scaling(strat='normalize')
-        cwt_matrix = np.zeros((n_Dbins, n_cwt_scales, n_chan), dtype=np.float32)
-        window_fcn = np.kaiser(n_Dbins, 5.0)
-    else:
-        spc_matrix = np.zeros((n_Dbins, n_chan), dtype=np.float32)
+    MASK = np.all(np.all(spectra_mask, axis=3), axis=2)
 
     quick_check = feature_info['quick_check'] if 'quick_check' in feature_info else False
     if quick_check and classes != []:
@@ -283,55 +193,29 @@ def load_features_and_labels(spectra, classes, **feature_info):
         # ZE['var_lims'] = [ZE['var'].min(), ZE['var'].max()]
         ZE['var_lims'] = [-60, 20]
         ZE['var_unit'] = 'dBZ'
-        ZE['mask'] = masked
+        ZE['mask'] = MASK
 
         fig, _ = tr.plot_timeheight(ZE, var_converter='lin2z', title='bla inside wavelett')  # , **plot_settings)
         Plot.save_figure(fig, name=f'limrad_pseudoZe.png', dpi=200)
 
-    spectra_lims = np.array(spec_params['var_lims'])
+    spectra_lims = np.array(feature_info['VSpec']['var_lims'])
     # convert to logarithmic units
-    if 'var_converter' in spec_params and 'lin2z' in spec_params['var_converter']:
+    if 'var_converter' in feature_info['VSpec'] and 'lin2z' in feature_info['VSpec']['var_converter']:
         spectra_3d = h.get_converter_array('lin2z')[0](spectra_3d)
-        spectra_lims = h.get_converter_array('lin2z')[0](spec_params['var_lims'])
+        spectra_lims = h.get_converter_array('lin2z')[0](feature_info['VSpec']['var_lims'])
 
     # load scaling functions
     spectra_scaler = scaling(strat='normalize')
-    cnt = 0
+    spectra_scaled = spectra_scaler(spectra_3d, spectra_lims[0], spectra_lims[1])
     feature_list, target_labels = [], []
 
-    logger.info(f'\n{dimensions} Feature Extraction......')
+    logger.info(f'\nConv2D Feature Extraction......')
     iterator = range(n_time) if logger.level > 20 else tqdm(range(n_time))
     for iT in iterator:
         for iR in range(n_range):
-            if masked[iT, iR]: continue  # skip masked values
-
-            if dimensions == 'conv2d':
-                for iCh in range(n_chan):
-                    spc_matrix = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1]) * window_fcn
-                    cwtmatr = signal.cwt(spc_matrix, signal.ricker, scales)
-                    cwt_matrix[:, :, iCh] = cwt_scaler(cwtmatr, cwt_params['var_lims'][0], cwt_params['var_lims'][1]).T
-
-                #cwt_tensor = [cwt_matrix[:, :, icwt] for icwt in range(n_chan)]
-
-                cwt_tensor = [np.mean(cwt_matrix, axis=2), np.std(cwt_matrix, axis=2)]
-                feature_list.append(np.stack(cwt_tensor, axis=2))
-
-            else:
-                spc_list = []
-                for iCh in range(n_chan):
-                    spc_matrix[:, iCh] = spectra_scaler(spectra_3d[iT, iR, :, iCh], spectra_lims[0], spectra_lims[1])
-                    spc_list.append(spc_matrix[:, iCh])
-
-                #feature_list.append(np.stack([np.mean(spc_matrix, axis=1), np.std(spc_matrix, axis=1)], axis=1))
-                feature_list.append(np.stack(spc_list, axis=1))
-
-            if classes != []:
-                # sparse one hot encoding
-                target_labels.append(classes['var'][iT, iR] if classes['var'][iT, iR] < 8 else 8)
-            else:
-                target_labels.append(-999)
-
-            cnt += 1
+            if MASK[iT, iR]: continue  # skip MASK values
+            feature_list.append(spectra_scaled[iT, iR, :, :])
+            target_labels.append(classes['var'][iT, iR] if classes['var'][iT, iR] < 8 else 8)    # sparse one hot encoding
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
@@ -341,7 +225,7 @@ def load_features_and_labels(spectra, classes, **feature_info):
     logger.debug(f'min/max value in features = {np.min(FEATURES)},  maximum = {np.max(FEATURES)}')
     logger.debug(f'min/max value in targets  = {np.min(LABELS)},  maximum = {np.max(LABELS)}')
 
-    return FEATURES, LABELS, masked
+    return FEATURES, LABELS, MASK
 
 def load_radar_data(larda_connected, begin_dt, end_dt, **kwargs):
     """ This routine loads the radar spectra from an RPG cloud radar and caluclates the radar moments.
@@ -685,54 +569,31 @@ def load_features_from_nc(
     #   |__] |__/ |___ |__] |__| |__/ |___    [__  |__] |___ |     |  |__/ |__|
     #   |    |  \ |___ |    |  | |  \ |___    ___] |    |___ |___  |  |  \ |  |
     #
-    if 'HSI' in kind:
-
-        if len(ZSpec['VHSpec']['rg']) != len(rg_master):
-            ZSpec['VHSpec'] = interpolate3d(
-                ZSpec['VHSpec'],
-                new_time=ZSpec['VHSpec']['ts'],
-                new_range=rg_master,
-                method=interp
-            )
-
-        quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp', QUICKLOOK_PATH)
-
-        # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
-        interp_var, interp_mask = hyperspectralimage(
-            ZSpec['VHSpec']['ts'],
-            ZSpec['VHSpec']['var'],
-            ZSpec['VHSpec']['mask'],
-            new_time=ts_master,
-            n_channels=kwargs['n_channels']
+    if len(ZSpec['VHSpec']['rg']) != len(rg_master):
+        ZSpec['VHSpec'] = interpolate3d(
+            ZSpec['VHSpec'],
+            new_time=ZSpec['VHSpec']['ts'],
+            new_range=rg_master,
+            method=interp
         )
 
-        ZSpec['VHSpec']['ts'] = ts_master
-        ZSpec['VHSpec']['rg'] = rg_master
-        ZSpec['VHSpec']['var'] = interp_var
-        ZSpec['VHSpec']['mask'] = interp_mask
-        ZSpec['VHSpec']['dimlabel'] = ['time', 'range', 'vel', 'channel']
+    quick_check(ZSpec['SLv'], 'pseudoZe_3spec-range_interp', QUICKLOOK_PATH)
 
-    elif kind == 'avg30sec':
-        # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
-        interp_var, interp_mask = average_time_dim(
-            ZSpec['VHSpec']['ts'],
-            ZSpec['VHSpec']['rg'],
-            ZSpec['VHSpec']['var'],
-            ZSpec['VHSpec']['mask'],
-            new_time=ts_master
-        )
+    # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
+    interp_var, interp_mask = hyperspectralimage(
+        ZSpec['VHSpec']['ts'],
+        ZSpec['VHSpec']['var'],
+        ZSpec['VHSpec']['mask'],
+        new_time=ts_master,
+        n_channels=kwargs['n_channels']
+    )
 
-        ZSpec['VHSpec']['ts'] = ts_master
-        ZSpec['VHSpec']['var'] = interp_var
-        ZSpec['VHSpec']['mask'] = interp_mask
+    ZSpec['VHSpec']['ts'] = ts_master
+    ZSpec['VHSpec']['rg'] = rg_master
+    ZSpec['VHSpec']['var'] = interp_var
+    ZSpec['VHSpec']['mask'] = interp_mask
+    ZSpec['VHSpec']['dimlabel'] = ['time', 'range', 'vel', 'channel']
 
-        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-interp', QUICKLOOK_PATH)
-
-        ZSpec['VHSpec'] = interpolate3d(ZSpec['VHSpec'], new_time=ts_master, new_range=rg_master, method=interp)
-        quick_check(cloudnet_variables['CLASS'], 'pseudoZe_avg30spec-range-interp', QUICKLOOK_PATH)
-
-    else:
-        raise ValueError(f'Unknown KIND of pre-processing. {kind}')
 
     ############################################################################################################################################################
     #   _    ____ ____ ___     ___ ____ ____ _ _  _ _ _  _ ____ ____ ____ ___
@@ -742,15 +603,12 @@ def load_features_from_nc(
     config_global_model = toml.load(voodoo_path + ann_settings_file)
     USE_MODEL = config_global_model['tensorflow']['USE_MODEL']
 
-    if USE_MODEL in ['conv1d', 'conv2d']:
-        features, targets, masked = load_features_and_labels(
-            ZSpec['VHSpec'],
-            cloudnet_variables['CLASS'],
-            USE_MODEL=USE_MODEL,
-            **config_global_model['feature']
-        )
-    else:
-        raise ValueError(f'Unkown "USE_MODEL" variable = {USE_MODEL}')
+    features, targets, masked = load_features_and_labels(
+        ZSpec['VHSpec'],
+        cloudnet_variables['CLASS'],
+        USE_MODEL=USE_MODEL,
+        **config_global_model['feature']
+    )
 
     ############################################################################################################################################################
     #   ____ ____ _  _ ____    ___  ____ ____ ____    ____ _ _    ____ ____
@@ -804,7 +662,7 @@ if __name__ == '__main__':
 
     # load case information
     if load_from_toml:
-        case = load_case_list(CASE_LIST, case_string)
+        case = Utils.load_case_list(CASE_LIST, case_string)
         TIME_SPAN_ = [datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
     else:
         if 'dt_start' in kwargs and 't_train' in kwargs:
@@ -812,8 +670,8 @@ if __name__ == '__main__':
             dt_end   = dt_begin + timedelta(minutes=float(kwargs['t_train']))
             TIME_SPAN_ = [dt_begin, dt_end]
         else:
-            dt_begin = datetime.strptime('20200513-1900', '%Y%m%d-%H%M')
-            dt_end   = dt_begin + timedelta(minutes=15.0)
+            dt_begin = datetime.strptime('20200-1900', '%Y%m%d-%H%M')
+            dt_end   = dt_begin + timedelta(minutes=60.0)
             TIME_SPAN_ = [dt_begin, dt_end]
             #raise ValueError('Wrong dt_begin or dt_end')
 

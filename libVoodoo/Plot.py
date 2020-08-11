@@ -26,6 +26,8 @@ import pyLARDA.helpers as h
 import pyLARDA.Transformations as tr
 import pyLARDA.VIS_Colormaps as VIS_Colormaps
 
+import libVoodoo.Utils as Utils
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.CRITICAL)
 logger.addHandler(logging.StreamHandler())
@@ -39,9 +41,9 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
-FIG_SIZE_ = [12, 7]
-DPI_ = 200
-_FONT_SIZE = 12
+_FIG_SIZE = [12, 7]
+_DPI = 450
+_FONT_SIZE = 14
 _FONT_WEIGHT = 'normal'
 
 def History(history):
@@ -1001,3 +1003,83 @@ def plot_ll_thichkness(ax, t, l1, l2):
     ax1.legend(loc='best')
 
     return ax1
+
+
+def add_lwp_to_classification(prediction, classification, fig, ax, cloudnet=''):
+    # add the lwp ontop
+    dt_interval = [h.ts_to_dt(prediction['ts'][0]), h.ts_to_dt(prediction['ts'][-1])]
+    larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
+    lwp_container = larda.read(cloudnet, 'LWP', dt_interval)
+    lwp_container = tr.interpolate1d(lwp_container, new_time=prediction['ts'], new_rg=prediction['rg'])
+    dt_lwp = [h.ts_to_dt(ts) for ts in lwp_container['ts']]
+
+    ax.set_xlim([h.ts_to_dt(lwp_container['ts'][0]), h.ts_to_dt(lwp_container['ts'][-1])])
+    lwp_ax = _plot_bar_data(fig, ax, lwp_container['var'], dt_lwp)
+
+    sum_ll_thickness_nn = Utils.sum_liquid_layer_thickness(Utils.get_liquid_pixel_mask(prediction['var']), rg_res=prediction['rg'][1] - prediction['rg'][0])
+    sum_ll_thickness_cn = Utils.sum_liquid_layer_thickness(Utils.get_liquid_pixel_mask(classification['var']), rg_res=prediction['rg'][1] - prediction['rg'][0])
+    plot_ll_thichkness(lwp_ax, [h.ts_to_dt(ts) for ts in prediction['ts']], sum_ll_thickness_nn, sum_ll_thickness_cn)
+
+    # these are matplotlib.patch.Patch properties
+    props = {
+        'transform': ax.transAxes,
+        'fontsize': _FONT_SIZE,
+        'verticalalignment': 'top',
+        'bbox': dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    }
+
+    corr_lwp_nn = r'$R_{lwp-nn}^2=$' + f'{Utils.ma_corr_coef(lwp_container["var"], sum_ll_thickness_nn):.3f}'
+    corr_lwp_cn = r'$R_{lwp-cn}^2=$' + f'{Utils.ma_corr_coef(lwp_container["var"], sum_ll_thickness_cn):.3f}'
+    # place a text box in upper left in axes coords
+    logger.info('------ CORRELATIONS ------')
+    ax.text(1.1, 1.6, corr_lwp_nn, **props)
+    ax.text(1.1, 1.5, corr_lwp_cn, **props)
+    logger.info(f'correlation mwr-lwp vs. neural network liquid containing range gates :: {corr_lwp_nn}')
+    logger.info(f'correlation mwr-lwp vs. cloudnet liquid containing range gates :: {corr_lwp_cn}')
+
+    lwp_smoothed5min = h.smooth(lwp_container['var'], 10)  # 10 bins = 5 min
+
+    corr_lwp_nn_smoohed = r'$\tilde{R}_{lwp-nn}^2=$' + f'{Utils.ma_corr_coef(lwp_smoothed5min, h.smooth(sum_ll_thickness_nn, 10)):.3f}'
+    corr_lwp_cn_smoohed = r'$\tilde{R}_{lwp-cn}^2=$' + f'{Utils.ma_corr_coef(lwp_smoothed5min, h.smooth(sum_ll_thickness_cn, 10)):.3f}'
+    # place a text box in upper left in axes coords
+    ax.text(1.1, 1.4, corr_lwp_nn_smoohed, **props)
+    ax.text(1.1, 1.3, corr_lwp_cn_smoohed, **props)
+    logger.info(f'correlation 5min smoothed mwr-lwp vs. neural network liquid containing range gates :: {corr_lwp_nn_smoohed}')
+    logger.info(f'correlation 5min smoothed mwr-lwp vs. cloudnet liquid containing range gates :: {corr_lwp_cn_smoohed}')
+
+    return fig, ax
+
+
+def quicklooks(variables, **kwargs):
+    fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else _FIG_SIZE
+    plot_range = kwargs['plot_range'] if 'plot_range' in kwargs else variables['range_interval']
+    rg_converter = kwargs['rg_converter'] if 'rg_converter' in kwargs else True
+    larda = pyLARDA.LARDA().connect(variables['campaign'], build_lists=False)
+    savenames = {}
+    for _i, _name in enumerate(variables['var_name']):
+        for sys in variables['system']:
+            try:
+                logger.info(f"\nloading :: {variables['time_interval'][0]:%A %d. %B %Y - %H:%M:%S} to {variables['time_interval'][1]:%H:%M:%S} from nc.")
+                container = larda.read(sys, _name, variables['time_interval'], plot_range)
+                container['var'] = np.ma.masked_greater_equal(container['var'], 100.)
+
+                fig, ax = pyLARDA.Transformations.plot_timeheight(
+                    container,
+                    range_interval=plot_range,
+                    contour=variables['contour'],
+                    fig_size=fig_size,
+                    z_converter=variables['var_converter'][_i],
+                    rg_converter=rg_converter,
+                    font_size=_FONT_SIZE,
+                    font_weight=_FONT_WEIGHT,
+                )
+                key_name = f'{sys}-{_name}' if _name in ['CLASS', 'detection_status'] else _name
+                savenames[key_name] = f'{variables["case_name"]}-{variables["campaign"]}-{key_name}--{sys}.png'
+                fig.savefig(f'{variables["plot_dir"]}/{savenames[key_name]}', dpi=_DPI)
+                matplotlib.pyplot.close(fig=fig)
+                logger.info(f'plot saved --> {savenames[key_name]}')
+            except:
+                h.print_traceback(f"no {variables['campaign']} {_name}  {variables['time_interval']} available")
+
+    return savenames
+

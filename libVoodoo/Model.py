@@ -13,9 +13,6 @@ import numpy as np
 
 import libVoodoo.Utils as util
 
-os.environ["CUDA_VISIBLE_DEVICES"] = str(util.pick_gpu_lowest_memory())
-ID_GPU = os.environ["CUDA_VISIBLE_DEVICES"]
-
 # neural network imports
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -28,8 +25,24 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam, SGD, RMSprop, Nadam
 from tensorflow.python import debug as tf_debug
 
-tf.compat.v1.keras.backend.set_session(
-    tf_debug.TensorBoardDebugWrapperSession(tf.compat.v1.Session(), "sdig-workstation:6006"))
+#tf.compat.v1.keras.backend.set_session(
+#    tf_debug.TensorBoardDebugWrapperSession(tf.compat.v1.Session(), "sdig-workstation:6006"))
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+  # Create 2 virtual GPUs with 1GB memory each
+  try:
+    tf.config.experimental.set_virtual_device_configuration(
+        gpus[util.pick_gpu_lowest_memory()],
+        #[tf.config.experimental.VirtualDeviceConfiguration(memory_limit=None),
+        # tf.config.experimental.VirtualDeviceConfiguration(memory_limit=None)]
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=50000.)]
+        )
+    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPU,", len(logical_gpus), "Logical GPUs")
+  except RuntimeError as e:
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
 
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
@@ -54,6 +67,164 @@ __version__ = "0.0.1"
 __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
+
+
+def _get_regularizer(reg_string):
+    if reg_string == 'l1':
+        return tf.keras.regularizers.l1(l=0.1)
+    elif reg_string == 'l2':
+        return tf.keras.regularizers.l2(l=0.01)
+    elif reg_string == 'l1_l2':
+        return tf.keras.regularizers.l1_l2(l1=0.1, l2=0.01)
+    else:
+        return None
+
+def _get_initializer(krnl_string):
+    if krnl_string == 'random_normal':
+        return tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
+    else:
+        return None
+
+
+def _get_optimizer(opt, lr, dr, mom, beta_1=None, beta_2=None):
+    if opt == 'sgd':
+        return SGD(lr=lr, momentum=mom, decay=dr)
+    elif opt == 'Nadam':
+        return Nadam(learning_rate=lr, beta_1=beta_1, beta_2=beta_2)
+    elif opt == 'rmsprop':
+        return RMSprop(learning_rate=lr, rho=mom)
+    elif opt == 'adam':
+        return Adam(lr=lr, decay=dr)
+    else:
+        raise ValueError('Unknown OPTIMIZER!', opt)
+
+
+def _get_loss_function(loss):
+    if loss == 'BinaryCrossentropy':
+        return BinaryCrossentropy()
+    elif loss == 'CategoricalCrossentropy':
+        return CategoricalCrossentropy()
+    elif loss == 'SparseCategoricalCrossentropy':
+        return SparseCategoricalCrossentropy()
+    else:
+        raise ValueError('Unknown LOSS_FCNS!', loss)
+
+
+def define_convnet_new(n_input, n_output, MODEL_PATH='', **hyper_params):
+    """Defining/loading a Tensorflow model.
+
+    Args:
+        n_input (tuple): shape of the input tensor
+        n_output (tuple): shape of the output tensor
+
+    Keyword Args:
+        **MODEL_PATH (string): path where Tensorflow models are stored, needs to be provided when loading an existing model
+        **CONV_LAYERS (int): number of convolutional layers
+        **DENSE_LAYERS (int): number of dense layers
+        **DENSE_NODES (list): list containing the number of nodes per dense layer
+        **NFILTERS (list): list containing the number of nodes per conv layer
+        **KERNEL_SIZE (list): list containing the 2D kernel
+        **POOL_SIZE (list): dimensions of the pooling layers
+        **ACTIVATIONS (string): name of the activation functions for the convolutional layers
+        **ACTIVATION_OL (string): name of the activation functions for the dense output layer
+        **BATCH_NORM (boolean): normalize the input layer by adjusting and scaling the activations
+        **LOSS_FCNS (string): name of the loss function, default: 'CategoricalCrossentropy'
+        **OPTIMIZER (string): name of the optimizer method, default: 'adam'
+        **beta_1 (float): additional parameter for nadam optimizer, default: 0.9
+        **beta_2 (float): additional parameter for nadam optimizer, default: 0.999
+        **LEARNING_RATE (float): controls the speed of the training process, default: 1.e-4
+        **DECAY_RATE (float): controls the decay of the learning rate, default: 1.e-3
+        **MOMENTUM (float): additional parameter for optimizers, default: 0.9
+
+    Returns:
+        model (Tensorflow object): definded/loaded Tensorflow model
+    """
+
+    if os.path.exists(MODEL_PATH):
+        # load model
+        model = keras.models.load_model(MODEL_PATH)
+        print(f'Loaded model from disk:\n{MODEL_PATH}')
+        model.summary()
+        return model
+
+    DENSE_LAYERS = hyper_params['DENSE_LAYERS'] if 'DENSE_LAYERS' in hyper_params else ValueError('DENSE_LAYERS missing!')
+    NFILTERS = hyper_params['NFILTERS'] if 'NFILTERS' in hyper_params else ValueError('NFILTERS missing!')
+    KERNEL_SIZE = hyper_params['KERNEL_SIZE'] if 'KERNEL_SIZE' in hyper_params else ValueError('KERNEL_SIZE missing!')
+    STRIDE_SIZE = hyper_params['STRIDE_SIZE'] if 'STRIDE_SIZE' in hyper_params else ValueError('STRIDE_SIZE missing!')
+    POOL_SIZE = hyper_params['POOL_SIZE'] if 'POOL_SIZE' in hyper_params else False
+    KERNEL_INITIALIZER = hyper_params['KERNEL_INITIALIZER'] if 'KERNEL_INITIALIZER' in hyper_params else ''
+    REGULARIZER = hyper_params['REGULARIZER'] if 'REGULARIZER' in hyper_params else ''
+    ACTIVATION = hyper_params['ACTIVATIONS'] if 'ACTIVATIONS' in hyper_params else ValueError('ACTIVATIONS missing!')
+    ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
+    BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
+    DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
+
+    # create the model and add the input layer
+    regularizers = _get_regularizer(REGULARIZER)
+    initializer = _get_initializer(KERNEL_INITIALIZER)
+
+    mirrored_strategy = tf.distribute.MirroredStrategy(
+        devices=[f'/gpu:{str(util.pick_gpu_lowest_memory())}'],
+    )
+
+    with mirrored_strategy.scope():
+        inputs = Input(shape=n_input)
+
+        # add convolutional layers
+        conv_layer_settings = {
+            'activation': ACTIVATION,
+            'padding': "same",
+            'kernel_initializer': initializer,
+            'kernel_regularizer': regularizers,
+        }
+        for i, (ifilt, ikern, istrd, ipool) in enumerate(zip(NFILTERS, KERNEL_SIZE, STRIDE_SIZE, POOL_SIZE)):
+            conv_layer_settings.update({'strides': istrd, 'name': f'Conv2D-layer-{i}'})
+            x = inputs if i == 0 else x
+            x = Conv2D(ifilt, ikern, **conv_layer_settings)(x)
+            if BATCH_NORM: x = BatchNormalization()(x)
+            if POOL_SIZE: x = MaxPool2D(pool_size=ipool)(x)
+
+        x = Flatten()(x)
+        dense_layer_settings = {
+            'activation': ACTIVATION,
+            'kernel_initializer': initializer,
+            'kernel_regularizer': regularizers,
+        }
+        for i, idense in enumerate(DENSE_LAYERS):
+            dense_layer_settings.update({'name': f'dense-layer-{i}'})
+
+            x = Dense(idense, **dense_layer_settings)(x)
+            if BATCH_NORM: x = BatchNormalization()(x)
+            if DROPOUT > 0.0: x = Dropout(DROPOUT)(x)
+
+        outputs = Dense(n_output[0], activation=ACTIVATION_OL, name='prediction')(x)
+        model = keras.Model(inputs, outputs)
+        print(f"Created model {MODEL_PATH}")
+
+        LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
+        OPTIMIZER = hyper_params['OPTIMIZER'] if 'OPTIMIZER' in hyper_params else ValueError('OPTIMIZER missing!')
+        beta_1 = hyper_params['beta_1'] if 'beta_1' in hyper_params else 0.9
+        beta_2 = hyper_params['beta_2'] if 'beta_2' in hyper_params else 0.999
+        learning_rate = hyper_params['LEARNING_RATE'] if 'LEARNING_RATE' in hyper_params else 1.e-4
+        decay_rate = hyper_params['DECAY_RATE'] if 'DECAY_RATE' in hyper_params else learning_rate * 1.e-3
+        momentum = hyper_params['MOMENTUM'] if 'MOMENTUM' in hyper_params else 0.9
+
+        model.compile(
+            optimizer=_get_optimizer(OPTIMIZER, learning_rate, decay_rate, momentum, beta_1=beta_1, beta_2=beta_2),
+            loss=_get_loss_function(LOSSES),
+            metrics=['sparse_categorical_accuracy']
+        )
+    model.summary()
+
+    """
+    import sys
+    import pyLARDA.helpers as h
+    h.change_dir(sys.path[0])
+    os.environ["PATH"] += os.pathsep + '/home/sdig/anaconda3/pkgs/graphviz-2.40.1-h21bd128_2/bin/'
+    tf.keras.utils.plot_model(model, show_shapes=True, to_file='quicklook.png')
+    """
+
+    return model
 
 
 def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
@@ -103,7 +274,6 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
         ACTIVATION_OL = hyper_params['ACTIVATION_OL'] if 'ACTIVATION_OL' in hyper_params else 'softmax'
         BATCH_NORM = hyper_params['BATCH_NORM'] if 'BATCH_NORM' in hyper_params else False
         DROPOUT = hyper_params['DROPOUT'] if 'DROPOUT' in hyper_params else -1.0
-        DEVICE = ID_GPU
 
         # create the model and add the input layer
 
@@ -111,7 +281,6 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
             initializer = tf.random_normal_initializer(mean=0.0, stddev=1.0, seed=None)
         else:
             initializer = None
-
 
         if REGULARIZER == 'l1':
             regularizers = tf.keras.regularizers.l1(l=0.1)
@@ -122,7 +291,9 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
         else:
             regularizers = None
 
-        mirrored_strategy = tf.distribute.MirroredStrategy(devices=[f"/gpu:{DEVICE}"])
+        mirrored_strategy = tf.distribute.MirroredStrategy(
+            devices=[f'/gpu:{str(util.pick_gpu_lowest_memory())}'],
+        )
 
         if CONV_DIMENSION == 'conv2d':
             ConvLayer, Pooling = Conv2D, MaxPool2D
@@ -167,8 +338,8 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
                 if BATCH_NORM:    model.add(BatchNormalization())
                 if DROPOUT > 0.0: model.add(Dropout(DROPOUT))
 
-            model.add(Dense(n_output, activation=ACTIVATION_OL, name='prediction'))
-            #model.add(Dense(n_output[0], activation=ACTIVATION_OL, name='prediction'))
+            model.add(Dense(n_output[0], activation=ACTIVATION_OL, name='prediction'))
+            # model.add(Dense(n_output[0], activation=ACTIVATION_OL, name='prediction'))
             print(f"Created model {MODEL_PATH}")
 
             LOSSES = hyper_params['LOSS_FCNS'] if 'LOSS_FCNS' in hyper_params else ValueError('LOSS_FCNS missing!')
@@ -210,7 +381,6 @@ def define_convnet(n_input, n_output, MODEL_PATH='', **hyper_params):
     tf.keras.utils.plot_model(model, show_shapes=True, to_file='quicklook.png')
     """
 
-
     return model
 
 
@@ -227,7 +397,6 @@ def training(model, train_set, train_label, **hyper_params):
         **EPOCHS:
         **LOG_PATH: path for keeping the training log files
         **MODEL_PATH: path for keeping the tensorflow optimized weights/biases
-        **DEVICE (int): GPU used, default: 0
         **validation: [features, labels] validation dataset
 
     Returns:
@@ -240,7 +409,6 @@ def training(model, train_set, train_label, **hyper_params):
     EPOCHS = hyper_params['EPOCHS'] if 'EPOCHS' in hyper_params else ValueError('EPOCHS missing!')
     LOG_PATH = hyper_params['LOG_PATH'] if 'LOG_PATH' in hyper_params else ValueError('LOG_PATH missing!')
     MODEL_PATH = hyper_params['MODEL_PATH'] if 'MODEL_PATH' in hyper_params else ValueError('MODEL_PATH missing!')
-    DEVICE = hyper_params['DEVICE'] if 'DEVICE' in hyper_params else 0
     VALID_SET = hyper_params['validation'] if 'validation' in hyper_params else ()
 
     # log model training to tensorboard callback
@@ -252,11 +420,12 @@ def training(model, train_set, train_label, **hyper_params):
     # initialize tqdm callback with default parameters
     tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
-    # with tf.device(f'/gpu:{DEVICE}'):
+    training_data = tf.data.Dataset.from_tensor_slices((train_set, train_label)).shuffle(train_set.shape[0], reshuffle_each_iteration=True)
+    training_data = training_data.batch(BATCH_SIZE)
+    validation_data = tf.data.Dataset.from_tensor_slices(VALID_SET).batch(BATCH_SIZE, drop_remainder=True)
+
     history = model.fit(
-        train_set,
-        train_label,
-        batch_size=BATCH_SIZE,
+        training_data,
         epochs=EPOCHS,
         shuffle=True,
         callbacks=[
@@ -264,9 +433,7 @@ def training(model, train_set, train_label, **hyper_params):
             tqdm_callback,
             # lr_callback
         ],
-        # validation_split=0.1,
-        validation_data=VALID_SET,
-        # callbacks=[PrintDot()],
+        validation_data=validation_data,
         verbose=0
     )
 
@@ -277,7 +444,7 @@ def training(model, train_set, train_label, **hyper_params):
     return history
 
 
-def predict_classes(model, test_set):
+def predict_classes(model, test_set, batch_size=128):
     """Prediction of classes with a Tensorflow model.
 
     Args:
@@ -288,32 +455,13 @@ def predict_classes(model, test_set):
         predicted_classes (Tensorflow object): trained Tensorflow model
 
     """
-    return model.predict(test_set, verbose=1)
-
-
-def one_hot_to_classes(cnn_pred, mask):
-    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
-
-    Args:
-        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
-        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
-
-    Returns:
-        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
-    """
-    predicted_classes = np.zeros(mask.shape, dtype=np.float32)
-    predicted_probability = np.zeros(mask.shape, dtype=np.float32)
-    cnt = 0
-    for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
-        if mask[iT, iR]: continue
-        predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
-        predicted_probability[iT, iR] = np.max(cnn_pred[cnt])
-        #        if predicted_classes[iT, iR] in [1, 5]:
-        #            if np.max(cnn_pred[cnt]) < 0.5:
-        #                predicted_classes[iT, iR] = 4
-        cnt += 1
-
-    return predicted_classes, predicted_probability
+    mirrored_strategy = tf.distribute.MirroredStrategy(
+        devices=[f'/gpu:{str(util.pick_gpu_lowest_memory())}'],
+    # cross_device_ops=tf.contrib.distribute.AllReduceCrossDeviceOps(all_reduce_alg="hierarchical_copy")
+    )
+    with mirrored_strategy.scope():
+        #test_set = tf.data.Dataset.from_tensor_slices(test_set).batch(batch_size)
+        return model.predict(test_set, verbose=1)
 
 
 # copy from https://github.com/jg-fisher/autoencoder/blob/master/ffae.py

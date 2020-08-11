@@ -44,8 +44,8 @@ if __name__ == '__main__':
         dt_begin = datetime.datetime.strptime(f'{kwargs["dt_start"]} 0000', '%Y%m%d %H%M')
         dt_end   = datetime.datetime.strptime(f'{kwargs["dt_end"]} 2359', '%Y%m%d %H%M')
     else:
-        dt_begin = datetime.datetime.strptime(f'20190306 0000', '%Y%m%d %H%M')
-        dt_end   = datetime.datetime.strptime(f'20190306 2359', '%Y%m%d %H%M')
+        dt_begin = datetime.datetime.strptime(f'20190904 0000', '%Y%m%d %H%M')
+        dt_end   = datetime.datetime.strptime(f'20190904 2359', '%Y%m%d %H%M')
         #raise ValueError('Wrong dt_begin or dt_end'
 
     generate_multicase_trainingset(

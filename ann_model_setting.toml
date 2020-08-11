@@ -35,11 +35,9 @@
 
     USE_MODEL = 'conv2d'
 
-    DEVICE = 0
-
-    BATCH_SIZE   = 128    # √
+    BATCH_SIZE   = 64# √
     BATCH_NORM   = true
-    EPOCHS       = 5
+    EPOCHS       = 15
 
     #KERNEL_INITIALIZER = 'random_normal'
     #REGULARIZER = 'l1_l2'
@@ -51,7 +49,7 @@
     OPTIMIZER   = 'adam'
 
     # why elu? --> https://arxiv.org/pdf/1511.07289.pdf
-    ACTIVATIONS  = 'relu'    # 'relu
+    ACTIVATIONS  = 'elu'    # 'relu
     ACTIVATIONS_OL  = 'softmax'
     LOSS_FCNS    = 'SparseCategoricalCrossentropy'
 
@@ -79,7 +77,7 @@
 
     [feature.VSpec]
         use = true
-        add_flipped = true
+        add_flipped = false
         var_lims = [1.0e-7, 1.0e2]
         var_converter= 'lin2z'
         scaling = 'normalize'
