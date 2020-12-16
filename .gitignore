@@ -3,11 +3,17 @@
 /deprecated/**/*
 /models/**/*
 /plots/**/*
+/tomls/**/*
 /libVoodoo/plots/**/*
 __pycache__/**/*
+/**/__pycache__/**/*
+/**/.ipynb_checkpoints/**/*
+/voodoo.egg-info/
 build/**/*
 data/**/*
+dist/**/*
 nc-files/**/*
+/**/*.sh
 
 # ignore files
 training*
