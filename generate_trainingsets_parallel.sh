@@ -3,7 +3,7 @@
 # default values
 t_train=60.0
 kind="HSI"
-site='limtower'
+site='lacros_dacapo_gpu'
 cloudnet="CLOUDNETpy94"
 
 if [[ $1 != "" ]]; then
@@ -43,7 +43,7 @@ if [[ $1 != "" ]]; then
 else
     echo "USE PRE-DEFINED DATE"
 
-    start_day="20190313"; end_day="20190313"; start_hour="0000"; end_hour="2359"; c
+    start_day="20181127"; end_day="20190928"; start_hour="0000"; end_hour="2359";
 
 fi
 
@@ -52,7 +52,7 @@ dt_start=$(date -d "$start_day $start_hour" +"%Y%m%d %H%M")
 dt_end=$(date -d "$end_day $end_hour" +"%Y%m%d %H%M")
 
 # generate le toml file contianing the intervals
-python ./generate_toml.py dt_start="$dt_start" dt_end="$dt_end" t_train="$t_train" t_skip="$t_train"
+#python ./generate_toml.py dt_start="$dt_start" dt_end="$dt_end" t_train="$t_train" t_skip="$t_train"
 
 pids=""
 RESULT=0

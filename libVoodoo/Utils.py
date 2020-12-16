@@ -1,22 +1,44 @@
-import traceback
-
+import datetime
 import logging
-import numpy as np
-import pyLARDA.helpers as h
 import re
 import subprocess
 import sys
+import traceback
+from itertools import groupby
 from itertools import product
-from jinja2 import Template
-from pyLARDA.Transformations import combine
-from tqdm.auto import tqdm
-import datetime
+
+import numpy as np
 import toml
 import xarray as xr
+from jinja2 import Template
+from tqdm.auto import tqdm
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('libVoodoo')
 logger.setLevel(logging.CRITICAL)
-logger.addHandler(logging.StreamHandler())
+
+cloudnetpy_classes = [
+    'Clear sky',
+    'Cloud liquid droplets only',
+    'Drizzle or rain.',
+    'Drizzle/rain & cloud droplet',
+    'Ice particles.',
+    'Ice coexisting with supercooled liquid droplets.',
+    'Melting ice particles',
+    'Melting ice & cloud droplets',
+    'Aerosol',
+    'Insects',
+    'Aerosol and Insects',
+]
+
+cloudnetpy_category_bits = [
+    'Small liquid droplets are present.',
+    'Falling hydrometeors are present',
+    'Wet-bulb temperature is less than 0 degrees C, implying the phase of Bit-1 particles.',
+    'Melting ice particles are present.',
+    'Aerosol particles are present and visible to the lidar.',
+    'Insects are present and visible to the radar.'
+]
+
 
 def read_cmd_line_args(argv=None):
     """Command-line -> method call arg processing.
@@ -60,10 +82,12 @@ def read_cmd_line_args(argv=None):
             args.append(value)
     return method_name, args, kwargs
 
+
 def run_command(cmd):
     """Run command, return output as string."""
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     return output.decode("ascii")
+
 
 def list_available_gpus():
     """Returns list of available GPU ids."""
@@ -76,6 +100,7 @@ def list_available_gpus():
         assert m, "Couldnt parse " + line
         result.append(int(m.group("gpu_id")))
     return result
+
 
 def gpu_memory_map():
     """Returns map of GPU id to memory allocated on that GPU."""
@@ -96,12 +121,92 @@ def gpu_memory_map():
         result[gpu_id] += gpu_memory
     return result
 
+
 def pick_gpu_lowest_memory():
     """Returns GPU with the least allocated memory"""
 
     memory_gpu_map = [(memory, gpu_id) for (gpu_id, memory) in gpu_memory_map().items()]
     best_memory, best_gpu = sorted(memory_gpu_map)[0]
     return best_gpu
+
+
+def get_nan_mask(arr):
+    mask = np.full(arr.shape, False)
+    mask[arr >= 0.0] = True
+    return mask
+
+
+def get_combined_mask(classes, indices, *status):
+    mask = np.full(classes.shape, False)
+    for idx in indices:
+        mask[classes == idx] = True
+    if len(status) > 0: mask[status[0] == 1] = False  # remove lidar echos only
+    return mask
+
+
+def correlation(X, Y, n_smooth=10):
+    import pyLARDA.helpers as h
+
+    corr = ma_corr_coef(X, Y)
+
+    X_smoothed = h.smooth(X, n_smooth)  # 10 bins = 5 min
+    Y_smoothed = h.smooth(Y, n_smooth)  # 10 bins = 5 min
+    corr_smoothed = ma_corr_coef(X_smoothed, Y_smoothed)
+    return corr, corr_smoothed
+
+
+def corr_(x, y):
+    return np.ma.corrcoef(np.ma.masked_less_equal(x, 0.0), np.ma.masked_less_equal(y, 0.0))[0, 1]
+
+
+def get_cloud_base_from_liquid_mask(liq_mask, rg):
+    """
+    Function returns the time series of cloud base height in meter.
+    Args:
+        liq_mask:
+        rg: range values
+
+    Returns: cloud base height
+
+    """
+    _, cbct_mask = find_bases_tops(liq_mask * 1, rg)
+    n_ts = liq_mask.shape[0]
+
+    CB = np.full(n_ts, np.nan)
+
+    for iT in range(n_ts):
+        idx = np.argwhere(cbct_mask[iT, :] == -1)
+        CB[iT] = rg[int(idx[0])] if len(idx) > 0 else 0.0
+    return CB
+
+
+def find_bases_tops(mask, rg_list):
+    """
+    This function finds cloud bases and tops for a provided binary cloud mask.
+    Args:
+        mask (np.array, dtype=bool) : bool array containing False = signal, True=no-signal
+        rg_list (list) : list of range values
+
+    Returns:
+        cloud_prop (list) : list containing a dict for every time step consisting of cloud bases/top indices, range and width
+        cloud_mask (np.array) : integer array, containing +1 for cloud tops, -1 for cloud bases and 0 for fill_value
+    """
+    cloud_prop = []
+    cloud_mask = np.full(mask.shape, 0, dtype=np.int)
+    for iT in range(mask.shape[0]):
+        cloud = [(k, sum(1 for j in g)) for k, g in groupby(mask[iT, :])]
+        idx_cloud_edges = np.cumsum([prop[1] for prop in cloud])
+        bases, tops = idx_cloud_edges[0:][::2][:-1], idx_cloud_edges[1:][::2]
+        if tops.size > 0 and tops[-1] == mask.shape[1]:
+            tops[-1] = mask.shape[1] - 1
+        cloud_mask[iT, bases] = -1
+        cloud_mask[iT, tops] = +1
+        cloud_prop.append({'idx_cb': bases, 'val_cb': rg_list[bases],  # cloud bases
+                           'idx_ct': tops, 'val_ct': rg_list[tops],  # cloud tops
+                           'width': [ct - cb for ct, cb in zip(rg_list[tops], rg_list[bases])]
+                           })
+    return cloud_prop, cloud_mask
+
 
 def write_ann_config_file(**kwargs):
     """
@@ -118,6 +223,7 @@ def write_ann_config_file(**kwargs):
     Returns:    0
 
     """
+    import pyLARDA.helpers as h
     path = kwargs['path'] if 'path' in kwargs else ''
     name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
     if len(path) > 0: h.change_dir(path)
@@ -127,6 +233,7 @@ def write_ann_config_file(**kwargs):
         json.dump(kwargs, out, sort_keys=True, indent=4, ensure_ascii=False)
     print(f'Saved ann configure file :: {name}')
     return 0
+
 
 def read_ann_config_file(**kwargs):
     """
@@ -143,6 +250,7 @@ def read_ann_config_file(**kwargs):
     Returns:    0
 
     """
+    import pyLARDA.helpers as h
     path = kwargs['path'] if 'path' in kwargs else ''
     name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
     if len(path) > 0: h.change_dir(path)
@@ -152,6 +260,7 @@ def read_ann_config_file(**kwargs):
         data = json.load(json_file)
     print(f'Loaded ann configure file :: {name}')
     return data
+
 
 def make_html_overview(template_loc, case_study_info, png_names):
     print('case_config', case_study_info)
@@ -168,7 +277,6 @@ def make_html_overview(template_loc, case_study_info, png_names):
                 )
             )
 
-
         """
         <!--
         {% for key, value in data.items() %}
@@ -177,11 +285,14 @@ def make_html_overview(template_loc, case_study_info, png_names):
         -->
         """
 
+
 def get_explorer_link(campaign, time_interval, range_interval, params):
+    import pyLARDA.helpers as h
     s = "http://larda.tropos.de/larda3/explorer/{}?interval={}-{}%2C{}-{}&params={}".format(
         campaign, h.dt_to_ts(time_interval[0]), h.dt_to_ts(time_interval[1]),
         *range_interval, ",".join(params))
     return s
+
 
 def traceback_error(time_span):
     exc_type, exc_value, exc_tb = sys.exc_info()
@@ -228,6 +339,7 @@ def container_from_prediction(ts, rg, var, mask, **kwargs):
 
 
 def get_isotherms(temperature, ts, rg, mask, **kwargs):
+    from pyLARDA.Transformations import combine
     def toC(datalist):
         return datalist[0]['var'] - 273.15, datalist[0]['mask']
 
@@ -252,7 +364,7 @@ def get_isotherms(temperature, ts, rg, mask, **kwargs):
 
 def variable_to_container(var, ts, rg, mask, **kwargs):
     container = {}
-    container['dimlabel'] = ['time', 'range']
+    container['dimlabel'] = ['time', 'range'] if len(var.shape) == 2 else ['time']
     container['name'] = kwargs['name']
     container['joints'] = ''
     container['paraminfo'] = ''
@@ -262,33 +374,38 @@ def variable_to_container(var, ts, rg, mask, **kwargs):
     container['system'] = kwargs['CLOUDNET'] if 'CLOUDNET' in kwargs else 'unknown'
     container['ts'] = ts
     container['rg'] = rg
-    container['var_lims'] = [240.0, 320.0]
-    container['var_unit'] = 'K'
+    container['var_lims'] = kwargs['var_lims'] if 'var_lims' in kwargs else [0., 1000.0]
+    container['var_unit'] = kwargs['var_unit'] if 'var_unit' in kwargs else 'K'
     container['mask'] = mask
     container['var'] = var
     return container
 
 
-def post_processor_temperature(data, contour):
-    import copy
-    container = copy.deepcopy(data)
-    melting_temp = 2.5  # °C
-    idx_Tplus_ice = (contour['data']['var'] > melting_temp) * (container['var'] == 4)
-    container['var'][idx_Tplus_ice] = 2
+def post_processor_temperature(data, temperature, **kwargs):
+    data_out = np.copy(data)
 
-    idx_Tplus_mixed = (contour['data']['var'] > melting_temp) * (container['var'] == 5)
-    container['var'][idx_Tplus_mixed] = 3  # set to drizzle/rain & cloud droplets
+    if 'melting' in kwargs:
+        melting_temp = 0.0  # °C
+        # idx_Tplus_ice = (temperature > melting_temp) * (data_out == 4)
+        # data_out[idx_Tplus_ice] = 2
 
-    idx_droplets_mixed = ((container['var'] == 1) + (container['var'] == 5))
-    idx_hetero_freezing = (contour['data']['var'] < -40.0)
-    container['var'][idx_hetero_freezing * idx_droplets_mixed] = 4  # set to ice
+        idx_Tplus_mixed = (temperature > melting_temp) * (data_out == 5)
+        data_out[idx_Tplus_mixed] = 3  # set to drizzle/rain & cloud droplets
 
-    idx_Tneg0_drizzle = (contour['data']['var'] < melting_temp) * (container['var'] == 2)
-    container['var'][idx_Tneg0_drizzle] = 4  # set to ice
+        idx_Tneg0_drizzle = (temperature < melting_temp) * (data_out == 2)
+        data_out[idx_Tneg0_drizzle] = 4  # set to ice
+
+        idx_Tneg_melting = (temperature < - 1.0) * (data_out == 6)
+        data_out[idx_Tneg_melting] = 4
+
+    if 'hetero_freezing' in kwargs:
+        idx_droplets_mixed = ((data_out == 1) + (data_out == 5))
+        idx_hetero_freezing = (temperature < -40.0)
+        data_out[idx_hetero_freezing * idx_droplets_mixed] = 4  # set to ice
 
     logger.info('Postprocessing temperature info done.')
 
-    return container
+    return data_out
 
 
 def get_good_radar_and_lidar_index(version):
@@ -309,44 +426,35 @@ def get_good_lidar_only_index(version):
         raise ValueError(f'Wrong Cloudnet Version: {version}')
 
 
-def post_processor_cloudnet_quality_flag(data, cloudnet_status, clodudnet_class, cloudnet_type=''):
-    import copy
-
-    container = copy.deepcopy(data)
+def post_processor_cloudnet_quality_flag(data, cloudnet_status, cloudnet_class, cloudnet_type=''):
+    data_out = np.copy(data)
     GoodRadarLidar = cloudnet_status == get_good_radar_and_lidar_index(cloudnet_type)
     GoodLidarOnly = cloudnet_status == get_good_lidar_only_index(cloudnet_type)
 
-    container['var'][GoodRadarLidar] = clodudnet_class[GoodRadarLidar]
-    container['var'][GoodLidarOnly] = clodudnet_class[GoodLidarOnly]
+    data_out[GoodRadarLidar] = cloudnet_class[GoodRadarLidar]
+    data_out[GoodLidarOnly] = cloudnet_class[GoodLidarOnly]
 
     if cloudnet_type in ['CLOUDNET', 'CLOUDNET_LIMRAD']:
         KnownAttenuation = cloudnet_status == 6
-        container['var'][KnownAttenuation] = clodudnet_class[KnownAttenuation]
+        data_out[KnownAttenuation] = cloudnet_class[KnownAttenuation]
 
     logger.info('Postprocessing status flag done.')
-    return container
+    return data_out
 
 
 def post_processor_cloudnet_classes(data, cloudnet_class):
-    import copy
-    container = copy.deepcopy(data)
-    CloudDroplets = cloudnet_class == 1
-    Drizzle = cloudnet_class == 2
-    DrizzleCloudDroplets = cloudnet_class == 3
-    MixedPhase = cloudnet_class == 5
-    MeltingLayer = (cloudnet_class == 6) + (cloudnet_class == 7)
+    data_out = np.copy(data)
 
-    container['var'][MixedPhase] = cloudnet_class[MixedPhase]
-    container['var'][CloudDroplets] = cloudnet_class[CloudDroplets]
-    container['var'][Drizzle] = cloudnet_class[Drizzle]
-    container['var'][MeltingLayer] = cloudnet_class[MeltingLayer]
-    container['var'][DrizzleCloudDroplets] = cloudnet_class[DrizzleCloudDroplets]
+    # reclassify all except of ice
+    for iclass in [1, 2, 3, 5, 6, 7, 8, 9, 10]:
+        indices = cloudnet_class == iclass
+        data_out[indices] = cloudnet_class[indices]
 
     logger.info('Postprocessing cloudnet classes done.')
-    return container
+    return data_out
 
 
-def post_processor_homogenize(data, nlabels):
+def post_processor_homogenize(classes, nlabels=9):
     """
     Homogenization a la Shupe 2007:
         Remove small patches (speckle) from any given mask by checking 5x5 box
@@ -366,12 +474,11 @@ def post_processor_homogenize(data, nlabels):
     def gen_one_hot(classes):
         one_hot = np.zeros(nlabels)
         for class_ in classes[iT:iT + WSIZE, iR:iR + WSIZE].flatten():
-            one_hot[int(class_)] = 1
+            if int(class_) < 9:
+                one_hot[int(class_)] = 1
+            else:
+                one_hot[8] = 1
         return one_hot
-
-    import copy
-    container = copy.deepcopy(data)
-    classes = container['var']
 
     n_dim = WSIZE // 2
     mask = classes == 0
@@ -408,10 +515,42 @@ def post_processor_homogenize(data, nlabels):
         # (rule 7c shupe 2007) change to dominant type
         classes_out[iT, iR] = np.argmax(n_samples_total)
 
-    classes_out[mask] = 0
-    container['var'] = classes_out
+    return classes_out
 
-    return container
+
+def postprocessor(xr_ds, smooth=False):
+    # POST PROCESSOR ON
+    postprocessed = xr_ds.voodoo_classification.copy()
+
+    postprocessed.values = post_processor_temperature(
+        postprocessed.values,
+        xr_ds.temperature.values - 273.15,
+        melting=True
+    )
+    # postprocessed.values = Utils.post_processor_temperature(
+    #    postprocessed.values, xr_ds.temperature, melting=True
+    # )
+    postprocessed.values = post_processor_cloudnet_quality_flag(
+        postprocessed.values, xr_ds.detection_status.values, xr_ds.target_classification.values,
+        cloudnet_type='CLOUDNETpy94',
+        # cloudnet_type = self.CLOUDNET
+    )
+    postprocessed.values = post_processor_cloudnet_classes(
+        postprocessed.values, xr_ds.target_classification.values
+    )
+    postprocessed.values = post_processor_homogenize(
+        postprocessed.values
+    )
+    postprocessed.values = post_processor_temperature(
+        postprocessed.values, xr_ds.temperature.values - 273.15, hetero_freezing=True
+    )
+    # update the mask
+    mask_proc = xr_ds.mask.copy()
+    mask_proc.values[postprocessed.values > 0] = False
+
+    postprocessed.attrs['system'] = 'Voodoo'
+
+    return postprocessed
 
 
 def sum_liquid_layer_thickness(liquid_pixel_mask, rg_res=30.0):
@@ -461,18 +600,14 @@ def load_training_mask(classes, status, cloudnet_type):
     # create mask
     valid_samples = np.full(status.shape, False)
     valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
-    # valid_samples[status == 2]  = True   # add good radar only
     valid_samples[classes == 5] = True  # add mixed-phase class pixel
-    # valid_samples[classes == 6] = True   # add melting layer class pixel
-    # valid_samples[classes == 7] = True   # add melting layer + SCL class pixel
+    valid_samples[classes == 6] = True  # add melting layer class pixel
+    valid_samples[classes == 7] = True  # add melting layer + SCL class pixel
     valid_samples[classes == 1] = True  # add cloud droplets only class
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
     valid_samples[status == idx_good_lidar_only] = False
 
-    # if polly processing, remove aerosol and insects (most actually drizzle)
-    if cloudnet_type in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        valid_samples[classes == 10] = False
     return ~valid_samples
 
 
@@ -488,14 +623,65 @@ def load_case_list(path, case_name):
     return config_case_studies['case'][case_name]
 
 
+def log_number_of_classes(classes, text=''):
+    # numer of samples per class afer removing ice
+    class_n_distribution = np.zeros(len(cloudnetpy_classes))
+    logger.critical(text)
+    logger.critical(f'{classes.size:12d}   total')
+    for i in range(len(cloudnetpy_classes)):
+        n = np.sum(classes == i)
+        logger.critical(f'{n:12d}   {cloudnetpy_classes[i]}')
+        class_n_distribution[i] = n
+    return class_n_distribution
+
+
+def target_class2bit_mask(target_labels):
+    #
+    #     clutter = categorize_bits.quality_bits['clutter']
+    #     classification = np.zeros(bits['cold'].shape, dtype=int)
+    #     classification[bits['droplet'] & ~bits['falling']] = 1
+    #     classification[~bits['droplet'] & bits['falling']] = 2
+    #     classification[bits['droplet'] & bits['falling']] = 3
+    #     classification[~bits['droplet'] & bits['falling'] & bits['cold']] = 4
+    #     classification[bits['droplet'] & bits['falling'] & bits['cold']] = 5
+    #     classification[bits['melting']] = 6
+    #     classification[bits['melting'] & bits['droplet']] = 7
+    #     classification[bits['aerosol']] = 8
+    #     classification[bits['insect'] & ~clutter] = 9
+    #     classification[bits['aerosol'] & bits['insect'] & ~clutter] = 10
+    #     classification[clutter & ~bits['aerosol']] = 0
+
+    #     bit_mask: droplet(0) / falling(1) / cold(2) / melting(3) / insect(4)
+
+    bit_mask = np.zeros((target_labels.size, 5))
+    # cloud droplets only
+    droplets = (target_labels == 1) + (target_labels == 3) + (target_labels == 5) + (target_labels == 7)
+    falling = (target_labels == 2) + (target_labels == 3) + (target_labels == 4) + (target_labels == 5)
+    cold = (target_labels == 4) + (target_labels == 5)
+    melting = (target_labels == 6) + (target_labels == 7)
+    insects = (target_labels == 9) + (target_labels == 10)
+    bit_mask[droplets, 0] = 1
+    bit_mask[falling, 1] = 1
+    bit_mask[cold, 2] = 1
+    bit_mask[melting, 3] = 1
+    bit_mask[insects, 4] = 1
+
+    return bit_mask
+
+
 def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
     N_NOT_AVAILABLE = 0
-    feature_set, target_labels, masked_total = [], [], []
-    cloudnet_class, cloudnet_status, model_temp, ts_cloudnet, rg_cloundet = [], [], [], [], []
+    features, labels, multilabels, mask = [], [], [], []
+    class_, status, catbits, qualbits, insect_prob = [], [], [], [], []
+    mT, mP, mq, ts, rg, lwp, u_w, v_w = [], [], [], [], [], [], [], []
+    Z, VEL, VEL_sigma, width, beta, attbsc532, depol = [], [], [], [], [], [], []
+
+    xarr_ds = []
 
     for icase, case_str in tqdm(enumerate(case_string_list), total=len(case_string_list), unit='files'):
 
-        # gather time interval, etc.
+        # gather time interval, etc..:505
+
         case = load_case_list(case_list_path, case_str)
         TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
         dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
@@ -503,16 +689,40 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
         # check if a mat files is available
         try:
             with xr.open_zarr(f'{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
-                _class = zarr_data['CLASS'].values if 'CLASS' in zarr_data else []
-                _status = zarr_data['detection_status'].values if 'detection_status' in zarr_data else []
-                _temperature = zarr_data['T'].values if 'T' in zarr_data else []
+                # for training & validation
+                _multitarget = zarr_data['multitargets'].values
                 _feature = zarr_data['features'].values
                 _target = zarr_data['targets'].values
                 _masked = zarr_data['masked'].values
-                _ts = zarr_data['ts'].values
-                _rg = zarr_data['rg'].values
+
+                # for validation
+                _class = zarr_data['CLASS'].values if 'CLASS' in zarr_data else []
+                _status = zarr_data['detection_status'].values if 'detection_status' in zarr_data else []
+                _catbits = zarr_data['category_bits'].values if 'category_bits' in zarr_data else []
+                _qualbits = zarr_data['quality_bits'].values if 'quality_bits' in zarr_data else []
+                _insect_prob = zarr_data['insect_prob'].values if 'insect_prob' in zarr_data else []
+                _temperature = zarr_data['T'].values if 'T' in zarr_data else []
+                _pressure = zarr_data['P'].values if 'P' in zarr_data else []
+                _q = zarr_data['q'].values if 'q' in zarr_data else []
+                _ts = zarr_data['ts'].values if 'ts' in zarr_data else []
+                _rg = zarr_data['rg'].values if 'rg' in zarr_data else []
+                _lwp = zarr_data['LWP'].values if 'LWP' in zarr_data else []
+                _uw = zarr_data['UWIND'].values if 'UWIND' in zarr_data else []
+                _vw = zarr_data['VWIND'].values if 'VWIND' in zarr_data else []
+                _Z = zarr_data['Z'].values if 'Z' in zarr_data else []
+                _VEL = zarr_data['VEL'].values if 'VEL' in zarr_data else []
+                _VEL_sigma = zarr_data['VEL_sigma'].values if 'VEL_sigma' in zarr_data else []
+                _width = zarr_data['width'].values if 'width' in zarr_data else []
+                _beta = zarr_data['beta'].values if 'beta' in zarr_data else []
+                _attbsc532 = zarr_data['attbsc532'].values if 'attbsc532' in zarr_data else []
+                _depol = zarr_data['depol'].values if 'depol' in zarr_data else []
 
                 logger.debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} zarr files')
+
+        except KeyError:
+            N_NOT_AVAILABLE += 1
+            logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
+            continue
 
         except FileNotFoundError:
             N_NOT_AVAILABLE += 1
@@ -530,7 +740,7 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         except Exception as e:
             logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                                f"Check folder: {kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
+                            f"Check folder: {kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
             logger.critical(f'Exception: Check ~/{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr)')
@@ -562,6 +772,7 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
             _feature = _feature[idx_valid_samples, :, :]
             _target = _target[idx_valid_samples, np.newaxis]
+            _multitarget = _multitarget[idx_valid_samples, :]
 
             """
             flip the CWT on the y-axis to generate a mirror image, 
@@ -577,19 +788,71 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
                 _feature = np.concatenate((_feature, _feature_flipped), axis=0)
                 _target = np.concatenate((_target, _target), axis=0)
+                _multitarget = np.concatenate((_multitarget, _multitarget), axis=0)
 
         logger.debug(f'\n dim = {_feature.shape}')
         logger.debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
 
-        feature_set.append(_feature)
-        target_labels.append(_target)
-        cloudnet_class.append(_class)
-        cloudnet_status.append(_status)
-        masked_total.append(_masked)
-        model_temp.append(_temperature)
-        ts_cloudnet.append(_ts)
+        features.append(_feature)
+        labels.append(_target)
+        multilabels.append(_multitarget)
+        xarr_ds.append(zarr_data)
 
-    return feature_set, target_labels, cloudnet_class, cloudnet_status, masked_total, model_temp, ts_cloudnet, _rg
+        if kwargs["TASK"] == 'train':
+            continue
+
+        class_.append(_class)
+        status.append(_status)
+        catbits.append(_catbits)
+        qualbits.append(_qualbits)
+        insect_prob.append(_insect_prob)
+        mask.append(_masked)
+        mT.append(_temperature)
+        mP.append(_pressure)
+        mq.append(_q)
+        ts.append(_ts)
+        lwp.append(_lwp)
+        u_w.append(_uw)
+        v_w.append(_vw)
+        Z.append(_Z)
+        VEL.append(_VEL)
+        VEL_sigma.append(_VEL_sigma)
+        width.append(_width)
+        beta.append(_beta)
+        attbsc532.append(_attbsc532)
+        depol.append(_depol)
+
+    features = np.concatenate(features, axis=0)
+    labels = np.concatenate(labels, axis=0)
+    multilabels = np.concatenate(multilabels, axis=0)
+    returns = [features, np.squeeze(labels), multilabels]
+
+    if kwargs["TASK"] != 'train':
+        returns.append(np.concatenate(class_, axis=0))
+        returns.append(np.concatenate(status, axis=0))
+        returns.append(np.concatenate(catbits, axis=0))
+        returns.append(np.concatenate(qualbits, axis=0))
+        returns.append(np.concatenate(insect_prob, axis=0))
+        returns.append(np.concatenate(mask, axis=0))
+        returns.append(np.concatenate(mT, axis=0))
+        returns.append(np.concatenate(mP, axis=0))
+        returns.append(np.concatenate(mq, axis=0))
+        returns.append(np.concatenate(ts, axis=0))
+        returns.append(np.array(_rg))
+        returns.append(np.concatenate(lwp, axis=0))
+        returns.append(np.concatenate(u_w, axis=0))
+        returns.append(np.concatenate(v_w, axis=0))
+        returns.append(np.concatenate(Z, axis=0))
+        returns.append(np.concatenate(VEL, axis=0))
+        returns.append(np.concatenate(VEL_sigma, axis=0))
+        returns.append(np.concatenate(width, axis=0))
+        returns.append(np.concatenate(beta, axis=0))
+        returns.append(np.concatenate(attbsc532, axis=0))
+        returns.append(np.concatenate(depol, axis=0))
+    else:
+        for i in range(22):  returns.append(None)
+
+    return returns
 
 
 def one_hot_to_classes(cnn_pred, mask):
@@ -603,17 +866,73 @@ def one_hot_to_classes(cnn_pred, mask):
         predicted_classes (numpy.array): predicted values converted to Cloudnet classes
     """
     predicted_classes = np.zeros(mask.shape, dtype=np.float32)
-    predicted_probability = np.zeros(mask.shape, dtype=np.float32)
+    predicted_probability = np.zeros(mask.shape + (9,), dtype=np.float32)
     cnt = 0
     for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
         if mask[iT, iR]: continue
         predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
-        predicted_probability[iT, iR] = np.max(cnn_pred[cnt])
-        #        if predicted_classes[iT, iR] in [1, 5]:
-        #            if np.max(cnn_pred[cnt]) < 0.5:
-        #                predicted_classes[iT, iR] = 4
+        predicted_probability[iT, iR, :] = cnn_pred[cnt]
         cnt += 1
 
     return predicted_classes, predicted_probability
 
+
+def classes_to_one_hot(classes, mask):
+    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
+
+    Args:
+        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
+        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
+
+    Returns:
+        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
+    """
+    one_hot = []
+
+    for iT, iR in product(range(classes.shape[0]), range(classes.shape[1])):
+        if mask[iT, iR]: continue
+        one_hot.append(classes[iT, iR])
+
+    return np.array(one_hot)
+
+
+def one_hot_to_spectra(features, mask):
+    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
+
+    Args:
+        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
+        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
+
+    Returns:
+        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
+    """
+    from itertools import product
+    print((mask.shape,) + (features.shape[2],))
+    spectra = np.zeros(mask.shape + (features.shape[1], features.shape[2],), dtype=np.float32)
+    cnt = 0
+    for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
+        if mask[iT, iR]: continue
+        spectra[iT, iR, :, :] = features[cnt]
+        cnt += 1
+
+    return spectra
+
+
+def random_choice(xr_ds, rg_int, N=4, iclass=4, var='voodoo_classification'):
+    import pyLARDA.helpers as h
+    nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
+
+    icnt = 0
+    indices = np.zeros((N, 2), dtype=np.int)
+    nnearest = h.argnearest(xr_ds.ZSpec.rg.values, rg_int)
+
+    while icnt < N:
+        while True:
+            idxts = int(np.random.randint(0, high=nts, size=1))
+            idxrg = int(np.random.randint(0, high=nnearest, size=1))
+            if ~xr_ds.mask[idxts, idxrg] and xr_ds[var].values[idxts, idxrg] == iclass:
+                indices[icnt, :] = [idxts, idxrg]
+                icnt += 1
+                break
+    return indices
 

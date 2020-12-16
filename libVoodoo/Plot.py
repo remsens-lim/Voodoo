@@ -67,7 +67,7 @@ def History(history):
     for loss in history.history:
         axis.plot(hist['epoch'], hist[loss], label=f'{loss}')
     axis.legend()
-
+    axis.set_ylim([-0.05, 1.05])
     return figure, axis
 
 def LearningRate(hist):
@@ -826,7 +826,7 @@ def spectra_3by3(data, *args, **kwargs):
               (for multiple spectra, the last ax is returned)
         """
 
-    fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [10, 5.7]
+    fig_size = kwargs['fig_size'] if 'fig_size' in kwargs else [14, 7]
     fsz = kwargs['font_size'] if 'font_size' in kwargs else 17
     alpha = kwargs['alpha'] if 'alpha' in kwargs else 1.0
     name = kwargs['save'] if 'save' in kwargs else ''
@@ -957,16 +957,18 @@ def spectra_3by3(data, *args, **kwargs):
 
     return fig, ax
 
-def _plot_bar_data(fig, ax, data, time, mask_value=0.0):
+def plot_bar_data(fig, ax, time, data, mask_value=0.0, font_size=_FONT_SIZE):
     """Plots 1D variable as bar plot.
     Args:
         ax (obj): Axes object.
         data (ndarray): 1D data array.
         time (ndarray): 1D time array.
     """
+
+    plt.rcParams.update({'font.size': font_size})
     data = np.ma.masked_less_equal(data, mask_value)
     pos0 = ax.get_position()
-    ax_new = fig.add_axes([0., 0., 1., 1.])
+    ax_new = fig.add_axes([0., 0., 1., 4.5])
     ax_new.bar(time, data.filled(0), width=1 / 1200, align='center', alpha=0.5, color='royalblue')
     ax_new.set(
         ylim=[-10, 200], ylabel='mwr-lwp [g m-2]',
@@ -977,7 +979,7 @@ def _plot_bar_data(fig, ax, data, time, mask_value=0.0):
     ax_new.tick_params(labelbottom=False, labeltop=True)
     ax_new.grid(True)
 
-    time_extend = time[-1] - time[0]
+    time_extend = datetime.timedelta(seconds=(time[-1].values - time[0].values).astype(np.float64)/10**9)
     ax_new = tr.set_xticks_and_xlabels(ax_new, time_extend)
     ax_new.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
     ax_new.tick_params(axis='both', which='both', right=True, top=True)
@@ -985,67 +987,67 @@ def _plot_bar_data(fig, ax, data, time, mask_value=0.0):
     ax_new.tick_params(axis='both', which='minor', width=2, length=3)
     return ax_new
 
-def plot_ll_thichkness(ax, t, l1, l2):
+def plot_ll_thichkness(ax, t, l1, l2, font_size=_FONT_SIZE):
     y_lim = [-0.12, 2.5]
 
+    plt.rcParams.update({'font.size': font_size})
     ax1 = ax.twinx()
-    ax1.plot(t, l1 / 1000., color='#E64A23', alpha=0.75, label='neural network (nn)')
+    ax1.plot(t, l1 / 1000., color='#E64A23', alpha=0.75, label='VOODOO (V)')
     ax1.set_ylim(y_lim)
-    ax1.plot(t, l2 / 1000., color='navy', alpha=0.75, label='cloudnet (cn)')
+    ax1.plot(t, l2 / 1000., color='navy', alpha=0.75, label='Cloudnet (C)')
     # ax1.plot(dt_list, sum_ll_thickness[nn_varname], color='red', linestyle='-', alpha=0.75, label=nn_varname)
 
-    ax1.set(ylim=y_lim, ylabel='liquid layer thickness [km]')
+    ax1.set(ylim=y_lim, ylabel='liquid layer\nthickness [km]')
     ax1.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
     ax1.tick_params(axis='both', which='both', right=True)
-    ax1.tick_params(axis='both', which='major', labelsize=_FONT_SIZE, width=3, length=5.5)
+    ax1.tick_params(axis='both', which='major', labelsize=font_size, width=3, length=5.5)
     ax1.tick_params(axis='both', which='minor', width=2, length=3)
-    ax1 = tr.set_xticks_and_xlabels(ax1, t[-1] - t[0])
-    ax1.legend(loc='best')
+    time_extend = datetime.timedelta(seconds=(t[-1].values - t[0].values).astype(np.float64)/10**9)
+    ax1 = tr.set_xticks_and_xlabels(ax1, time_extend)
+    ax1.legend(loc='upper left')
 
     return ax1
 
 
-def add_lwp_to_classification(prediction, classification, fig, ax, cloudnet=''):
+def add_lwp_to_classification(fig, ax, prediction, lwp, llt_v, llt_c, font_size=_FONT_SIZE):
     # add the lwp ontop
-    dt_interval = [h.ts_to_dt(prediction['ts'][0]), h.ts_to_dt(prediction['ts'][-1])]
-    larda = pyLARDA.LARDA().connect('lacros_dacapo_gpu', build_lists=False)
-    lwp_container = larda.read(cloudnet, 'LWP', dt_interval)
-    lwp_container = tr.interpolate1d(lwp_container, new_time=prediction['ts'], new_rg=prediction['rg'])
-    dt_lwp = [h.ts_to_dt(ts) for ts in lwp_container['ts']]
+    dt_lwp = [h.ts_to_dt(ts) for ts in lwp['ts']]
 
-    ax.set_xlim([h.ts_to_dt(lwp_container['ts'][0]), h.ts_to_dt(lwp_container['ts'][-1])])
-    lwp_ax = _plot_bar_data(fig, ax, lwp_container['var'], dt_lwp)
+    ax.set_xlim([h.ts_to_dt(lwp['ts'][0]), h.ts_to_dt(lwp['ts'][-1])])
+    lwp_ax = plot_bar_data(
+        fig, ax,
+        dt_lwp,
+        lwp['var'],
+        font_size=_FONT_SIZE
+    )
 
-    sum_ll_thickness_nn = Utils.sum_liquid_layer_thickness(Utils.get_liquid_pixel_mask(prediction['var']), rg_res=prediction['rg'][1] - prediction['rg'][0])
-    sum_ll_thickness_cn = Utils.sum_liquid_layer_thickness(Utils.get_liquid_pixel_mask(classification['var']), rg_res=prediction['rg'][1] - prediction['rg'][0])
-    plot_ll_thichkness(lwp_ax, [h.ts_to_dt(ts) for ts in prediction['ts']], sum_ll_thickness_nn, sum_ll_thickness_cn)
+    plot_ll_thichkness(
+        lwp_ax,
+        [h.ts_to_dt(ts) for ts in prediction['ts']],
+        llt_v,
+        llt_c,
+        font_size=font_size
+    )
 
-    # these are matplotlib.patch.Patch properties
-    props = {
-        'transform': ax.transAxes,
-        'fontsize': _FONT_SIZE,
-        'verticalalignment': 'top',
-        'bbox': dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    }
+    return fig, ax
 
-    corr_lwp_nn = r'$R_{lwp-nn}^2=$' + f'{Utils.ma_corr_coef(lwp_container["var"], sum_ll_thickness_nn):.3f}'
-    corr_lwp_cn = r'$R_{lwp-cn}^2=$' + f'{Utils.ma_corr_coef(lwp_container["var"], sum_ll_thickness_cn):.3f}'
-    # place a text box in upper left in axes coords
-    logger.info('------ CORRELATIONS ------')
-    ax.text(1.1, 1.6, corr_lwp_nn, **props)
-    ax.text(1.1, 1.5, corr_lwp_cn, **props)
-    logger.info(f'correlation mwr-lwp vs. neural network liquid containing range gates :: {corr_lwp_nn}')
-    logger.info(f'correlation mwr-lwp vs. cloudnet liquid containing range gates :: {corr_lwp_cn}')
+def add_lwp_to_classification2(fig, ax, lwp, lwp_ad, lwp_ad2, font_size=_FONT_SIZE):
+    # add the lwp ontop
+    dt_lwp = [h.ts_to_dt(ts) for ts in lwp['ts']]
 
-    lwp_smoothed5min = h.smooth(lwp_container['var'], 10)  # 10 bins = 5 min
+    ax.set_xlim([h.ts_to_dt(lwp['ts'][0]), h.ts_to_dt(lwp['ts'][-1])])
+    lwp_ax = plot_bar_data(
+        fig, ax,
+        dt_lwp,
+        lwp['var'],
+        font_size=_FONT_SIZE
+    )
 
-    corr_lwp_nn_smoohed = r'$\tilde{R}_{lwp-nn}^2=$' + f'{Utils.ma_corr_coef(lwp_smoothed5min, h.smooth(sum_ll_thickness_nn, 10)):.3f}'
-    corr_lwp_cn_smoohed = r'$\tilde{R}_{lwp-cn}^2=$' + f'{Utils.ma_corr_coef(lwp_smoothed5min, h.smooth(sum_ll_thickness_cn, 10)):.3f}'
-    # place a text box in upper left in axes coords
-    ax.text(1.1, 1.4, corr_lwp_nn_smoohed, **props)
-    ax.text(1.1, 1.3, corr_lwp_cn_smoohed, **props)
-    logger.info(f'correlation 5min smoothed mwr-lwp vs. neural network liquid containing range gates :: {corr_lwp_nn_smoohed}')
-    logger.info(f'correlation 5min smoothed mwr-lwp vs. cloudnet liquid containing range gates :: {corr_lwp_cn_smoohed}')
+    lwp_ax.plot(dt_lwp, lwp_ad, label='adiabatic lwp')
+    lwp_ax.plot(dt_lwp, lwp_ad2, label='adiabatic lwp cn')
+    lwp_ax.set_ylim([-10, 250])
+
+    ax.legend(loc='best')
 
     return fig, ax
 
@@ -1075,6 +1077,8 @@ def quicklooks(variables, **kwargs):
                 )
                 key_name = f'{sys}-{_name}' if _name in ['CLASS', 'detection_status'] else _name
                 savenames[key_name] = f'{variables["case_name"]}-{variables["campaign"]}-{key_name}--{sys}.png'
+
+                #fig.tight_layout(rect=[0., 0., 1.0, .6])
                 fig.savefig(f'{variables["plot_dir"]}/{savenames[key_name]}', dpi=_DPI)
                 matplotlib.pyplot.close(fig=fig)
                 logger.info(f'plot saved --> {savenames[key_name]}')
