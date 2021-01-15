@@ -8,6 +8,8 @@ from itertools import groupby
 from itertools import product
 
 import numpy as np
+np.random.seed(2000)
+
 import toml
 import xarray as xr
 from jinja2 import Template
@@ -409,21 +411,17 @@ def post_processor_temperature(data, temperature, **kwargs):
 
 
 def get_good_radar_and_lidar_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+    if 'py' in version.lower():
         return 1
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 3
     else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
+        return 3
 
 
 def get_good_lidar_only_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+    if 'py' in version.lower():
         return 3
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 1
     else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
+        return 1
 
 
 def post_processor_cloudnet_quality_flag(data, cloudnet_status, cloudnet_class, cloudnet_type=''):
@@ -600,10 +598,10 @@ def load_training_mask(classes, status, cloudnet_type):
     # create mask
     valid_samples = np.full(status.shape, False)
     valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
+    valid_samples[classes == 1] = True  # add cloud droplets only class
     valid_samples[classes == 5] = True  # add mixed-phase class pixel
     valid_samples[classes == 6] = True  # add melting layer class pixel
     valid_samples[classes == 7] = True  # add melting layer + SCL class pixel
-    valid_samples[classes == 1] = True  # add cloud droplets only class
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
     valid_samples[status == idx_good_lidar_only] = False
@@ -626,11 +624,11 @@ def load_case_list(path, case_name):
 def log_number_of_classes(classes, text=''):
     # numer of samples per class afer removing ice
     class_n_distribution = np.zeros(len(cloudnetpy_classes))
-    logger.critical(text)
-    logger.critical(f'{classes.size:12d}   total')
+    logger.info(text)
+    logger.info(f'{classes.size:12d}   total')
     for i in range(len(cloudnetpy_classes)):
         n = np.sum(classes == i)
-        logger.critical(f'{n:12d}   {cloudnetpy_classes[i]}')
+        logger.info(f'{n:12d}   {cloudnetpy_classes[i]}')
         class_n_distribution[i] = n
     return class_n_distribution
 
@@ -669,7 +667,7 @@ def target_class2bit_mask(target_labels):
     return bit_mask
 
 
-def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
+def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
     N_NOT_AVAILABLE = 0
     features, labels, multilabels, mask = [], [], [], []
     class_, status, catbits, qualbits, insect_prob = [], [], [], [], []
@@ -677,20 +675,21 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
     Z, VEL, VEL_sigma, width, beta, attbsc532, depol = [], [], [], [], [], [], []
 
     xarr_ds = []
+    data_chunk_heads = [chunk for chunk in load_case_file(TOML_PATH).keys()]
 
-    for icase, case_str in tqdm(enumerate(case_string_list), total=len(case_string_list), unit='files'):
+    for icase, case_str in tqdm(enumerate(data_chunk_heads), total=len(data_chunk_heads), unit='files'):
 
         # gather time interval, etc..:505
 
-        case = load_case_list(case_list_path, case_str)
+        case = load_case_list(TOML_PATH, case_str)
         TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
         dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
 
         # check if a mat files is available
         try:
-            with xr.open_zarr(f'{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
+            with xr.open_zarr(f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
                 # for training & validation
-                _multitarget = zarr_data['multitargets'].values
+                #_multitarget = zarr_data['multitargets'].values
                 _feature = zarr_data['features'].values
                 _target = zarr_data['targets'].values
                 _masked = zarr_data['masked'].values
@@ -721,18 +720,18 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         except KeyError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
             continue
 
         except FileNotFoundError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
 
         except ValueError as e:
             if 'group not found at path' in str(e):
-                logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
             else:
-                logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  some value is missing! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  some value is missing! n_Failed = {N_NOT_AVAILABLE}")
                 logger.info(f"{e}")
 
             N_NOT_AVAILABLE += 1
@@ -740,7 +739,7 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         except Exception as e:
             logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                            f"Check folder: {kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
+                            f"Check folder: {DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
             logger.critical(f'Exception: Check ~/{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr)')
@@ -750,10 +749,11 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         if _masked.all(): continue  # if there are no data points
 
-        if len(_feature.shape) == 3 and kwargs["CDIM"] == 'conv2d': _feature = _feature[:, :, :, np.newaxis]
+        if len(_feature.shape) == 3:
+            _feature = _feature[:, :, :, np.newaxis]
 
         # apply training mask
-        if kwargs["TASK"] == 'train':
+        if TASK == 'train':
             """
             select pixel satisfying the following expression:
             training_mask = (   "Good radar & lidar echos" 
@@ -770,35 +770,40 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
             if len(idx_valid_samples) < 1: continue
 
-            _feature = _feature[idx_valid_samples, :, :]
+            if len(_feature.shape) == 4:
+                _feature = _feature[idx_valid_samples, :, :]
+            elif len(_feature.shape) == 5:
+                _feature = _feature[idx_valid_samples, :, :, :]
+            else:
+                raise ValueError(f'Wrong feature set dimensions : {_feature.shape}')
+
             _target = _target[idx_valid_samples, np.newaxis]
-            _multitarget = _multitarget[idx_valid_samples, :]
+            #_multitarget = _multitarget[idx_valid_samples, :]
 
             """
             flip the CWT on the y-axis to generate a mirror image, 
             the goal is to overcome the miss-classification of updrafts as liquid
             """
-            if kwargs['add_flipped']:
-                _feature_flipped = np.zeros(_feature.shape)
-                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[-1])):
-                    if kwargs["CDIM"] == 'conv2d':
-                        _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
-                else:
-                    _feature_flipped[ismpl, :, ichan] = np.flip(_feature[ismpl, :, ichan])
-
-                _feature = np.concatenate((_feature, _feature_flipped), axis=0)
-                _target = np.concatenate((_target, _target), axis=0)
-                _multitarget = np.concatenate((_multitarget, _multitarget), axis=0)
+#            if kwargs['add_flipped']:
+#                _feature_flipped = np.zeros(_feature.shape)
+#                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[-1])):
+#                    if kwargs["CDIM"] == 'conv2d':
+#                        _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
+#                else:
+#                    _feature_flipped[ismpl, :, ichan] = np.flip(_feature[ismpl, :, ichan])
+#
+#                _feature = np.concatenate((_feature, _feature_flipped), axis=0)
+#                _target = np.concatenate((_target, _target), axis=0)
+#                _multitarget = np.concatenate((_multitarget, _multitarget), axis=0)
 
         logger.debug(f'\n dim = {_feature.shape}')
         logger.debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
 
         features.append(_feature)
         labels.append(_target)
-        multilabels.append(_multitarget)
-        xarr_ds.append(zarr_data)
+        #multilabels.append(_multitarget)
 
-        if kwargs["TASK"] == 'train':
+        if TASK == 'train':
             continue
 
         class_.append(_class)
@@ -824,18 +829,21 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
     features = np.concatenate(features, axis=0)
     labels = np.concatenate(labels, axis=0)
-    multilabels = np.concatenate(multilabels, axis=0)
+    #multilabels = np.concatenate(multilabels, axis=0)
     returns = [features, np.squeeze(labels), multilabels]
 
-    if kwargs["TASK"] != 'train':
+    if TASK == 'train':
+        for i in range(21):
+            returns.append(None)
+    else:
         returns.append(np.concatenate(class_, axis=0))
         returns.append(np.concatenate(status, axis=0))
-        returns.append(np.concatenate(catbits, axis=0))
+        returns.append(np.concatenate(catbits, axis=0)) # 5
         returns.append(np.concatenate(qualbits, axis=0))
         returns.append(np.concatenate(insect_prob, axis=0))
         returns.append(np.concatenate(mask, axis=0))
         returns.append(np.concatenate(mT, axis=0))
-        returns.append(np.concatenate(mP, axis=0))
+        returns.append(np.concatenate(mP, axis=0)) # 10
         returns.append(np.concatenate(mq, axis=0))
         returns.append(np.concatenate(ts, axis=0))
         returns.append(np.array(_rg))
@@ -849,8 +857,6 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
         returns.append(np.concatenate(beta, axis=0))
         returns.append(np.concatenate(attbsc532, axis=0))
         returns.append(np.concatenate(depol, axis=0))
-    else:
-        for i in range(22):  returns.append(None)
 
     return returns
 
@@ -918,19 +924,22 @@ def one_hot_to_spectra(features, mask):
     return spectra
 
 
-def random_choice(xr_ds, rg_int, N=4, iclass=4, var='voodoo_classification'):
+def random_choice(xr_ds, rg_int, N=4, iclass=4, var='CLASS'):
     import pyLARDA.helpers as h
     nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
 
     icnt = 0
     indices = np.zeros((N, 2), dtype=np.int)
     nnearest = h.argnearest(xr_ds.ZSpec.rg.values, rg_int)
+    #mask_below_x = xr_ds['PROBDIST'][:, :, iclass].values > 0.5
 
     while icnt < N:
         while True:
             idxts = int(np.random.randint(0, high=nts, size=1))
             idxrg = int(np.random.randint(0, high=nnearest, size=1))
-            if ~xr_ds.mask[idxts, idxrg] and xr_ds[var].values[idxts, idxrg] == iclass:
+            msk = ~xr_ds.mask[idxts, idxrg] #* mask_below_x[idxts, idxrg]
+            cls = xr_ds[var].values[idxts, idxrg] == iclass
+            if msk and cls:
                 indices[icnt, :] = [idxts, idxrg]
                 icnt += 1
                 break

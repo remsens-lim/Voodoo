@@ -45,6 +45,13 @@ __maintainer__ = "Willi Schimmel"
 __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
+lidar = 'POLLY'
+cloudnet_vars = ['CLASS', 'detection_status', 'Z', 'VEL', 'VEL_sigma', 'width', 'Tw', 'insect_prob', 'beta', 'category_bits', 'quality_bits']
+cloudnet_ts_vars = ['LWP']
+model_vars = ['T', 'P', 'q', 'UWIND', 'VWIND']
+lidar_vars = ['attbsc1064', 'attbsc532', 'depol']
+larda_params = ['filename', 'system', 'colormap', 'rg_unit', 'var_unit']
+
 
 # resolution of python version is master
 class VoodooXR(xr.Dataset):
@@ -67,7 +74,7 @@ class VoodooXR(xr.Dataset):
         if len(_vel) > 0: self.coords['vel'] = _vel[0]
         if len(_vel) > 1: self.coords.update({f'vel_{ic + 1}': _vel[ic] for ic in range(1, len(_vel))})
 
-    def _add_coordinate(self, name, unit, val):
+    def _add_coordinate(self, name, unit):
         """
         Adding a coordinate to an xarray structure.
         Args:
@@ -77,9 +84,9 @@ class VoodooXR(xr.Dataset):
 
         """
         for key, item in name.items():
-            self.attrs[key] = item
+            #self.attrs[key] = item
             self.attrs[f'{key}_unit'] = unit
-            self.coords[key] = val
+            self.coords[key] = item
 
     def add_nD_variable(self, name, dims, val, **kwargs):
         self[name] = (dims, val)
@@ -190,6 +197,8 @@ def load_features_and_labels(spectra, classes, category_bits, **feature_info):
     else:
         raise ValueError('Spectra has wrong dimension!', spectra['var'].shape)
 
+    add_labels = False if classes is None else True
+
     spectra_Ndim = spectra['var'].astype('float32')
     spectra_mask = spectra['mask']
     MASK = np.all(np.all(spectra_mask, axis=3), axis=2)
@@ -215,8 +224,9 @@ def load_features_and_labels(spectra, classes, category_bits, **feature_info):
             else:
                 feature_list.append(spectra_scaled[iT, iR, :, :])
 
-            target_labels.append(classes['var'][iT, iR])  # sparse one hot encoding
-            multitarget_labels.append(np.unpackbits(bits_uint[iT, iR])[2:])
+            if add_labels:
+                target_labels.append(classes['var'][iT, iR])  # sparse one hot encoding
+                multitarget_labels.append(np.unpackbits(bits_uint[iT, iR])[2:])
 
     Plot.print_elapsed_time(t0, 'Added continuous wavelet transformation to features (single-core), elapsed time = ')
 
@@ -242,47 +252,6 @@ def load_data(larda_connected, system, time_span, var_list):
             logger.warning(f'WARNING :: Skipped {system} Data {var} --> set 30 sec time res. as master')
             cloudnet_ts_vars.pop(i)
     return data
-
-#
-#def average_time_dim(ts, rg, var, mask, **kwargs):
-#    assert 'new_time' in kwargs, ValueError('new_time key needs to be provided')
-#
-#    new_ts = kwargs['new_time']
-#    n_ts_new = len(new_ts)
-#    n_ts = len(ts)
-#    n_rg = len(rg)
-#
-#    # if 2D array is provided
-#    if len(var.shape) == 2:
-#        var = var.reshape((n_ts, n_rg, 1))
-#
-#    n_vel = var.shape[2]
-#
-#    ip_var = np.zeros((n_ts_new, n_rg, n_vel), dtype=np.float32)
-#    ip_mask = np.full((n_ts_new, n_rg, n_vel), True)
-#
-#    logger.info('Averaging over N radar spectra time-steps (30 sec avg)...')
-#    # for iBin in range(n_vel):
-#    iterator = range(n_vel) if logger.level > 20 else tqdm(range(n_vel))
-#    for iBin in iterator:
-#
-#        for iT_cn in range(n_ts_new - 1):
-#            iT_rd0 = h.argnearest(ts, new_ts[iT_cn])
-#            ts_diff = int((new_ts[iT_cn + 1] - new_ts[iT_cn]) / (ts[iT_rd0 + 1] - ts[iT_rd0]))
-#
-#            iT_rdN = iT_rd0 + ts_diff if iT_rd0 + ts_diff < n_ts else n_ts  # catch edge case
-#            ip_var[iT_cn, :, iBin] = np.mean(var[iT_rd0:iT_rdN, :, iBin], axis=0)
-#            rg_with_signal = np.sum(mask[iT_rd0:iT_rdN, :, iBin], axis=0) < ts_diff
-#            ip_mask[iT_cn, rg_with_signal, iBin] = False
-#
-#        ip_var[-1, :, iBin] = ip_var[-2, :, iBin]
-#        ip_mask[-1, :, iBin] = ip_mask[-2, :, iBin]
-#
-#    if ip_var.shape[2] == 1:
-#        ip_var = ip_var.reshape((n_ts_new, n_rg))
-#        ip_mask = ip_mask.reshape((n_ts_new, n_rg))
-#
-#    return ip_var, ip_mask
 
 
 def hyperspectralimage(ts, var, msk, **kwargs):
@@ -317,8 +286,8 @@ def hyperspectralimage2(ts, vhspec, hspec, msk, **kwargs):
     n_ts, n_rg, n_vel = vhspec.shape
     mid = n_channels // 2
 
-    ip_var = np.zeros((n_ts_new, n_rg, n_vel, n_channels, 2), dtype=np.float32)
-    ip_msk = np.empty((n_ts_new, n_rg, n_vel, n_channels), dtype=np.bool)
+    ip_var = np.full((n_ts_new, n_rg, n_vel, n_channels, 2), fill_value=-999.0, dtype=np.float32)
+    ip_msk = np.full((n_ts_new, n_rg, n_vel, n_channels), fill_value=True)
 
     logger.info(f'\nConcatinate {n_channels} spectra to 1 sample:\n'
                 f'    --> resulting tensor dimension (n_samples, n_velocity_bins, n_channels, 2) = (????, 256, 32, {n_channels}, 2) ......')
@@ -327,6 +296,7 @@ def hyperspectralimage2(ts, vhspec, hspec, msk, **kwargs):
     for iBin in iterator:
         for iT_cn in range(n_ts_new):
             iT_rd0 = h.argnearest(ts, new_ts[iT_cn])
+
             for itmp in range(-mid, mid):
                 iTdiff = itmp if iT_rd0 + itmp < n_ts else 0
                 ip_var[iT_cn, :, iBin, iTdiff + mid, 0] = vhspec[iT_rd0 + iTdiff, :, iBin]
@@ -334,89 +304,6 @@ def hyperspectralimage2(ts, vhspec, hspec, msk, **kwargs):
                 ip_msk[iT_cn, :, iBin, iTdiff + mid] = msk[iT_rd0 + iTdiff, :, iBin]
 
     return ip_var, ip_msk
-
-
-
-def interpolate3d(data, mask_thres=0.1, **kwargs):
-    """interpolate timeheight data container
-
-    Args:
-        mask_thres (float, optional): threshold for the interpolated mask
-        **new_time (np.array): new time axis
-        **new_range (np.array): new range axis
-        **method (str): if not given, use scipy.interpolate.RectBivariateSpline
-        valid method arguments:
-            'linear' - scipy.interpolate.interp2d
-            'nearest' - scipy.interpolate.NearestNDInterpolator
-            'rectbivar' (default) - scipy.interpolate.RectBivariateSpline
-    """
-    all_var_bins = h.fill_with(data['var'], data['mask'], data['var'][~data['mask']].min())
-    all_mask_bins = data['mask']
-    var_interp = np.full((kwargs['new_time'].size, kwargs['new_range'].size, data['vel'].size), 0.0)
-    mask_interp = np.full((kwargs['new_time'].size, kwargs['new_range'].size, data['vel'].size), 1)
-    method = kwargs['method'] if 'method' in kwargs else 'rectbivar'
-
-    new_time = data['ts'] if not 'new_time' in kwargs else kwargs['new_time']
-    new_range = data['rg'] if not 'new_range' in kwargs else kwargs['new_range']
-
-    if method in ['nearest', 'linear1d']:
-        points = np.array(list(zip(np.repeat(data['ts'], len(data['rg'])), np.tile(data['rg'], len(data['ts'])))))
-        new_points = np.array(list(zip(np.repeat(new_time, len(new_range)), np.tile(new_range, len(new_time)))))
-
-    args_to_pass = {}
-
-    logger.info('Start interpolation......')
-
-    iterator = range(data['vel'].size) if logger.level > 20 else tqdm(range(data['vel'].size))
-    for iBin in iterator:
-        var, mask = all_var_bins[:, :, iBin], all_mask_bins[:, :, iBin]
-        if method == 'rectbivar':
-            kx, ky = 1, 1
-            interp_var = RectBivariateSpline(data['ts'], data['rg'], var, kx=kx, ky=ky)
-            interp_mask = RectBivariateSpline(data['ts'], data['rg'], mask.astype(np.float), kx=kx, ky=ky)
-            args_to_pass = {"grid": True}
-        elif method == 'linear1d':
-            interp_var = LinearNDInterpolator(points, var.flatten(), fill_value=-999.0)
-            interp_mask = LinearNDInterpolator(points, (mask.flatten()).astype(np.float))
-        elif method in ['linear', 'cubic', 'quintic']:
-            interp_var = interp2d(data['rg'], data['ts'], var, fill_value=-999.0, kind=method)
-            interp_mask = interp2d(data['rg'], data['ts'], mask.astype(np.float))
-            args_to_pass = {}
-        elif method == 'nearest':
-            interp_var = NearestNDInterpolator(points, var.flatten())
-            interp_mask = NearestNDInterpolator(points, (mask.flatten()).astype(np.float))
-
-        else:
-            raise ValueError('Unknown Interpolation Method', method)
-
-        if method in ['nearest', 'linear1d']:
-            new_var = interp_var(new_points).reshape((len(new_time), len(new_range)))
-            new_mask = interp_mask(new_points).reshape((len(new_time), len(new_range)))
-        else:
-            new_var = interp_var(new_time, new_range, **args_to_pass)
-            new_mask = interp_mask(new_time, new_range, **args_to_pass)
-
-        new_mask[new_mask > mask_thres] = 1
-        new_mask[new_mask < mask_thres] = 0
-
-        if var_interp.shape[:2] == new_var.shape:
-            var_interp[:, :, iBin] = new_var
-            mask_interp[:, :, iBin] = new_mask
-        else:
-            var_interp[:, :, iBin] = new_var.T
-            mask_interp[:, :, iBin] = new_mask.T
-
-    # deepcopy to keep data immutable
-    interp_data = {**data}
-
-    interp_data['ts'] = new_time
-    interp_data['rg'] = new_range
-    interp_data['var'] = var_interp
-    interp_data['mask'] = mask_interp
-    logger.info("interpolated shape: time {} range {} var {} mask {}".format(
-        new_time.shape, new_range.shape, var_interp.shape, mask_interp.shape))
-
-    return interp_data
 
 
 def load_features_from_nc(
@@ -504,10 +391,9 @@ def load_features_from_nc(
     # not sure if this has an effect, when using a masked layer in the neural network
     ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], ZSpec['SLv']['var'])
     ZSpec['HSpec']['var'] = replace_fill_value(ZSpec['HSpec']['var'], ZSpec['SLh']['var'])
-    ZSpec['HSpec']['var'][ZSpec['VHSpec']['mask']] = -999.0
     logger.info(f'\nloaded :: {TIME_SPAN_RADAR[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_RADAR[1]:%H:%M:%S} of {system} VHSpectra')
 
-    quick_check(QUICKLOOK_PATH)
+    #quick_check(QUICKLOOK_PATH)
 
     ########################################################################################################################################################
     #
@@ -515,31 +401,39 @@ def load_features_from_nc(
     #   |    |  | |__| |  \    |    |    |  | |  | |  \ |\ | |___  |     |  \ |__|  |  |__|
     #   |___ |__| |  | |__/    |___ |___ |__| |__| |__/ | \| |___  |     |__/ |  |  |  |  |
     #
-    cloudnet_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, cloudnet_vars)
-    cloudnet_ts_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, cloudnet_ts_vars)
-    cloudnet_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, model_vars)
-    ts_master, rg_master = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
-    cn_available = True
+    try:
+        cloudnet_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, cloudnet_vars)
+        cloudnet_ts_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, cloudnet_ts_vars)
+        cloudnet_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, model_vars)
+        ts_master, rg_master = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
+        cn_available = True
 
-    # Create a new xarray dataset
-    ds = VoodooXR(ts_master, rg_master)
+        CNclass = cloudnet_variables['CLASS']
+        CNbits = cloudnet_variables['category_bits']
 
-    # Add cloudnet data if available
-    if cn_available:
-        for ivar in cloudnet_vars:
-            ds.add_nD_variable(ivar, ('ts', 'rg'), cloudnet_variables[ivar]['var'], **{key: cloudnet_variables[ivar][key] for key in larda_params})
-        for ivar in cloudnet_ts_vars:
-            ds.add_nD_variable(
-                ivar,
-                ('ts'),
-                cloudnet_ts_variables[ivar]['var'],
-                **{
-                    key: cloudnet_ts_variables[ivar][key] for key in larda_params if key in cloudnet_ts_variables[ivar].keys()
-                }
-            )
-        for ivar in model_vars:
-            cloudnet_model[ivar] = tr.interpolate2d(cloudnet_model[ivar], new_time=ts_master, new_range=rg_master)
-            ds.add_nD_variable(ivar, ('ts', 'rg'), cloudnet_model[ivar]['var'], **{key: cloudnet_model[ivar][key] for key in larda_params})
+        # Create a new xarray dataset
+        ds = VoodooXR(ts_master, rg_master)
+
+        # Add cloudnet data if available
+        if cn_available:
+            for ivar in cloudnet_vars:
+                ds.add_nD_variable(ivar, ('ts', 'rg'), cloudnet_variables[ivar]['var'], **{key: cloudnet_variables[ivar][key] for key in larda_params})
+            for ivar in cloudnet_ts_vars:
+                ds.add_nD_variable(
+                    ivar,
+                    ('ts'),
+                    cloudnet_ts_variables[ivar]['var'],
+                    **{
+                        key: cloudnet_ts_variables[ivar][key] for key in larda_params if key in cloudnet_ts_variables[ivar].keys()
+                    }
+                )
+            for ivar in model_vars:
+                cloudnet_model[ivar] = tr.interpolate2d(cloudnet_model[ivar], new_time=ts_master, new_range=rg_master)
+                ds.add_nD_variable(ivar, ('ts', 'rg'), cloudnet_model[ivar]['var'], **{key: cloudnet_model[ivar][key] for key in larda_params})
+
+    except Exception as e:
+        CNclass, CNbits = None, None
+        logger.warning('WARNING :: Skipped CLoudnet Data --> set 30 sec time.')
 
     ########################################################################################################################################################
     #
@@ -563,13 +457,6 @@ def load_features_from_nc(
     #   |__] |__/ |___ |__] |__| |__/ |___    [__  |__] |___ |     |  |__/ |__|
     #   |    |  \ |___ |    |  | |  \ |___    ___] |    |___ |___  |  |  \ |  |
     #
-    #if len(ZSpec['VHSpec']['rg']) != len(rg_master):
-    #    ZSpec['VHSpec'] = interpolate3d(
-    #        ZSpec['VHSpec'],
-    #        new_time=ZSpec['VHSpec']['ts'],
-    #        new_range=rg_master,
-    #        method=interp
-    #    )
 
     # average N time-steps of the radar spectra over the cloudnet time resolution (~30 sec)
     if dual_polarization:
@@ -603,13 +490,10 @@ def load_features_from_nc(
     #   |___ |__| |  | |__/     |  |  \ |  | | | \| | | \| |__] ___] |___  |
     #
     config_global_model = toml.load(voodoo_path + ann_settings_file)
-    USE_MODEL = config_global_model['tensorflow']['USE_MODEL']
 
     features, targets, multitargets, masked = load_features_and_labels(
         ZSpec['VHSpec'],
-        cloudnet_variables['CLASS'],
-        cloudnet_variables['category_bits'],
-        USE_MODEL=USE_MODEL,
+        CNclass, CNbits,
         **config_global_model['feature']
     )
 
@@ -646,7 +530,7 @@ def load_features_from_nc(
             logger.critical(f'DONE :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} zarr files generated, elapsed time = '
                             f'{timedelta(seconds=int(time() - start_time))} min')
 
-    return features, targets, multitargets, masked, cloudnet_variables['CLASS'], cloudnet_variables['detection_status'], cloudnet_model['T']
+    return features, targets, multitargets, masked, CNclass, ts_master, rg_master
 
 
 ########################################################################################################################
@@ -668,13 +552,6 @@ if __name__ == '__main__':
     ANN_INI_FILE = 'HP_12chdp.toml'
     #ANN_INI_FILE = 'ann_model_setting.toml'
 
-
-    lidar = 'POLLY'
-    cloudnet_vars = ['CLASS', 'detection_status', 'Z', 'VEL', 'VEL_sigma', 'width', 'Tw', 'insect_prob', 'beta', 'category_bits', 'quality_bits']
-    cloudnet_ts_vars = ['LWP']
-    model_vars = ['T', 'P', 'q', 'UWIND', 'VWIND']
-    lidar_vars = ['attbsc1064', 'attbsc532', 'depol']
-    larda_params = ['filename', 'system', 'colormap', 'rg_unit', 'var_unit']
 
     method_name, args, kwargs = h._method_info_from_argv(sys.argv)
 
@@ -699,7 +576,7 @@ if __name__ == '__main__':
     dt_string = f'{TIME_SPAN_[0]:%Y%m%d}_{TIME_SPAN_[0]:%H%M}-{TIME_SPAN_[1]:%H%M}'
 
     try:
-        features, targets, multitargets, masked, cn_class, cn_status, cn_temperature = load_features_from_nc(
+        features, targets, multitargets, masked, classes, ts, rg = load_features_from_nc(
             time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,

@@ -62,7 +62,7 @@ logger.addHandler(logging.StreamHandler())
 
 class Voodoo():
 
-    def __init__(self, voodoo_path='', radar='limrad94'):
+    def __init__(self, voodoo_path: str=None, data_path: str=None, radar='limrad94'):
         # gather command line arguments
         method_name, args, kwargs = Utils.read_cmd_line_args(sys.argv)
 
@@ -71,7 +71,7 @@ class Voodoo():
         self.CLOUDNET = kwargs['cloudnet'] if 'cloudnet' in kwargs else 'CLOUDNETpy94'
         self.VOODOO_PATH = voodoo_path
         self.LOGS_PATH = f'{voodoo_path}/logs/'
-        self.DATA_PATH = f'{voodoo_path}/data/'
+        self.DATA_PATH = f'{voodoo_path}/data/' if data_path is None else data_path
         self.MODELS_PATH = f'{voodoo_path}/models/'
         self.MODEL_NAME = kwargs['model'] + ' ' + args[0][:] if len(args) > 0 else kwargs['model'] if 'model' in kwargs else ''
         self.MODEL_PATH = f'{self.MODELS_PATH}/{self.MODEL_NAME}'
@@ -81,13 +81,13 @@ class Voodoo():
         self.plotnames = {}
 
         if self.TASK == 'predict' and not os.path.isfile(f'{self.MODEL_PATH}'):
-            raise FileNotFoundError(f'Trained model not found! {self.MODEL_PATH}')
+            raise RuntimeWarning(f'Trained model not found! {self.MODEL_PATH}')
 
         if len(self.CASE) == 17:
             self.data_chunk_toml = f'{voodoo_path}/tomls/auto-trainingset-{self.CASE}.toml'
             self.data_chunk_heads = [chunk for chunk in Utils.load_case_file(self.data_chunk_toml).keys()]
         elif '-X' in self.CASE:
-            self.data_chunk_toml = f'{voodoo_path}/tomls/auto-trainingset-{self.CASE[:-2]}.toml'
+            self.data_chunk_toml = f'{voodoo_path}/tomls/auto-trainingset-{self.CASE[:17]}.toml'
             self.data_chunk_heads = [chunk for chunk in Utils.load_case_file(self.data_chunk_toml).keys()]
         else:
             raise ValueError('Check keyword argument "case" ! (format(string): YYYYMMDD-YYYYMMDD')
@@ -103,7 +103,8 @@ class Voodoo():
             data_path = f'{self.DATA_PATH}/xarray_zarr/{self.CASE}.zarr'
             with xr.open_zarr(data_path) as zarr_data:
                 X = zarr_data['features'].values
-                X = X[:, :, :, np.newaxis]
+                if len(X.shape) < 4:
+                    X = X[:, :, :, np.newaxis]
                 y = zarr_data['targets'].values
 
             logger.critical(f'\nReading zarr {data_path}, elapsed time = {datetime.timedelta(seconds=int(time.time() - start_time))} [min:sec]')
@@ -128,13 +129,26 @@ class Voodoo():
             xr_ds._add_coordinate({'nsamples': 'Number of training samples'}, '-', np.arange(X.shape[0]))
             xr_ds._add_coordinate({'nvelocity': 'Number of velocity bins'}, '-', np.arange(X.shape[1]))
             xr_ds._add_coordinate({'nchannels': 'Number of stacked spectra'}, '-', np.arange(X.shape[2]))
-            xr_ds.add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels'), np.squeeze(X), **{})
+            xr_ds._add_coordinate({'npolarization': 'vertical(co) and horizontal(cx) polarization'}, '-', np.arange(X.shape[3]))
+            xr_ds.add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels', 'npolarization'), X, **{})
             xr_ds.add_nD_variable('targets', ('nsamples'), y, **{})
 
             h.change_dir(f'{self.DATA_PATH}/xarray_zarr/')
-            FILE_NAME = f'{self.CASE}-X.zarr'
+            FILE_NAME = f'{self.CASE}-X-{X.shape[2]}ch{X.shape[3]}pol.zarr'
             xr_ds.to_zarr(store=FILE_NAME, mode='w')
             logger.critical(f'save :: {FILE_NAME}')
+
+            xr_ds2D = VoodooXR(ts, rg)
+            xr_ds2D.add_nD_variable('classes', ('ts', 'rg'), classes, **{'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy'})
+            xr_ds2D.add_nD_variable('status', ('ts', 'rg'), status, **{'colormap': 'cloudnetpy_detection_status', 'rg_unit': 'km', 'var_unit': '',
+                                                                       'system': 'Cloudnetpy'})
+            xr_ds2D.add_nD_variable('Ze', ('ts', 'rg'), Z, **{})
+            xr_ds2D.add_nD_variable('mask', ('ts', 'rg'), masked, **{})
+
+            h.change_dir(f'{self.DATA_PATH}/xarray_zarr/')
+            FILE_NAME_2D = f'{self.CASE}-X-{X.shape[2]}ch{X.shape[3]}pol2D.zarr'
+            xr_ds2D.to_zarr(store=FILE_NAME_2D, mode='w')
+            logger.critical(f'save :: {FILE_NAME_2D}')
 
         # specify which kind of output we want to use image classification or multitarget classification
         if self.tf_settings['OUTPUT_TYPE'] == 'multitarget':
@@ -147,6 +161,11 @@ class Voodoo():
 
         if 'trim_spectra' in kwargs and len(kwargs['trim_spectra']) == 2:
             X = X[:, kwargs['trim_spectra'][0]:kwargs['trim_spectra'][1], :, :]
+
+        trim_spectra_ts = 6
+        if trim_spectra_ts > 0:
+            half = trim_spectra_ts//2
+            X = X[:, :, X.shape[2] - half:X.shape[2] + half, :]
 
         self.dataset = {}
         validation_set = ()
@@ -186,7 +205,7 @@ class Voodoo():
                 'uwind': uw,
                 'vwind': vw,
                 'Z': Z,
-                'VEL': VEL ,
+                'VEL': VEL,
                 'VEL_sigma': VEL_sigma,
                 'width': width,
                 'beta': beta,
@@ -300,7 +319,6 @@ class Voodoo():
 
     def plot_2d(self, container, mask, contour=None, varname='', info='', **kwargs):
 
-
         container['mask'] = mask
 
         fig, ax = tr.plot_timeheight(
@@ -336,31 +354,29 @@ class Voodoo():
 
     def data_to_xarray(self, cnn_pred):
 
+        xr_spec = VoodooXR(self.dataset['cloudnet_ts'], self.dataset['cloudnet_rg'])
+        xr_2D = VoodooXR(self.dataset['cloudnet_ts'], self.dataset['cloudnet_rg'])
 
-        xr_ds = VoodooXR(self.dataset['cloudnet_ts'], self.dataset['cloudnet_rg'])
+        xr_spec._add_coordinate({'nsamples': 'Number of samples'}, '-', np.arange(self.dataset['feature_set'].shape[0]))
+        xr_spec._add_coordinate({'nvelocity': 'Number of velocity bins'}, '-', np.arange(self.dataset['feature_set'].shape[1]))
+        xr_spec._add_coordinate({'nchannels': 'Number of stacked spectra'}, '-', np.arange(self.dataset['feature_set'].shape[2]))
+        xr_spec._add_coordinate({'npolarization': 'vertical(co) and horizontal(cx) polarization'}, '-', np.arange(self.dataset['feature_set'].shape[3]))
 
-        # add coordinates
-        xr_ds._add_coordinate({'nsamples': 'Number of samples'}, '-', np.arange(self.dataset['feature_set'].shape[0]))
-        xr_ds._add_coordinate({'nvelocity': 'Number of velocity bins'}, '-', np.arange(self.dataset['feature_set'].shape[1]))
-        xr_ds._add_coordinate({'nchannels': 'Number of stacked spectra'}, '-', np.arange(self.dataset['feature_set'].shape[2]))
+        xr_spec.add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels', 'npolarization'), self.dataset['feature_set'], **{})
+        xr_spec.add_nD_variable('targets', ('nsamples'), self.dataset['target_labels'], **{})
 
-        xr_ds._add_coordinate({'cl': 'Number of Cloudnet Classes'}, '-', np.arange(9))
+        xr_2D._add_coordinate({'cl': 'Number of Cloudnet Classes'}, '-', np.arange(9))
 
-        # add features and labels
-        xr_ds.add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels'), np.squeeze(self.dataset['feature_set']), **{})
-        xr_ds.add_nD_variable('targets', ('nsamples'), self.dataset['target_labels'], **{})
-
-        # add 2D variabels from cloudnet
-        xr_ds.add_nD_variable('mask_nc', ('ts', 'rg'), self.dataset['cloudnet_class'] < 1, **{})
-        xr_ds.add_nD_variable('mask', ('ts', 'rg'), self.dataset['mask'], **{})
-        xr_ds.add_nD_variable('temperature', ('ts', 'rg'), self.dataset['model_temp'], **{})
-        xr_ds.add_nD_variable('pressure', ('ts', 'rg'), self.dataset['model_press'], **{})
-        xr_ds.add_nD_variable('q', ('ts', 'rg'), self.dataset['model_q'], **{})
-        xr_ds.add_nD_variable('uwind', ('ts', 'rg'), self.dataset['uwind'], **{})
-        xr_ds.add_nD_variable('vwind', ('ts', 'rg'), self.dataset['vwind'], **{})
-        xr_ds.add_nD_variable('insect_prob', ('ts', 'rg'), self.dataset['insect_prob'], **{})
-        xr_ds.add_nD_variable('detection_status', ('ts', 'rg'), self.dataset['cloudnet_status'], **{'colormap': 'cloudnet_target_new'})
-        xr_ds.add_nD_variable('target_classification', ('ts', 'rg'), self.dataset['cloudnet_class'],
+        xr_2D.add_nD_variable('mask_nc', ('ts', 'rg'), self.dataset['cloudnet_class'] < 1, **{})
+        xr_2D.add_nD_variable('mask', ('ts', 'rg'), self.dataset['mask'], **{})
+        xr_2D.add_nD_variable('temperature', ('ts', 'rg'), self.dataset['model_temp'], **{})
+        xr_2D.add_nD_variable('pressure', ('ts', 'rg'), self.dataset['model_press'], **{})
+        xr_2D.add_nD_variable('q', ('ts', 'rg'), self.dataset['model_q'], **{})
+        xr_2D.add_nD_variable('uwind', ('ts', 'rg'), self.dataset['uwind'], **{})
+        xr_2D.add_nD_variable('vwind', ('ts', 'rg'), self.dataset['vwind'], **{})
+        xr_2D.add_nD_variable('insect_prob', ('ts', 'rg'), self.dataset['insect_prob'], **{})
+        xr_2D.add_nD_variable('detection_status', ('ts', 'rg'), self.dataset['cloudnet_status'], **{'colormap': 'cloudnet_target_new'})
+        xr_2D.add_nD_variable('target_classification', ('ts', 'rg'), self.dataset['cloudnet_class'],
                               **{'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy'})
 
         # add voodoo classificationd
@@ -370,31 +386,30 @@ class Voodoo():
 
         for var in ['Z', 'VEL', 'VEL_sigma', 'width', 'beta', 'attbsc532', 'depol']:
             self.dataset[var][np.isnan(self.dataset[var])] = -999.0
-            xr_ds.add_nD_variable(var, ('ts', 'rg'), self.dataset[var], **{**voodoo_specs, **{'colormap': 'jet'}})
+            xr_2D.add_nD_variable(var, ('ts', 'rg'), self.dataset[var], **{**voodoo_specs, **{'colormap': 'jet'}})
 
-        xr_ds.add_nD_variable('voodoo_classification', ('ts', 'rg'), pred_class['var'], **{**voodoo_specs, **{'colormap': 'cloudnet_target_new'}})
-        xr_ds.add_nD_variable('voodoo_classification_post', ('ts', 'rg'), pred_class['var'], **{**voodoo_specs, **{'colormap': 'cloudnet_target_new'}})
-        xr_ds.add_nD_variable('voodoo_classification_probabilities', ('ts', 'rg', 'cl'), pred_probs3D, **{**voodoo_specs, **{'colormap': 'viridis'}})
+        xr_2D.add_nD_variable('voodoo_classification', ('ts', 'rg'), pred_class['var'], **{**voodoo_specs, **{'colormap': 'cloudnet_target_new'}})
+        xr_2D.add_nD_variable('voodoo_classification_post', ('ts', 'rg'), pred_class['var'], **{**voodoo_specs, **{'colormap': 'cloudnet_target_new'}})
+        xr_2D.add_nD_variable('voodoo_classification_probabilities', ('ts', 'rg', 'cl'), pred_probs3D, **{**voodoo_specs, **{'colormap': 'viridis'}})
 
         # plot smoothed data
         from scipy.ndimage import gaussian_filter
-        smoothed_probs = np.zeros(xr_ds.voodoo_classification_probabilities.shape)
+        smoothed_probs = np.zeros(xr_2D.voodoo_classification_probabilities.shape)
         for i in range(9):
-            smoothed_probs[:, :, i] = gaussian_filter(xr_ds.voodoo_classification_probabilities[:, :, i].values, sigma=1)
+            smoothed_probs[:, :, i] = gaussian_filter(xr_2D.voodoo_classification_probabilities[:, :, i].values, sigma=1)
 
-        xr_ds['voodoo_classification_smoothed'] = (('ts', 'rg'), np.argmax(smoothed_probs, axis=2))
-        xr_ds['voodoo_classification_smoothed'].attrs = {'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy'}
-        xr_ds['voodoo_classification_probabilities_smoothed'] = (('ts', 'rg', 'cl'), smoothed_probs)
-        xr_ds['voodoo_classification_probabilities_smoothed'].attrs = {'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy'}
-
+        xr_2D['voodoo_classification_smoothed'] = (('ts', 'rg'), np.argmax(smoothed_probs, axis=2))
+        xr_2D['voodoo_classification_smoothed'].attrs = {'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy'}
+        xr_2D['voodoo_classification_probabilities_smoothed'] = (('ts', 'rg', 'cl'), smoothed_probs)
+        xr_2D['voodoo_classification_probabilities_smoothed'].attrs = {'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '',
+                                                                       'system': 'Cloudnetpy'}
 
         # load lwp
         self.dataset['cloudnet_lwp'] = np.ma.masked_invalid(self.dataset['cloudnet_lwp'])
         self.dataset['cloudnet_lwp'] = np.ma.masked_greater_equal(self.dataset['cloudnet_lwp'], 1.0e6)
-        xr_ds.add_nD_variable('lwp', ('ts',), self.dataset['cloudnet_lwp'], **{})
+        xr_2D.add_nD_variable('lwp', ('ts',), self.dataset['cloudnet_lwp'], **{})
 
-        return xr_ds
-
+        return xr_2D, xr_spec
 
     def Aftermath(self, pred_):
 
@@ -402,7 +417,7 @@ class Voodoo():
         self.case_plot_path = f'{self.LOGS_PATH}/{self.MODEL_NAME}/'
         h.change_dir(self.case_plot_path)
 
-        xr_ds = self.data_to_xarray(pred_)
+        xr_ds, xr_spec = self.data_to_xarray(pred_)
 
         # extract a binary mask, where True contains liquid cloud droplets
         mean_delta_rg = np.mean(np.diff(xr_ds['rg']))
@@ -439,9 +454,9 @@ class Voodoo():
             if self.stat_settings['exclude_wet_radome_mwr'] > 0:
                 joint_availability[rain_flag[self.stat_settings['exclude_drizzle']]] = False
 
-
         predictions_nc = f'{self.CASE}-{self.MODEL_NAME}.nc'
         xr_ds.to_netcdf(predictions_nc)
+        xr_spec.to_netcdf(predictions_nc.replace('.nc', '-FL.nc'))
         logger.critical(f'VOODOO predictions saved : {predictions_nc}')
 
         # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -455,7 +470,6 @@ class Voodoo():
             varname='VOODOO_class', info='postproc-off', var_lims=[0, 10]
         )
         self.save_to_png(fig_raw_pred, 'VOODOO_class', info='postproc-off')
-
 
         fig_raw_pred, ax_raw_pred = plt.subplots(nrows=1, ncols=1, figsize=_FIG_SIZE)
         fig_raw_pred, ax_raw_pred = self.plot_2d(
@@ -495,7 +509,6 @@ class Voodoo():
             contour=contour_Temp,
             varname='VOODOO_class2', info='postproc-on', var_lims=[0, 10])
         self.save_to_png(fig_proc_pred, 'VOODOO_class2_smoothed', info='postproc-on')
-
 
     def prediction_to_larda_container(self, prediction, mask):
 
@@ -608,8 +621,9 @@ if __name__ == '__main__':
     _PLOT_RANGE = [0, 12000]
 
     VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
-    ANN_MODEL_TOML = 'ann_model_setting.toml'
-    DATA_LOC = f'{VOODOO_PATH}/data/'
+    # ANN_MODEL_TOML = 'ann_model_setting.toml'
+    ANN_MODEL_TOML = 'HP_12chdp.toml'
+    DATA_LOC = f'{VOODOO_PATH}/data_12chdp/'
 
     start_time = time.time()
     logger.critical(f'\nData location : {DATA_LOC}')
@@ -620,13 +634,13 @@ if __name__ == '__main__':
     #   | |\ | |  |  | |__| |    |   /  | |\ | | __
     #   | | \| |  |  | |  | |___ |  /__ | | \| |__]
     #
-    x = Voodoo(voodoo_path=VOODOO_PATH, radar='limrad94')
+    x = Voodoo(voodoo_path=VOODOO_PATH, data_path=DATA_LOC, radar='limrad94')
 
     cnn_parameters = x.init_cnn_setup(ann_config_toml=ANN_MODEL_TOML)
 
-    x.import_dataset(data_root=DATA_LOC, save=False)
+    x.import_dataset(data_root=DATA_LOC, save=True)
     # x.import_dataset(data_root=DATA_LOC, trim_spectra=[256, 512])
-    #sys.exit()
+    # sys.exit()
 
     # I/O dimensions
     cnn_parameters.update({

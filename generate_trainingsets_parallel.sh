@@ -43,7 +43,7 @@ if [[ $1 != "" ]]; then
 else
     echo "USE PRE-DEFINED DATE"
 
-    start_day="20181127"; end_day="20190928"; start_hour="0000"; end_hour="2359";
+    start_day="20190801"; end_day="20190801"; start_hour="0000"; end_hour="2359";
 
 fi
 
