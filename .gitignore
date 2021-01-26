@@ -5,15 +5,35 @@
 /plots/**/*
 /tomls/**/*
 /libVoodoo/plots/**/*
+libVoodoo/.DS_Store
 __pycache__/**/*
 /**/__pycache__/**/*
 /**/.ipynb_checkpoints/**/*
 /voodoo.egg-info/
+voodoo_deprJan2021/**/*
 build/**/*
 data/**/*
 dist/**/*
 nc-files/**/*
 /**/*.sh
+
+*.zip
+*.py~
+*.json
+*.pyc
+*.swp
+.gitignore~
+.spyderworkspace
+*.lprof
+*.lprof~
+.ipynb_checkpoints
+.ipynb_checkpoints/*
+**/__pycache__/**/*
+libVoodoo/__pycache__/*
+data*/
+data_new/
+torch_models/
+
 
 # ignore files
 training*

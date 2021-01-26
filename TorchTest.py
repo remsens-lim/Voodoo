@@ -35,16 +35,19 @@ if __name__ == '__main__':
     
     _, agrs, kwargs = UT.read_cmd_line_args()
     # load data
-    trained_model = os.path.join(pt_models_path, f"{kwargs['model'][:-3]}/{kwargs['model']}" if 'model' in kwargs else '')
+    trained_model = os.path.join(
+        pt_models_path,
+        f"{kwargs['model']}" if 'model' in kwargs else 'TEST_desp/Vnet0x6007eab3-dc2-fn6-eps3-bs128-bl200000.pt'
+    )
     task = 'inference' if 'task' not in kwargs else kwargs['task']
 
     if task == 'inference':
         date_str = str(kwargs['time'])
-        dt_begin = datetime.datetime.strptime(f"{date_str}-0901", '%Y%m%d-%H%M')
-        dt_end = dt_begin + datetime.timedelta(minutes=12*60-2)
+        dt_begin = datetime.datetime.strptime(f"{date_str}-0001", '%Y%m%d-%H%M')
+        dt_end = dt_begin + datetime.timedelta(minutes=24*60-2)
         print(f'Loading data from nc ...... {dt_begin:%Y%m%d %H:%M} to {dt_end:%Y%m%d %H:%M}')
 
-        X, y, _, mask, classes, ts, rg = load_features_from_nc(
+        X, y, _, mask, _, ts, rg = load_features_from_nc(
             time_span=[dt_begin, dt_end],
             VOODOO_PATH=VOODOO_PATH,
             data_path=DATA_PATH,
@@ -57,10 +60,11 @@ if __name__ == '__main__':
             dual_polarization=True,
         )
 
+        X = X[:, :, 4:10, 0]  # good!
+        X = X[:, :, :, np.newaxis]
         X = X.transpose(0, 3, 2, 1)
         X_test = torch.Tensor(X)
         y_test = torch.Tensor(y)
-        classes = classes['var'].copy()
     elif task == 'test':
         date_str = kwargs['time'] if 'time' in kwargs else '20190801'
         toml_file = f'{VOODOO_PATH}/tomls/auto-trainingset-{date_str}-{date_str}.toml'
@@ -75,6 +79,8 @@ if __name__ == '__main__':
         )
         X, y, classes, mask, ts, rg = args[0], args[1], args[3], args[8], args[12], args[13]
 
+        X = X[:, :, 4:10, 0]  # good!
+        X = X[:, :, :, np.newaxis]
         X = X.transpose(0, 3, 2, 1)
         X_test = torch.Tensor(X)
         y_test = torch.Tensor(y)
@@ -89,7 +95,6 @@ if __name__ == '__main__':
         xrTest = TM.VoodooNet.fetch_2Ddata(TEST_PATH)
 
         mask = xrTest['mask'].values.copy()
-        classes = xrTest['classes'].values.copy()
         ts, rg = xrTest['mask'].ts.copy(), xrTest['mask'].rg.copy()
         import re
 
@@ -117,12 +122,19 @@ if __name__ == '__main__':
         'range_interval': [0, 5]
     })
 
-    CNclasses = Vclasses.copy()
-    CNclasses['CLASS'].attrs['system'] = 'CLOUDNETpy94'
-    CNclasses['CLASS'].values = classes
+    f, ax = TM.VoodooNet.create_quicklook(Vclasses['CLASS'])
+    fig_name = trained_model.replace('.pt', f'-{date_str}-V.png')
+    f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
+    print(f"\nfig saved: {fig_name}")
 
-    TM.VoodooNet.create_quicklook(Vclasses['CLASS'], trained_model.replace('.pt', f'-{date_str}-VO0DOO.pt'))
-    TM.VoodooNet.create_quicklook(CNclasses['CLASS'], trained_model.replace('.pt', f'-{date_str}-CN.pt'))
+    if task != 'inference':
+        CNclasses = Vclasses.copy()
+        CNclasses['CLASS'].attrs['system'] = 'CLOUDNETpy94'
+        CNclasses['CLASS'].values = classes
+        f, ax = TM.VoodooNet.create_quicklook(CNclasses['CLASS'])
+        fig_name = trained_model.replace('.pt', f'-{date_str}-CN.png')
+        f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
+        print(f"\nfig saved: {fig_name}")
 
     # plot smoothed data
     from scipy.ndimage import gaussian_filter
@@ -141,7 +153,10 @@ if __name__ == '__main__':
     Vclasses['sCLASS'].values = np.argmax(smoothed_probs, axis=2)
     Vclasses['sCLASS'].values[mask] = 0
 
-    TM.VoodooNet.create_quicklook(Vclasses['sCLASS'], trained_model.replace('.pt', f'-{date_str}-VO0DOO_smoothed.pt'))
+    f, ax = TM.VoodooNet.create_quicklook(Vclasses['sCLASS'])
+    fig_name = trained_model.replace('.pt', f'-{date_str}-sV.png')
+    f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
+    print(f"\nfig saved: {fig_name}")
 
 #######
 #    # post stuff

@@ -26,7 +26,8 @@ voodoo_path = '/home/sdig/code/larda3/voodoo/'
 model_path = '/home/sdig/code/larda3/voodoo/HP_12chdp2.toml'
 toml_file = '/home/sdig/code/larda3/voodoo/tomls/auto-trainingset-20190801-20190801.toml'
 CALIBRATED_PATH = '/home/sdig/code/larda3/voodoo/data_12chdp/CLOUDNETpy94/xarray/'
-CONCATINATED_PATH = '/home/sdig/code/larda3/voodoo/data_12chdp/xarray_zarr/'
+CONCATINATED_PATH = '/home/sdig/code/larda3/voodoo/data_12chdp/xarray_zarr_5folds/'
+TOMLS_PATH = '/home/sdig/code/larda3/voodoo/tomls/5folds_all/'
 
 
 def save_torch_input(args, path, datestr=''):
@@ -40,7 +41,7 @@ def save_torch_input(args, path, datestr=''):
     xr_ds.add_nD_variable('targets', ('nsamples'), args[1], **{})
 
     h.change_dir(path)
-    FILE_NAME = f'{datestr}-X-{args[0].shape[2]}ch{args[0].shape[3]}pol.zarr'
+    FILE_NAME = f'{datestr}-{args[0].shape[2]}ch{args[0].shape[3]}pol.zarr'
     xr_ds.to_zarr(store=FILE_NAME, mode='w')
     logger.critical(f'save :: {FILE_NAME}')
 
@@ -87,13 +88,12 @@ def save_2D_validation_data(args, path, datestr=''):
 
 if __name__ == '__main__':
 
-    nfiles = 1
-    tomls_path = '/home/sdig/code/larda3/voodoo/tomls/'
-    toml_file = f'{tomls_path}/auto-trainingset-20190801-20190801.toml'
+    nfiles = 5
+    toml_file = f'{TOMLS_PATH}/auto-trainingset-20190801-20190801.toml'
     # reprocess entire trainingset
-    for ifile in range(0, nfiles):
+    for ifile in range(1, nfiles):
         if nfiles > 1:
-            toml_file = f'{tomls_path}/auto-trainingset-20181127-20190927-{ifile}.toml'
+            toml_file = f'{TOMLS_PATH}/auto-trainingset-20181127-20190927-{ifile}.toml'
         print(f'\nLoad toml file: {toml_file}')
 
         args = load_dataset_from_zarr(
@@ -101,13 +101,13 @@ if __name__ == '__main__':
             toml_file,
             CLOUDNET='CLOUDNETpy94',
             RADAR='limrad94',
-            TASK='predict',
+            TASK='train',
         )
 
         log_number_of_classes(args[1], text=f'\nsamples per class')
 
         m = re.search('\d{8}-\d{8}', toml_file).group(0)
-        save_torch_input(args, CONCATINATED_PATH, datestr=f'{m}-{ifile}-allclasses-deepconv2only')
+        save_torch_input(args, CONCATINATED_PATH, datestr=f'{m}-{ifile}-allclasses-allfiles')
         try:
             save_2D_validation_data(args, CONCATINATED_PATH, datestr=m)
         except:

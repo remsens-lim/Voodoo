@@ -71,6 +71,25 @@ def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
 
     return fig, ax
 
+def create_acc_loss_graph(stats):
+    fig = plt.figure(figsize=(10, 10))
+
+    ax1 = plt.subplot2grid((2, 1), (0, 0))
+    ax2 = plt.subplot2grid((2, 1), (1, 0), sharex=ax1)
+
+    ax1.plot(stats[:, 1], label="acc")
+    ax1.plot(stats[:, 2], label="val_acc")
+    ax1.legend(loc=2)
+    ax2.plot(stats[:, 3], label="loss")
+    ax2.plot(stats[:, 4], label="val_loss")
+    ax2.legend(loc=2)
+    ax1.grid()
+    ax2.grid()
+    load_xy_style(ax1, xlabel='validation epochs', ylabel='accuracy [1]', fs=10)
+    load_xy_style(ax2, xlabel='validation epochs', ylabel='loss [-]', fs=10)
+
+    return fig, np.array([ax1, ax2], dtype=object)
+
 
 # Some adjustments to the axis labels, ticks and fonts
 def load_xy_style(axis, xlabel='Time [UTC]', ylabel='Height [m]', fs=10):

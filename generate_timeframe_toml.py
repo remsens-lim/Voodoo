@@ -12,7 +12,7 @@ def generate_multicase_trainingset(t_span, t_train, t_skip, path, cnt=0):
     """
     training_span = datetime.timedelta(minutes=t_train)
     skip = datetime.timedelta(minutes=t_skip)
-    h.change_dir(f'{path}')
+    h.change_dir(path)
     t_span_str = f'{t_span[0]:%Y%m%d}-{t_span[1]:%Y%m%d}'
     if t_span[1] == '0000': t_span[1] = '2359'
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
             )
     else:
 
-        for i in range(1):
+        for i in range(24):
 
             if 'dt_start' in kwargs and 'dt_end' in kwargs:
                 dt_begin = datetime.datetime.strptime(f'{kwargs["dt_start"]}', '%Y%m%d %H%M')
@@ -79,8 +79,8 @@ if __name__ == '__main__':
             generate_multicase_trainingset(
                 [dt_begin, dt_end],
                 float(kwargs['t_train']) if 't_train' in kwargs else 60.0,   # minutes,
-                float(kwargs['t_skip']) if 't_skip' in kwargs else 600.0,   # minutes,
-                '/home/sdig/code/larda3/voodoo/tomls/',
+                float(kwargs['t_skip']) if 't_skip' in kwargs else 300.0,   # minutes,
+                '/home/sdig/code/larda3/voodoo/tomls/5folds_all/',
                 cnt=hour
             )
     print('done\n')

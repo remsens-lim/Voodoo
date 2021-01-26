@@ -8,6 +8,7 @@ from itertools import groupby
 from itertools import product
 
 import numpy as np
+
 np.random.seed(2000)
 
 import toml
@@ -623,12 +624,12 @@ def load_case_list(path, case_name):
 
 def log_number_of_classes(classes, text=''):
     # numer of samples per class afer removing ice
-    class_n_distribution = np.zeros(len(cloudnetpy_classes))
+    class_n_distribution = np.zeros(len(cloudnetpy_classes), dtype=int)
     logger.info(text)
     logger.info(f'{classes.size:12d}   total')
     for i in range(len(cloudnetpy_classes)):
         n = np.sum(classes == i)
-        logger.info(f'{n:12d}   {cloudnetpy_classes[i]}')
+        logger.info(f'{n:12_d}   {cloudnetpy_classes[i]}')
         class_n_distribution[i] = n
     return class_n_distribution
 
@@ -689,7 +690,7 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
         try:
             with xr.open_zarr(f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
                 # for training & validation
-                #_multitarget = zarr_data['multitargets'].values
+                # _multitarget = zarr_data['multitargets'].values
                 _feature = zarr_data['features'].values
                 _target = zarr_data['targets'].values
                 _masked = zarr_data['masked'].values
@@ -778,30 +779,14 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
                 raise ValueError(f'Wrong feature set dimensions : {_feature.shape}')
 
             _target = _target[idx_valid_samples, np.newaxis]
-            #_multitarget = _multitarget[idx_valid_samples, :]
-
-            """
-            flip the CWT on the y-axis to generate a mirror image, 
-            the goal is to overcome the miss-classification of updrafts as liquid
-            """
-#            if kwargs['add_flipped']:
-#                _feature_flipped = np.zeros(_feature.shape)
-#                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[-1])):
-#                    if kwargs["CDIM"] == 'conv2d':
-#                        _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
-#                else:
-#                    _feature_flipped[ismpl, :, ichan] = np.flip(_feature[ismpl, :, ichan])
-#
-#                _feature = np.concatenate((_feature, _feature_flipped), axis=0)
-#                _target = np.concatenate((_target, _target), axis=0)
-#                _multitarget = np.concatenate((_multitarget, _multitarget), axis=0)
+            # _multitarget = _multitarget[idx_valid_samples, :]
 
         logger.debug(f'\n dim = {_feature.shape}')
         logger.debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
 
         features.append(_feature)
         labels.append(_target)
-        #multilabels.append(_multitarget)
+        # multilabels.append(_multitarget)
 
         if TASK == 'train':
             continue
@@ -829,7 +814,7 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
 
     features = np.concatenate(features, axis=0)
     labels = np.concatenate(labels, axis=0)
-    #multilabels = np.concatenate(multilabels, axis=0)
+    # multilabels = np.concatenate(multilabels, axis=0)
     returns = [features, np.squeeze(labels), multilabels]
 
     if TASK == 'train':
@@ -838,12 +823,12 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
     else:
         returns.append(np.concatenate(class_, axis=0))
         returns.append(np.concatenate(status, axis=0))
-        returns.append(np.concatenate(catbits, axis=0)) # 5
+        returns.append(np.concatenate(catbits, axis=0))  # 5
         returns.append(np.concatenate(qualbits, axis=0))
         returns.append(np.concatenate(insect_prob, axis=0))
         returns.append(np.concatenate(mask, axis=0))
         returns.append(np.concatenate(mT, axis=0))
-        returns.append(np.concatenate(mP, axis=0)) # 10
+        returns.append(np.concatenate(mP, axis=0))  # 10
         returns.append(np.concatenate(mq, axis=0))
         returns.append(np.concatenate(ts, axis=0))
         returns.append(np.array(_rg))
@@ -924,24 +909,23 @@ def one_hot_to_spectra(features, mask):
     return spectra
 
 
-def random_choice(xr_ds, rg_int, N=4, iclass=4, var='CLASS'):
-    import pyLARDA.helpers as h
-    nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
+def argnearest(array, value):
+    """find the index of the nearest value in a sorted array
+    for example time or range axis
 
-    icnt = 0
-    indices = np.zeros((N, 2), dtype=np.int)
-    nnearest = h.argnearest(xr_ds.ZSpec.rg.values, rg_int)
-    #mask_below_x = xr_ds['PROBDIST'][:, :, iclass].values > 0.5
+    Args:
+        array (np.array): sorted array with values, list will be converted to 1D array
+        value: value to find
+    Returns:
+        index
+    """
+    if type(array) == list:
+        array = np.array(array)
+    i = np.searchsorted(array, value) - 1
 
-    while icnt < N:
-        while True:
-            idxts = int(np.random.randint(0, high=nts, size=1))
-            idxrg = int(np.random.randint(0, high=nnearest, size=1))
-            msk = ~xr_ds.mask[idxts, idxrg] #* mask_below_x[idxts, idxrg]
-            cls = xr_ds[var].values[idxts, idxrg] == iclass
-            if msk and cls:
-                indices[icnt, :] = [idxts, idxrg]
-                icnt += 1
-                break
-    return indices
+    if not i == array.shape[0] - 1:
+        if np.abs(array[i] - value) > np.abs(array[i + 1] - value):
+            i = i + 1
+    return i
+
 

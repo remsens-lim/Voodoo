@@ -5,21 +5,25 @@ This module contains functions for generating deep learning models with Tensorfl
 
 import os
 import sys
+import logging
+import time
 from collections import OrderedDict
-from typing import Tuple
 
 import matplotlib.pyplot as plt
-import numpy as np
 
-np.random.seed(2000)
+import numpy as np
+np.random.seed(0)
+
 import torch
 import torch.nn as nn
-import xarray as xr
-from matplotlib import style
-from tqdm.auto import tqdm
-from typing import List, Set, Dict, Tuple, Optional
+torch.manual_seed(0)
 
-from .Utils import log_number_of_classes, random_choice
+import xarray as xr
+
+from tqdm.auto import tqdm, trange
+from typing import List, Tuple
+
+from .Utils import log_number_of_classes, argnearest
 from .Utils import logger as log_UT
 from generate_trainingset import VoodooXR
 
@@ -27,7 +31,6 @@ PATH_TO_LARDA = '/home/sdig/code/larda3/larda/'
 sys.path.append(PATH_TO_LARDA)
 import pyLARDA.Transformations as TR
 
-import logging
 
 log_TM = logging.getLogger(__name__)
 log_TM.setLevel(logging.CRITICAL)
@@ -42,7 +45,7 @@ log_UT.setLevel(logging.INFO)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
 __author__ = "Willi Schimmel"
-__copyright__ = "Copyright 2019, The Voodoo Project"
+__copyright__ = "Copyright 2021, The Voodoo Project"
 __credits__ = ["Willi Schimmel"]
 __license__ = "MIT"
 __version__ = "0.0.1"
@@ -54,7 +57,7 @@ __status__ = "Prototype"
 class Conv2DUnit(nn.Module):
     def __init__(self, in_shape, nfltrs, kernel, pool, padding):
         super(Conv2DUnit, self).__init__()
-        self.conv = nn.Conv2d(in_shape, nfltrs, kernel_size=tuple(kernel), padding=1)  # , padding_mode='circular')
+        self.conv = nn.Conv2d(in_shape, nfltrs, kernel_size=tuple(kernel), padding=tuple(padding), padding_mode='circular')
         self.bn = nn.BatchNorm2d(num_features=nfltrs)
         self.relu = nn.ELU()
         self.pool = nn.AvgPool2d(tuple(pool))
@@ -77,9 +80,11 @@ class DenseUnit(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, input):
+        #residual = input  # Save input as residual
         output = self.dense(input)
         output = self.bn(output)
         output = self.relu(output)
+        #output += residual  # residual block
         output = self.dropout(output)
         return output
 
@@ -209,11 +214,15 @@ class VoodooNet(nn.Module):
             batch_size: int = 256,
             mask_below: float = -1,
             despeckle: bool = False,
+            remove_sl: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
+        t0 = time.time()
         with xr.open_zarr(path) as data:
-            X = data['features'].values.copy()
-            y = data['targets'].values.copy()
+            X = data['features'].values
+            y = data['targets'].values
+
+            print(f'time elapsed reading {path} :: {int(time.time()-t0)} sec')
 
             assert len(X) != 4, f'Input data has wrong shape: {X.shape}'
 
@@ -244,8 +253,18 @@ class VoodooNet(nn.Module):
                 s_mask = np.all(s_min == s_max, axis=1)
                 rm_list = np.where(s_mask)[0]
 
-                y = np.delete(y, rm_list)
+                X = np.delete(X, rm_list, axis=0)
+                y = np.delete(y, rm_list, axis=0)
                 log_number_of_classes(y, text=f'\nsamples per class, weird samples removed')
+
+            if remove_sl:
+                ichannel = 0
+                Xnew = np.min(X[:, ichannel, :, :], axis=2)
+                for ifeat in tqdm(range(X.shape[0]), ncols=100):
+                    for iBin in range(256):
+                        mask = X[ifeat, ichannel, :, iBin] <= Xnew[ifeat, :]
+                        X[ifeat, ichannel, mask, iBin] = 1.0e-7
+
 
             X = torch.Tensor(X)
             y = torch.Tensor(y)
@@ -255,7 +274,7 @@ class VoodooNet(nn.Module):
                 perm = torch.randperm(len(y))
                 X, y = X[perm], y[perm]
 
-        return X, y
+            return X, y
 
     @staticmethod
     def fetch_2Ddata(path):
@@ -273,6 +292,7 @@ class VoodooNet(nn.Module):
         perm = np.arange(0, idx.size)
         np.random.shuffle(perm)
         idx = idx[perm]
+
         if 0.0 <= remove_from_class <= 100.0:
             rand_choice = idx[:int(idx.size * remove_from_class / 100.)]
         elif remove_from_class > 100:
@@ -286,31 +306,10 @@ class VoodooNet(nn.Module):
         return _feature_out, _target_out
 
     @staticmethod
-    def create_acc_loss_graph(stats, path):
-        style.use("ggplot")
-        fig = plt.figure()
-
-        ax1 = plt.subplot2grid((2, 1), (0, 0))
-        ax2 = plt.subplot2grid((2, 1), (1, 0), sharex=ax1)
-
-        ax1.plot(stats[:, 1], label="acc")
-        ax1.plot(stats[:, 2], label="val_acc")
-        ax1.legend(loc=2)
-        ax2.plot(stats[:, 3], label="loss")
-        ax2.plot(stats[:, 4], label="val_loss")
-        ax2.legend(loc=2)
-        fig.savefig(path.replace('.pt', '.png'))
-        log_TM.info(f"fig saved: {path.replace('.pt', '.png')}")
-        # np.save(path.replace('.pt', '.npy'), stats)
-
-    @staticmethod
-    def create_quicklook(da, path, title=''):
+    def create_quicklook(da):
         f, ax = plt.subplots(nrows=1, figsize=(14, 5.7))
         f, ax = TR.plot_timeheight2(da, fig=f, ax=ax)
-        if len(title) > 0:
-            ax.set_title(title, fontsize=10, fontweight='normal')
-        f.savefig(path.replace('.pt', '-quicklook.png'), dpi=450)
-        log_TM.info(f"fig saved: {path.replace('.pt', '-quicklook.png')}")
+        return f, ax
 
     @staticmethod
     def new_classification(pred, mask):
@@ -387,8 +386,15 @@ class VoodooNet(nn.Module):
     def random_subset(xr_ds, var='CLASS', rg_max=12000):
 
         # choose a random set of indices
-        analyse_classes = [1, 2, 4, 5]
+        analyse_classes = [2, 4]
+        Nclasses = log_number_of_classes(
+            xr_ds['CLASS'].values,
+            text='\nsamples per class, from prediction'
+        )
+
+        analyse_classes = [i for i in analyse_classes if Nclasses[i] > len(analyse_classes)]
         N = len(analyse_classes)
+
         indices = np.concatenate(
             [random_choice(
                 xr_ds,
@@ -413,34 +419,55 @@ class VoodooNet(nn.Module):
 
         xr_ds['mask'] = X2D['mask'].copy()
 
-        xr_ds.add_nD_variable('CLASS', ('ts', 'rg'),
-                              VoodooNet.new_classification(prediction, xr_ds['mask'].values),
-                              **kwargs
-                              )
+        xr_ds.add_nD_variable(
+            'CLASS', ('ts', 'rg'),
+            VoodooNet.new_classification(
+                prediction, xr_ds['mask'].values
+            ),
+            **kwargs
+        )
         xr_ds['CLOUDNET_CLASS'] = X2D['classes'].copy()
         xr_ds['CLOUDNET_STATUS'] = X2D['status'].copy()
         xr_ds['CLOUDNET_ZE'] = X2D['Ze'].copy()
 
-        xr_ds.add_nD_variable('CLOUDNET_STATUS', ('ts', 'rg'),
-                              VoodooNet.new_classification(prediction, xr_ds['mask'].values),
-                              **kwargs
-                              )
+        xr_ds.add_nD_variable(
+            'CLOUDNET_STATUS', ('ts', 'rg'),
+            VoodooNet.new_classification(
+                prediction,
+                xr_ds['mask'].values
+            ),
+            **kwargs
+        )
 
-        xr_ds.add_nD_variable('PROBDIST', ('ts', 'rg', 'cl'),
-                              VoodooNet.reshape(prediction, xr_ds['mask'].values, (n_ts, n_rg, n_class)),
-                              **kwargs
-                              )
+        xr_ds.add_nD_variable(
+            'PROBDIST', ('ts', 'rg', 'cl'),
+            VoodooNet.reshape(
+                prediction,
+                xr_ds['mask'].values,
+                (n_ts, n_rg, n_class)
+            ),
+            **kwargs
+        )
 
-        xr_ds.add_nD_variable('ZSpec', ('ts', 'rg', 'ch', 'vel'),
-                              VoodooNet.reshape(XnD[:, POLARIZ, :, :], xr_ds['mask'].values, (n_ts, n_rg, n_ch, n_vel)),
-                              **kwargs
-                              )
+        xr_ds.add_nD_variable(
+            'ZSpec', ('ts', 'rg', 'ch', 'vel'),
+            VoodooNet.reshape(
+                XnD[:, POLARIZ, :, :],
+                xr_ds['mask'].values,
+                (n_ts, n_rg, n_ch, n_vel)
+            ),
+            **kwargs
+        )
 
-        sprobabilities = VoodooNet.smooth_prediction(xr_ds['PROBDIST'].values, (n_ts, n_rg, n_class))
-        xr_ds.add_nD_variable('sCLASS', ('ts', 'rg'),
-                              np.argmax(sprobabilities, axis=2),
-                              **kwargs
-                              )
+        sprobabilities = VoodooNet.smooth_prediction(
+            xr_ds['PROBDIST'].values,
+            (n_ts, n_rg, n_class)
+        )
+        xr_ds.add_nD_variable(
+            'sCLASS', ('ts', 'rg'),
+            np.argmax(sprobabilities, axis=2),
+            **kwargs
+        )
         xr_ds['sCLASS'].values[xr_ds['mask'].values] = 0
         xr_ds['sCLASS'] = xr_ds['sCLASS'].astype(int)
         xr_ds['CLASS'] = xr_ds['CLASS'].astype(int)
@@ -459,8 +486,8 @@ class VoodooNet(nn.Module):
         pytorch_total_params = sum(p.numel() for p in self.parameters())
         pytorch_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         log_TM.info(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
-        log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:,d}', )
-        log_TM.info(f'             Total  parameters: {pytorch_total_params:,d}', )
+        log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
+        log_TM.critical(f'             Total  parameters: {pytorch_total_params:_d}')
 
     def _define_cnn(self):
 
@@ -567,3 +594,51 @@ class VoodooNet(nn.Module):
 
         sm = nn.Softmax(dim=1)
         return sm(torch.cat(pred, 0))
+
+
+    def lrp(self, X_test, y_test, batch_size=1, dev='cpu'):
+        from captum.attr import IntegratedGradients
+        attr_algo = IntegratedGradients(self)
+
+        self.train()
+        att_list, delta_list = [], []
+        log_TM.info('\nLayerwise-relevance propagation')
+        for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
+            batch_X = X_test[i:i + batch_size].to(dev)
+            batch_y = y_test[i:i + batch_size].to(dev)
+
+            attributes, delta = attr_algo.attribute(
+                batch_X[0],
+                target=batch_y[0],
+                return_convergence_delta=True
+            )
+            att_list.append(attributes)
+            delta_list.append(delta)
+
+        return
+
+
+def random_choice(xr_ds, rg_int, N=4, iclass=4, var='CLASS'):
+    nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
+
+    icnt = 0
+    indices = np.zeros((N, 2), dtype=np.int)
+    nnearest = argnearest(xr_ds.ZSpec.rg.values, rg_int)
+    # mask_below_x = xr_ds['PROBDIST'][:, :, iclass].values > 0.5
+
+    MAXITER = 1000
+    while icnt < N:
+        iter = 0
+        while True:
+            iter += 1
+            idxts = int(np.random.randint(0, high=nts, size=1))
+            idxrg = int(np.random.randint(0, high=nnearest, size=1))
+            msk = ~xr_ds.mask[idxts, idxrg]  # * mask_below_x[idxts, idxrg]
+            cls = xr_ds[var].values[idxts, idxrg] == iclass
+            #if iter > MAXITER:
+            #    raise RuntimeError(f'No class {iclass} found!')
+            if msk and cls:
+                indices[icnt, :] = [idxts, idxrg]
+                icnt += 1
+                break
+    return indices
