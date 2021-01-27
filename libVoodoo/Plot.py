@@ -9,6 +9,7 @@ import datetime
 import numpy as np
 import logging
 
+from itertools import product
 from scipy.fftpack import fft
 
 import matplotlib
@@ -46,6 +47,162 @@ _DPI = 450
 _FONT_SIZE = 14
 _FONT_WEIGHT = 'normal'
 
+
+def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
+    import matplotlib.ticker as plticker
+    Z = ZSpec.sel(ts=ts, rg=rg)
+
+    Z = np.squeeze(Z.values)
+    X, Y = np.meshgrid(
+        np.linspace(-Z.shape[1]//2, Z.shape[1]//2, num=Z.shape[1]),
+        np.linspace(0, Z.shape[0], num=Z.shape[0])
+    )
+
+    if 'fig' in font_settings and 'ax' in font_settings:
+        fig, ax = font_settings['fig'], font_settings['ax']
+    else:
+        fig, ax = plt.subplots(1, figsize=(7, 7))
+
+    surf = ax.contourf(X, Y, Z, cmap='coolwarm', linewidth=0.5, linestyle=':', antialiased=False)
+
+    ax.set(xlabel=r"Doppler velocity bins [-]", ylabel="signal normalized")
+    ax.xaxis.set_major_locator(plticker.MultipleLocator(base=32))
+    ax.grid(which='both')
+
+    return fig, ax
+
+def create_acc_loss_graph(stats):
+    fig = plt.figure(figsize=(10, 10))
+
+    ax1 = plt.subplot2grid((2, 1), (0, 0))
+    ax2 = plt.subplot2grid((2, 1), (1, 0), sharex=ax1)
+
+    ax1.plot(stats[:, 1], label="acc")
+    ax1.plot(stats[:, 2], label="val_acc")
+    ax1.legend(loc=2)
+    ax2.plot(stats[:, 3], label="loss")
+    ax2.plot(stats[:, 4], label="val_loss")
+    ax2.legend(loc=2)
+    ax1.grid()
+    ax2.grid()
+    load_xy_style(ax1, xlabel='validation epochs', ylabel='accuracy [1]', fs=10)
+    load_xy_style(ax2, xlabel='validation epochs', ylabel='loss [-]', fs=10)
+
+    return fig, np.array([ax1, ax2], dtype=object)
+
+
+# Some adjustments to the axis labels, ticks and fonts
+def load_xy_style(axis, xlabel='Time [UTC]', ylabel='Height [m]', fs=10):
+    """
+    Method that alters the apperance of labels on the x and y axis in place.
+
+    Note:
+        If xlabel == 'Time [UTC]', the x axis set to major
+        ticks every 3 hours and minor ticks every 30 minutes.
+
+    Args:
+        ax (matplotlib.axis) :: axis that gets adjusted
+        **xlabel (string) :: name of the x axis label
+        **ylabel (string) :: name of the y axis label
+
+    """
+
+    axis.set_xlabel(xlabel, fontweight='normal', fontsize=fs)
+    axis.set_ylabel(ylabel, fontweight='normal', fontsize=fs)
+    if xlabel == 'Time [UTC]':
+        axis.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M'))
+        axis.xaxis.set_major_locator(matplotlib.dates.HourLocator(interval=3))
+        axis.xaxis.set_minor_locator(matplotlib.dates.MinuteLocator(byminute=[0, 30]))
+        axis.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(500))
+    axis.tick_params(axis='both', which='major', top=True, right=True, labelsize=fs, width=3, length=4)
+    axis.tick_params(axis='both', which='minor', top=True, right=True, width=2, length=3)
+    return axis
+
+
+def featureql(xr_ds, xr_ds2D, indices, **kwargs):
+    """
+
+    Args:
+        xr_ds: contains xarray DataArrays ZSpec, probabilities,
+                with dimension (time, range, velocity) and (time, range, classes)
+
+    Returns:
+
+    """
+
+    N = 4
+    if 'fig' in kwargs and 'ax' in kwargs:
+        fig, ax = kwargs['fig'], kwargs['ax']
+    else:
+        fig, ax = plt.subplots(nrows=N, ncols=N, figsize=(16, 16))  # , subplot_kw={'projection': '3d'})
+
+    font_settings = {'fig': fig}
+
+    icnt = 0
+    for i, j in product(range(N), range(N)):
+        its, irg = indices[icnt, 0], indices[icnt, 1]
+        ts = xr_ds.ZSpec.ts.values[its]
+        dt2 = datetime.datetime.utcfromtimestamp(ts)
+        rg = xr_ds.ZSpec.rg.values[irg]
+
+        fig, ax[i, j] = plot_single_spectrogram(xr_ds.ZSpec, ts, rg, ax=ax[i, j], **font_settings)
+
+        load_xy_style(ax[i, j], xlabel='Doppler velocity bins [-]', ylabel='Number of time steps')
+        ax[i, j].set_title(f'({icnt}) {dt2:%H:%M:%S} at {rg:6.3f} [m]', fontsize=12)
+        if j > 0: ax[i, j].set_ylabel('')
+        if i < N - 1: ax[i, j].set_xlabel('')
+
+        pICE = xr_ds.PROBDIST[its, irg, 4].values
+        pPRECIP = xr_ds.PROBDIST[its, irg, 2].values
+        pMIXED = xr_ds.PROBDIST[its, irg, 5].values
+        pDROPS = xr_ds.PROBDIST[its, irg, 1].values
+        CN_class = xr_ds["CLOUDNET_CLASS"][its, irg].values
+        VD_class = xr_ds["CLASS"][its, irg].values
+
+        text_dict = {'backgroundcolor': 'white', 'fontsize': 8}
+        ax[i, j].text(-120, 5.5, s=f'MXD={pMIXED:.3f}', **text_dict)
+        ax[i, j].text(-120, 4.75, s=f'ICE={pICE:.3f}', **text_dict)
+        ax[i, j].text(-120, 4.0, s=f'PRC={pPRECIP:.3f}', **text_dict)
+        ax[i, j].text(-120, 3.25, s=f'DRP={pDROPS:.3f}', **text_dict)
+        ax[i, j].text(70, 5.5, f'cCLASS={CN_class}', **text_dict)
+        ax[i, j].text(70, 4.75, f'vCLASS={VD_class}', **text_dict)
+        icnt += 1
+
+    # print(f'PUNTA AREAS {dt_list[0]:%A %d. %B %Y}')
+
+    return fig, ax
+
+
+def grid_plt(xr_ds, xr_ds2D, indices):
+    from matplotlib.gridspec import GridSpec
+    fig = plt.figure(figsize=(16, 16))#, constrained_layout=True)
+    ncols = 4
+
+    gs = GridSpec(ncols+2, ncols, left=0.05, right=0.98, hspace=0.25, wspace=0.1)
+    ax_class = fig.add_subplot(gs[:2, :])
+
+    N = 4
+    dots_ts = xr_ds.dt.values[indices[:, 0]]
+    dots_rg = xr_ds.rg.values[indices[:, 1]] / 1000.
+
+    ax_class.scatter(dots_ts, dots_rg, s=42, c='r', edgecolors='white')
+    fig, ax_class = tr.plot_timeheight2(xr_ds['CLASS'], fig=fig, ax=ax_class, label=False, rg_converter=True)
+    for i in range(N * N):
+        x, y = dots_ts[i], xr_ds.rg.values[indices[i, 1]] / 1000.
+        ax_class.text(x, y + 0.1, f'{i}', fontsize=12)
+
+    ax_class.set_xlabel('')
+
+    ax_feat = np.zeros((ncols, ncols), dtype=object)
+    for i, j in product(range(ncols), range(ncols)):
+        ax_feat[i, j] = fig.add_subplot(gs[i+2, j])
+
+    fig, ax_feat = featureql(xr_ds, xr_ds2D, indices, fig=fig, ax=ax_feat)
+
+    return fig, [ax_class, ax_feat]
+
+
+##### old
 def History(history):
     """This routine generates a history quicklook for a trained Tensoflow ANN model. The figure contains the in-sample-loss/accuracy and
     out-of-sample-loss/accuracy.

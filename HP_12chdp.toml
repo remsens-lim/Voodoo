@@ -40,14 +40,14 @@
     USE_MODEL = 'conv2d'
     OUTPUT_TYPE = 'singletarget'
 
-    BATCH_SIZE   = 256 # √
+    BATCH_SIZE   = 128 # √
     BATCH_NORM   = true
     EPOCHS       = 2
 
     #KERNEL_INITIALIZER = 'random_uniform'
     #REGULARIZER = 'l1_l2'
 
-    DENSE_LAYERS  = [512, 512]
+    DENSE_LAYERS  = [256, 256, 256]
     DROPOUT      = 0.25
 
     OPTIMIZER   = 'adam'
@@ -60,33 +60,16 @@
     LOSS_FCNS    = 'SparseCategoricalCrossentropy'
     METRICS = ['sparse_categorical_accuracy']
 
-    # multilable classification
-    #ACTIVATIONS_OL  = 'sigmoid'
-    #LOSS_FCNS    = 'BinaryCrossentropy'
-
-    LEARNING_RATE = 1.0e-3
+    LEARNING_RATE = 1.0e-4
     DECAY_RATE = 1.0e-5
     MOMENTUM = 0.9
 
     # define paths
     VOODOO_PATH  = '/home/sdig/code/larda3/voodoo/'
 
-
-    #KERNEL_SIZE  = [[3, 1], [3, 1], [3, 1], [3, 1], [3, 1]]
-    #STRIDE_SIZE  = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]
-    #POOL_SIZE    = [[4, 1], [2, 1], [2, 1], [2, 1], [2, 1]]
-    #NFILTERS     = [64, 128, 256, 256, 256]
-
-    #KERNEL_SIZE  = [ [3, 1], [1, 1], [3, 1], [1, 1], [3, 1], [1, 1], [1, 1]]
-    #STRIDE_SIZE  = [ [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]
-    #POOL_SIZE    = [ [2, 1], [1, 1], [2, 1], [1, 1], [4, 2], [4, 1], [1, 1]]
-    ##NFILTERS     = [64, 32, 128, 64, 256, 128, 512, 256]
-    #NFILTERS     = [1024, 512, 2048, 1024, 2048, 1028, 512]
-
-    KERNEL_SIZE  = [ [3, 1], [1, 1], [3, 1], [1, 1], [3, 1], [1, 1]]
+    KERNEL_SIZE  = [ [3, 2], [1, 1], [3, 2], [1, 1], [3, 2], [1, 1]]
     STRIDE_SIZE  = [ [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]
     POOL_SIZE    = [ [2, 1], [1, 1], [2, 1], [1, 1], [4, 2], [4, 1]]
-    #NFILTERS     = [64, 32, 128, 64, 256, 128, 512, 256]
     NFILTERS     = [512, 256, 1024, 512, 1024, 512]
 
 
@@ -94,10 +77,6 @@
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 [feature]
     quick_check = true
-    #remove_ice = 0.0       # remove percentage of samples
-    #remove_drizzle = 0.0   # remove percentage of samples
-    #n_validation = 2        # use 1 out of n_validation samples for validation
-
     remove_ice = 0.0       # remove percentage of samples
     remove_drizzle = 0.0   # remove percentage of samples
     n_validation = 5        # use 1 out of n_validation samples for validation
@@ -106,7 +85,7 @@
         scaling = '-'
         use = false
 
-    [feature.VSpec]
+    [feature.Spec]
         use = true
         add_flipped = false
         var_lims = [1.0e-7, 1.0e2]

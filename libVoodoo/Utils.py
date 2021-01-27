@@ -8,6 +8,9 @@ from itertools import groupby
 from itertools import product
 
 import numpy as np
+
+np.random.seed(2000)
+
 import toml
 import xarray as xr
 from jinja2 import Template
@@ -409,21 +412,17 @@ def post_processor_temperature(data, temperature, **kwargs):
 
 
 def get_good_radar_and_lidar_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+    if 'py' in version.lower():
         return 1
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 3
     else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
+        return 3
 
 
 def get_good_lidar_only_index(version):
-    if version in ['CLOUDNETpy94', 'CLOUDNETpy35']:
+    if 'py' in version.lower():
         return 3
-    elif version in ['CLOUDNET_LIMRAD', 'CLOUDNET']:
-        return 1
     else:
-        raise ValueError(f'Wrong Cloudnet Version: {version}')
+        return 1
 
 
 def post_processor_cloudnet_quality_flag(data, cloudnet_status, cloudnet_class, cloudnet_type=''):
@@ -600,10 +599,10 @@ def load_training_mask(classes, status, cloudnet_type):
     # create mask
     valid_samples = np.full(status.shape, False)
     valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
+    valid_samples[classes == 1] = True  # add cloud droplets only class
     valid_samples[classes == 5] = True  # add mixed-phase class pixel
     valid_samples[classes == 6] = True  # add melting layer class pixel
     valid_samples[classes == 7] = True  # add melting layer + SCL class pixel
-    valid_samples[classes == 1] = True  # add cloud droplets only class
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
     valid_samples[status == idx_good_lidar_only] = False
@@ -625,12 +624,12 @@ def load_case_list(path, case_name):
 
 def log_number_of_classes(classes, text=''):
     # numer of samples per class afer removing ice
-    class_n_distribution = np.zeros(len(cloudnetpy_classes))
-    logger.critical(text)
-    logger.critical(f'{classes.size:12d}   total')
+    class_n_distribution = np.zeros(len(cloudnetpy_classes), dtype=int)
+    logger.info(text)
+    logger.info(f'{classes.size:12d}   total')
     for i in range(len(cloudnetpy_classes)):
         n = np.sum(classes == i)
-        logger.critical(f'{n:12d}   {cloudnetpy_classes[i]}')
+        logger.info(f'{n:12_d}   {cloudnetpy_classes[i]}')
         class_n_distribution[i] = n
     return class_n_distribution
 
@@ -669,7 +668,7 @@ def target_class2bit_mask(target_labels):
     return bit_mask
 
 
-def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
+def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
     N_NOT_AVAILABLE = 0
     features, labels, multilabels, mask = [], [], [], []
     class_, status, catbits, qualbits, insect_prob = [], [], [], [], []
@@ -677,20 +676,21 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
     Z, VEL, VEL_sigma, width, beta, attbsc532, depol = [], [], [], [], [], [], []
 
     xarr_ds = []
+    data_chunk_heads = [chunk for chunk in load_case_file(TOML_PATH).keys()]
 
-    for icase, case_str in tqdm(enumerate(case_string_list), total=len(case_string_list), unit='files'):
+    for icase, case_str in tqdm(enumerate(data_chunk_heads), total=len(data_chunk_heads), unit='files'):
 
         # gather time interval, etc..:505
 
-        case = load_case_list(case_list_path, case_str)
+        case = load_case_list(TOML_PATH, case_str)
         TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
         dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
 
         # check if a mat files is available
         try:
-            with xr.open_zarr(f'{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
+            with xr.open_zarr(f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
                 # for training & validation
-                _multitarget = zarr_data['multitargets'].values
+                # _multitarget = zarr_data['multitargets'].values
                 _feature = zarr_data['features'].values
                 _target = zarr_data['targets'].values
                 _masked = zarr_data['masked'].values
@@ -721,18 +721,18 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         except KeyError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
             continue
 
         except FileNotFoundError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
 
         except ValueError as e:
             if 'group not found at path' in str(e):
-                logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
             else:
-                logger.info(f"{kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  some value is missing! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  some value is missing! n_Failed = {N_NOT_AVAILABLE}")
                 logger.info(f"{e}")
 
             N_NOT_AVAILABLE += 1
@@ -740,7 +740,7 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         except Exception as e:
             logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                            f"Check folder: {kwargs['DATA_PATH']}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
+                            f"Check folder: {DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
             logger.critical(f'Exception: Check ~/{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr)')
@@ -750,10 +750,11 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
         if _masked.all(): continue  # if there are no data points
 
-        if len(_feature.shape) == 3 and kwargs["CDIM"] == 'conv2d': _feature = _feature[:, :, :, np.newaxis]
+        if len(_feature.shape) == 3:
+            _feature = _feature[:, :, :, np.newaxis]
 
         # apply training mask
-        if kwargs["TASK"] == 'train':
+        if TASK == 'train':
             """
             select pixel satisfying the following expression:
             training_mask = (   "Good radar & lidar echos" 
@@ -770,35 +771,24 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
             if len(idx_valid_samples) < 1: continue
 
-            _feature = _feature[idx_valid_samples, :, :]
+            if len(_feature.shape) == 4:
+                _feature = _feature[idx_valid_samples, :, :]
+            elif len(_feature.shape) == 5:
+                _feature = _feature[idx_valid_samples, :, :, :]
+            else:
+                raise ValueError(f'Wrong feature set dimensions : {_feature.shape}')
+
             _target = _target[idx_valid_samples, np.newaxis]
-            _multitarget = _multitarget[idx_valid_samples, :]
-
-            """
-            flip the CWT on the y-axis to generate a mirror image, 
-            the goal is to overcome the miss-classification of updrafts as liquid
-            """
-            if kwargs['add_flipped']:
-                _feature_flipped = np.zeros(_feature.shape)
-                for ismpl, ichan in product(range(len(idx_valid_samples)), range(_feature.shape[-1])):
-                    if kwargs["CDIM"] == 'conv2d':
-                        _feature_flipped[ismpl, :, :, ichan] = np.fliplr(_feature[ismpl, :, :, ichan])
-                else:
-                    _feature_flipped[ismpl, :, ichan] = np.flip(_feature[ismpl, :, ichan])
-
-                _feature = np.concatenate((_feature, _feature_flipped), axis=0)
-                _target = np.concatenate((_target, _target), axis=0)
-                _multitarget = np.concatenate((_multitarget, _multitarget), axis=0)
+            # _multitarget = _multitarget[idx_valid_samples, :]
 
         logger.debug(f'\n dim = {_feature.shape}')
         logger.debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
 
         features.append(_feature)
         labels.append(_target)
-        multilabels.append(_multitarget)
-        xarr_ds.append(zarr_data)
+        # multilabels.append(_multitarget)
 
-        if kwargs["TASK"] == 'train':
+        if TASK == 'train':
             continue
 
         class_.append(_class)
@@ -824,18 +814,21 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
 
     features = np.concatenate(features, axis=0)
     labels = np.concatenate(labels, axis=0)
-    multilabels = np.concatenate(multilabels, axis=0)
+    # multilabels = np.concatenate(multilabels, axis=0)
     returns = [features, np.squeeze(labels), multilabels]
 
-    if kwargs["TASK"] != 'train':
+    if TASK == 'train':
+        for i in range(21):
+            returns.append(None)
+    else:
         returns.append(np.concatenate(class_, axis=0))
         returns.append(np.concatenate(status, axis=0))
-        returns.append(np.concatenate(catbits, axis=0))
+        returns.append(np.concatenate(catbits, axis=0))  # 5
         returns.append(np.concatenate(qualbits, axis=0))
         returns.append(np.concatenate(insect_prob, axis=0))
         returns.append(np.concatenate(mask, axis=0))
         returns.append(np.concatenate(mT, axis=0))
-        returns.append(np.concatenate(mP, axis=0))
+        returns.append(np.concatenate(mP, axis=0))  # 10
         returns.append(np.concatenate(mq, axis=0))
         returns.append(np.concatenate(ts, axis=0))
         returns.append(np.array(_rg))
@@ -849,8 +842,6 @@ def load_dataset_from_zarr(case_string_list, case_list_path, **kwargs):
         returns.append(np.concatenate(beta, axis=0))
         returns.append(np.concatenate(attbsc532, axis=0))
         returns.append(np.concatenate(depol, axis=0))
-    else:
-        for i in range(22):  returns.append(None)
 
     return returns
 
@@ -918,21 +909,109 @@ def one_hot_to_spectra(features, mask):
     return spectra
 
 
-def random_choice(xr_ds, rg_int, N=4, iclass=4, var='voodoo_classification'):
-    import pyLARDA.helpers as h
-    nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
+def argnearest(array, value):
+    """find the index of the nearest value in a sorted array
+    for example time or range axis
 
-    icnt = 0
-    indices = np.zeros((N, 2), dtype=np.int)
-    nnearest = h.argnearest(xr_ds.ZSpec.rg.values, rg_int)
+    Args:
+        array (np.array): sorted array with values, list will be converted to 1D array
+        value: value to find
+    Returns:
+        index
+    """
+    if type(array) == list:
+        array = np.array(array)
+    i = np.searchsorted(array, value) - 1
 
-    while icnt < N:
-        while True:
-            idxts = int(np.random.randint(0, high=nts, size=1))
-            idxrg = int(np.random.randint(0, high=nnearest, size=1))
-            if ~xr_ds.mask[idxts, idxrg] and xr_ds[var].values[idxts, idxrg] == iclass:
-                indices[icnt, :] = [idxts, idxrg]
-                icnt += 1
-                break
-    return indices
+    if not i == array.shape[0] - 1:
+        if np.abs(array[i] - value) > np.abs(array[i + 1] - value):
+            i = i + 1
+    return i
 
+
+
+def interpolate2d(data, mask_thres=0.1, **kwargs):
+    """interpolate timeheight data container
+
+    Args:
+        mask_thres (float, optional): threshold for the interpolated mask
+        **new_time (np.array): new time axis
+        **new_range (np.array): new range axis
+        **method (str): if not given, use scipy.interpolate.RectBivariateSpline
+        valid method arguments:
+            'linear' - scipy.interpolate.interp2d
+            'nearest' - scipy.interpolate.NearestNDInterpolator
+            'rectbivar' (default) - scipy.interpolate.RectBivariateSpline
+    """
+    import scipy.interpolate as SI
+
+    var = data['var'].copy()
+    # var = h.fill_with(data['var'], data['mask'], data['var'][~data['mask']].min())
+    # logger.debug('var min {}'.format(data['var'][~data['mask']].min()))
+    method = kwargs['method'] if 'method' in kwargs else 'rectbivar'
+    args_to_pass = {}
+    if method == 'rectbivar':
+        kx, ky = 1, 1
+        interp_var = SI.RectBivariateSpline(data['ts'], data['rg'], var, kx=kx, ky=ky)
+        interp_mask = SI.RectBivariateSpline(data['ts'], data['rg'], data['mask'].astype(np.float), kx=kx, ky=ky)
+        args_to_pass["grid"] = True
+    elif method == 'linear1d':
+        points = np.array(list(zip(np.repeat(data['ts'], len(data['rg'])), np.tile(data['rg'], len(data['ts'])))))
+        interp_var = SI.LinearNDInterpolator(points, var.flatten(), fill_value=-999.0)
+        interp_mask = SI.LinearNDInterpolator(points, (data['mask'].flatten()).astype(np.float))
+    elif method == 'linear':
+        interp_var = SI.interp2d(data['ts'], data['rg'], np.transpose(var), fill_value=np.nan)
+        interp_mask = SI.interp2d(data['ts'], data['rg'], np.transpose(data['mask']).astype(np.float))
+    elif method == 'nearest':
+        points = np.array(list(zip(np.repeat(data['ts'], len(data['rg'])), np.tile(data['rg'], len(data['ts'])))))
+        interp_var = SI.NearestNDInterpolator(points, var.flatten())
+        interp_mask = SI.NearestNDInterpolator(points, (data['mask'].flatten()).astype(np.float))
+    else:
+        raise ValueError('Unknown Interpolation Method', method)
+
+    new_time = data['ts'] if not 'new_time' in kwargs else kwargs['new_time']
+    new_range = data['rg'] if not 'new_range' in kwargs else kwargs['new_range']
+
+    if method in ["nearest", "linear1d"]:
+        new_points = np.array(list(zip(np.repeat(new_time, len(new_range)), np.tile(new_range, len(new_time)))))
+        new_var = interp_var(new_points).reshape((len(new_time), len(new_range)))
+        new_mask = interp_mask(new_points).reshape((len(new_time), len(new_range)))
+    else:
+        new_var = interp_var(new_time, new_range, **args_to_pass)
+        new_mask = interp_mask(new_time, new_range, **args_to_pass)
+
+    # print('new_mask', new_mask)
+    new_mask[new_mask > mask_thres] = 1
+    new_mask[new_mask < mask_thres] = 0
+    # print('new_mask', new_mask)
+
+    # print(new_var.shape, new_var)
+    # deepcopy to keep data immutable
+    interp_data = {**data}
+
+    interp_data['ts'] = new_time
+    interp_data['rg'] = new_range
+    interp_data['var'] = new_var if method in ['nearest', "linear1d", 'rectbivar'] else np.transpose(new_var)
+    interp_data['mask'] = new_mask if method in ['nearest', "linear1d", 'rectbivar'] else np.transpose(new_mask)
+    logger.info("interpolated shape: time {} range {} var {} mask {}".format(
+        new_time.shape, new_range.shape, new_var.shape, new_mask.shape))
+
+    return interp_data
+
+
+def dt_to_ts(dt):
+    """datetime to unix timestamp"""
+    # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return (dt - datetime.datetime(1970, 1, 1)).total_seconds()
+
+def ts_to_dt(ts):
+    """unix timestamp to dt"""
+    return datetime.datetime.utcfromtimestamp(ts)
+
+def lin2z(array):
+    """linear values to dB (for np.array or single number)"""
+    return 10 * np.ma.log10(array)
+
+def z2lin(array):
+    """dB to linear values (for np.array or single number)"""
+    return 10 ** (array / 10.)

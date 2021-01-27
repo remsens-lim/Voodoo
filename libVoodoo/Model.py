@@ -41,6 +41,12 @@ if gpus:
     # Virtual devices must be set before GPUs have been initialized
     print(e)
 
+#config = tf.compat.v1.ConfigProto(
+#        device_count = {'GPU': 0},
+#        intra_op_parallelism_threads=50
+#    )
+#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 # disable the OpenMP warnings
 os.environ['KMP_WARNINGS'] = 'off'
 
