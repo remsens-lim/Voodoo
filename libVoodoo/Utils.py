@@ -929,3 +929,89 @@ def argnearest(array, value):
     return i
 
 
+
+def interpolate2d(data, mask_thres=0.1, **kwargs):
+    """interpolate timeheight data container
+
+    Args:
+        mask_thres (float, optional): threshold for the interpolated mask
+        **new_time (np.array): new time axis
+        **new_range (np.array): new range axis
+        **method (str): if not given, use scipy.interpolate.RectBivariateSpline
+        valid method arguments:
+            'linear' - scipy.interpolate.interp2d
+            'nearest' - scipy.interpolate.NearestNDInterpolator
+            'rectbivar' (default) - scipy.interpolate.RectBivariateSpline
+    """
+    import scipy.interpolate as SI
+
+    var = data['var'].copy()
+    # var = h.fill_with(data['var'], data['mask'], data['var'][~data['mask']].min())
+    # logger.debug('var min {}'.format(data['var'][~data['mask']].min()))
+    method = kwargs['method'] if 'method' in kwargs else 'rectbivar'
+    args_to_pass = {}
+    if method == 'rectbivar':
+        kx, ky = 1, 1
+        interp_var = SI.RectBivariateSpline(data['ts'], data['rg'], var, kx=kx, ky=ky)
+        interp_mask = SI.RectBivariateSpline(data['ts'], data['rg'], data['mask'].astype(np.float), kx=kx, ky=ky)
+        args_to_pass["grid"] = True
+    elif method == 'linear1d':
+        points = np.array(list(zip(np.repeat(data['ts'], len(data['rg'])), np.tile(data['rg'], len(data['ts'])))))
+        interp_var = SI.LinearNDInterpolator(points, var.flatten(), fill_value=-999.0)
+        interp_mask = SI.LinearNDInterpolator(points, (data['mask'].flatten()).astype(np.float))
+    elif method == 'linear':
+        interp_var = SI.interp2d(data['ts'], data['rg'], np.transpose(var), fill_value=np.nan)
+        interp_mask = SI.interp2d(data['ts'], data['rg'], np.transpose(data['mask']).astype(np.float))
+    elif method == 'nearest':
+        points = np.array(list(zip(np.repeat(data['ts'], len(data['rg'])), np.tile(data['rg'], len(data['ts'])))))
+        interp_var = SI.NearestNDInterpolator(points, var.flatten())
+        interp_mask = SI.NearestNDInterpolator(points, (data['mask'].flatten()).astype(np.float))
+    else:
+        raise ValueError('Unknown Interpolation Method', method)
+
+    new_time = data['ts'] if not 'new_time' in kwargs else kwargs['new_time']
+    new_range = data['rg'] if not 'new_range' in kwargs else kwargs['new_range']
+
+    if method in ["nearest", "linear1d"]:
+        new_points = np.array(list(zip(np.repeat(new_time, len(new_range)), np.tile(new_range, len(new_time)))))
+        new_var = interp_var(new_points).reshape((len(new_time), len(new_range)))
+        new_mask = interp_mask(new_points).reshape((len(new_time), len(new_range)))
+    else:
+        new_var = interp_var(new_time, new_range, **args_to_pass)
+        new_mask = interp_mask(new_time, new_range, **args_to_pass)
+
+    # print('new_mask', new_mask)
+    new_mask[new_mask > mask_thres] = 1
+    new_mask[new_mask < mask_thres] = 0
+    # print('new_mask', new_mask)
+
+    # print(new_var.shape, new_var)
+    # deepcopy to keep data immutable
+    interp_data = {**data}
+
+    interp_data['ts'] = new_time
+    interp_data['rg'] = new_range
+    interp_data['var'] = new_var if method in ['nearest', "linear1d", 'rectbivar'] else np.transpose(new_var)
+    interp_data['mask'] = new_mask if method in ['nearest', "linear1d", 'rectbivar'] else np.transpose(new_mask)
+    logger.info("interpolated shape: time {} range {} var {} mask {}".format(
+        new_time.shape, new_range.shape, new_var.shape, new_mask.shape))
+
+    return interp_data
+
+
+def dt_to_ts(dt):
+    """datetime to unix timestamp"""
+    # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return (dt - datetime.datetime(1970, 1, 1)).total_seconds()
+
+def ts_to_dt(ts):
+    """unix timestamp to dt"""
+    return datetime.datetime.utcfromtimestamp(ts)
+
+def lin2z(array):
+    """linear values to dB (for np.array or single number)"""
+    return 10 * np.ma.log10(array)
+
+def z2lin(array):
+    """dB to linear values (for np.array or single number)"""
+    return 10 ** (array / 10.)

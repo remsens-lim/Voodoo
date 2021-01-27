@@ -9,20 +9,6 @@
 ########################################################################################################################################################
 ########################################################################################################################################################
 
-[statistics]
-    exclude_drizzle = 'rg0drizzle'  #   ['disdro', 'anydrizzle', 'rg0drizzle']
-    exclude_wet_radome_mwr = 6  #   numer ob time steps after precipitation (1 = 30sec)
-
-[plotting]
-    save = true
-
-    [plotting.generic]
-        fig_size = [12, 7]
-        range_interval = [0, 12000]
-        range_converter = true
-        contour = true
-        dpi = 200
-
 [pytorch]
 
     BATCH_SIZE   = 128 # √
@@ -62,16 +48,7 @@
 
 # define normalization boundaries and conversion for radar (feature) and lidar (label) space
 [feature]
-    quick_check = true
-    remove_ice = 0.0       # remove percentage of samples
-    remove_drizzle = 0.0   # remove percentage of samples
-    n_validation = 5        # use 1 out of n_validation samples for validation
-
-    [feature.generic]
-        scaling = '-'
-        use = false
-
-    [feature.VSpec]
+    [feature.Spec]
         use = true
         add_flipped = false
         var_lims = [1.0e-7, 1.0e2]
@@ -83,22 +60,4 @@
         ghost_echo_2 = true         #
         dealiasing = false         #
         add_horizontal_channel = true
-
-
-# define normalization boundaries and conversion for radar (feature) and lidar (label) space
-[target.info]
-    [target.info.generic]
-        scaling = 'normalize'
-
-    [target.info.attbsc1064]
-        var_lims = [1.0e-7, 1.0e-3]
-        var_converter= 'log'
-        scaling = ''
-        use = false
-
-    [target.info.depol]
-        var_lims = [1.0e-7, 0.3]
-        var_converter= 'ldr2cdr'
-        scaling = ''
-        use = false
 

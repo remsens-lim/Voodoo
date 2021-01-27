@@ -2,9 +2,6 @@
 
 # default values
 t_train=60.0
-kind="HSI"
-site='lacros_dacapo_gpu'
-cloudnet="CLOUDNETpy94"
 
 if [[ $1 != "" ]]; then
     while [ "$1" != "" ]; do
@@ -21,18 +18,7 @@ if [[ $1 != "" ]]; then
             -h1 | --h-end )     	shift
                     end_hour="$1"
                                 ;;
-            -s | --system )     	shift
-                    system="$1"
-                                ;;
-            -cn | --cloudnet )     	shift
-                    cloudnet="$1"
-                                ;;
-            -ttr | --t-train )     	shift
-                    t_train="$1"
-                                ;;
-            -site | --site )     	shift
-                    site="$1"
-                                ;;
+
             -h | --help )      	echo "help"
                               	echo "no help available"
                                 ;;
@@ -66,7 +52,7 @@ done
 echo "CREATE JOB: "$runList
 
 for run in $runList; do
-    python generate_trainingset.py dt_start="$run" t_train="$t_train" kind="$kind" cnet="$cloudnet" site="$site" &
+    python voodoo_preprocessor.py dt_start="$run" t_train="$t_train" &
     pids="$pids $!";
 done
 

@@ -85,7 +85,7 @@
         scaling = '-'
         use = false
 
-    [feature.VSpec]
+    [feature.Spec]
         use = true
         add_flipped = false
         var_lims = [1.0e-7, 1.0e2]
