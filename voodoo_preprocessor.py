@@ -39,7 +39,7 @@ if __name__ == '__main__':
         dt_end = dt_begin + timedelta(minutes=t_train)
         TIME_SPAN_ = [dt_begin, dt_end]
     else:
-        #debug case
+        #debug case PA 1. August 2019 5 UTC
         dt_begin = datetime.strptime('20190801-0500', '%Y%m%d-%H%M')
         dt_end = dt_begin + timedelta(minutes=30.0)
         TIME_SPAN_ = [dt_begin, dt_end]

@@ -337,12 +337,15 @@ def features_from_nc(
             try:
                 FILE_NAME = f'{dt_string}_{system}-{cloudnet}-2D.zarr'
                 ds.to_zarr(store=FILE_NAME, mode='w', compute=True)
-                logger.info(f'save :: {FILE_NAME}')
+                logger.info(f'SAVE FEATURES :: {FILE_NAME}')
             except Exception as e:
                 logger.info('Data too large?', e)
             finally:
                 logger.critical(f'DONE :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} zarr files generated, elapsed time = '
                                 f'{timedelta(seconds=int(time.time() - start_time))} min')
+
+        assert targets.shape[0] == features.shape[0], \
+            f'Features (N={features.shape[0]}) or Labels (N={targets.shape[0]}) missing!'
 
         ds_spec = VoodooXR(None, None)
         # save features (subfolders for different tensor dimension)
@@ -363,7 +366,7 @@ def features_from_nc(
         FILE_NAME = f'{dt_string}_{system}-{cloudnet}-ND.zarr'
         try:
             ds_spec.to_zarr(store=FILE_NAME, mode='w', compute=True)
-            logger.info(f'save :: {FILE_NAME}')
+            logger.info(f'SAVE TARGETS :: {FILE_NAME}')
         except Exception as e:
             logger.info('Data too large?', e)
         finally:
