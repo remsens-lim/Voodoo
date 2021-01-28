@@ -1,43 +1,35 @@
 #!/home/sdig/anaconda3/bin/python
-import os
-import sys
-
-import toml
-import torch
 import datetime
-import xarray as xr
+import os
+
 import numpy as np
+import torch
+
 import libVoodoo.TorchModel as TM
 import libVoodoo.Utils as UT
-from generate_trainingset import load_features_from_nc, VoodooXR
+from libVoodoo.Loader import features_from_nc, VoodooXR
+from libVoodoo.Plot import create_quicklook
 
-VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
-DATA_PATH = f'{VOODOO_PATH}/data_12chdp/'
+VOODOO_PATH = os.getcwd()
+DATA_PATH = os.path.join(VOODOO_PATH, 'data/HP_12chdp2/10folds_all/wSL/')
 pt_models_path = os.path.join(VOODOO_PATH, f'torch_models/')
-MODEL_TOML = '/home/sdig/code/larda3/voodoo/HP_12chdp2.toml'
-# model=model-1609964168-20eps.pt
-# model=model-1610033363-4eps.pt
+MODEL_TOML = os.path.join(VOODOO_PATH, 'HP_12chdp2.toml')
 igpu = 0
-DEVICE_train = f'cuda:{igpu}'
-DEVICE_test = f'cuda:{igpu}'
 
 _DEFAULT_CHANNELS = 12
-_DEFAULT_DOPPBINS = 256
 BATCH_SIZE = 500
 CLOUDNET= 'CLOUDNETpy94'
 NCLASSES = 11
 
 if __name__ == '__main__':
     # setting device on GPU if available, else CPU
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print('Using device:', DEVICE)
-    print()
-    
+    DEVICE = torch.device(f'cuda:{igpu}' if torch.cuda.is_available() else 'cpu')
+
     _, agrs, kwargs = UT.read_cmd_line_args()
     # load data
     trained_model = os.path.join(
         pt_models_path,
-        f"{kwargs['model']}" if 'model' in kwargs else 'TEST_desp/Vnet0x6007eab3-dc2-fn6-eps3-bs128-bl200000.pt'
+        f"{kwargs['model']}" if 'model' in kwargs else ''
     )
     task = 'inference' if 'task' not in kwargs else kwargs['task']
 
@@ -47,7 +39,7 @@ if __name__ == '__main__':
         dt_end = dt_begin + datetime.timedelta(minutes=24*60-2)
         print(f'Loading data from nc ...... {dt_begin:%Y%m%d %H:%M} to {dt_end:%Y%m%d %H:%M}')
 
-        X, y, _, mask, _, ts, rg = load_features_from_nc(
+        X, y, _, mask, _, ts, rg = features_from_nc(
             time_span=[dt_begin, dt_end],
             VOODOO_PATH=VOODOO_PATH,
             data_path=DATA_PATH,
@@ -72,7 +64,7 @@ if __name__ == '__main__':
 
         print(f'Loading multiple zarr files ...... {toml_file}')
         args = UT.load_dataset_from_zarr(
-            DATA_PATH=f'{DATA_PATH}/{CLOUDNET}/xarray/',
+            DATA_PATH=DATA_PATH,
             TOML_PATH=toml_file,
             RADAR='limrad94',
             TASK='predict',
@@ -87,7 +79,7 @@ if __name__ == '__main__':
     else:
         TEST_PATH = os.path.join(
             VOODOO_PATH,
-            'data_12chdp/xarray_zarr/20190801-20190801-X-12ch2pol.zarr'
+            'data/20190801-20190801-X-12ch2pol.zarr'
         )
 
         print(f'Loading compressed zarr file ...... {VOODOO_PATH}')
@@ -101,13 +93,13 @@ if __name__ == '__main__':
         date_test = re.search('\d{8}-\d{8}', TEST_PATH)
         date_str = date_test.group(0)
 
-        TM.VoodooNet.create_quicklook(xrTest, trained_model)
+        create_quicklook(xrTest, trained_model)
 
     model = TM.VoodooNet.load(trained_model)
     print(model)
     model.print_nparams()
 
-    prediction = model.testing(X_test, batch_size=BATCH_SIZE, dev=DEVICE_test)
+    prediction = model.testing(X_test, batch_size=BATCH_SIZE, dev=DEVICE)
     prediction = prediction.to('cpu')
     values = TM.VoodooNet.new_classification(prediction, mask)
 
@@ -122,7 +114,7 @@ if __name__ == '__main__':
         'range_interval': [0, 5]
     })
 
-    f, ax = TM.VoodooNet.create_quicklook(Vclasses['CLASS'])
+    f, ax = create_quicklook(Vclasses['CLASS'])
     fig_name = trained_model.replace('.pt', f'-{date_str}-V.png')
     f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
     print(f"\nfig saved: {fig_name}")
@@ -131,7 +123,7 @@ if __name__ == '__main__':
         CNclasses = Vclasses.copy()
         CNclasses['CLASS'].attrs['system'] = 'CLOUDNETpy94'
         CNclasses['CLASS'].values = classes
-        f, ax = TM.VoodooNet.create_quicklook(CNclasses['CLASS'])
+        f, ax = create_quicklook(CNclasses['CLASS'])
         fig_name = trained_model.replace('.pt', f'-{date_str}-CN.png')
         f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
         print(f"\nfig saved: {fig_name}")
@@ -153,7 +145,7 @@ if __name__ == '__main__':
     Vclasses['sCLASS'].values = np.argmax(smoothed_probs, axis=2)
     Vclasses['sCLASS'].values[mask] = 0
 
-    f, ax = TM.VoodooNet.create_quicklook(Vclasses['sCLASS'])
+    f, ax = create_quicklook(Vclasses['sCLASS'])
     fig_name = trained_model.replace('.pt', f'-{date_str}-sV.png')
     f.savefig(fig_name, dpi=250)  # , bbox_inches = 'tight')
     print(f"\nfig saved: {fig_name}")
@@ -171,6 +163,6 @@ if __name__ == '__main__':
 #    Vclasses['sxCLASS'].values[liuqid_most_probable] = 5
 #    Vclasses['sxCLASS'].values[mask] = 0
 #
-#    TM.VoodooNet.create_quicklook(Vclasses['sxCLASS'], trained_model.replace('.pt', f'-{date_str}-VO0DOO_smoothedX.pt'))
+#    create_quicklook(Vclasses['sxCLASS'], trained_model.replace('.pt', f'-{date_str}-VO0DOO_smoothedX.pt'))
 #######
 

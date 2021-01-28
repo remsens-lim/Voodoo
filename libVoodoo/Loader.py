@@ -174,9 +174,7 @@ def load_data(larda_connected, system, time_span, var_list):
     return data
 
 
-def hyperspectralimage(ts, vhspec, hspec, msk, **kwargs):
-    new_ts = kwargs['new_time']
-    n_channels = kwargs['n_channels'] if 'n_channels' in kwargs else _DEFAULT_CHANNELS
+def hyperspectralimage(ts, vhspec, hspec, msk, n_channels, new_ts):
     n_ts_new = len(new_ts) if len(new_ts) > 0 else ValueError('Needs new_time array!')
     n_ts, n_rg, n_vel = vhspec.shape
     mid = n_channels // 2
@@ -226,7 +224,7 @@ def features_from_nc(
     feature_settings = toml.load(ann_settings_file)
 
     # Load LARDA
-    larda_connected = LARDA().connect(site, build_lists=False)
+    larda_connected = LARDA().connect(site, build_lists=True)
 
     TIME_SPAN_ = time_span
 
@@ -245,6 +243,9 @@ def features_from_nc(
         raise ValueError('Unknown system.', system)
 
     # replace fill values with sensitivity limit or zeros?
+    #fill_ = np.full(ZSpec['SLv']['var'].shape, 1.0e-7)
+    #ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], fill_)
+    #ZSpec['HSpec']['var'] = replace_fill_value(ZSpec['HSpec']['var'], fill_)
     ZSpec['VHSpec']['var'] = replace_fill_value(ZSpec['VHSpec']['var'], ZSpec['SLv']['var'])
     ZSpec['HSpec']['var'] = replace_fill_value(ZSpec['HSpec']['var'], ZSpec['SLh']['var'])
     logger.info(f'\nloaded :: {TIME_SPAN_RADAR[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_RADAR[1]:%H:%M:%S} of {system} VHSpectra')
@@ -254,15 +255,15 @@ def features_from_nc(
         cloudnet_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, preproc_ini['instruments']['cloudnet'])
         cloudnet_ts_variables = load_data(larda_connected, cloudnet, TIME_SPAN_, preproc_ini['instruments']['cloudnet_ts'])
         cloudnet_model = load_data(larda_connected, cloudnet, TIME_SPAN_MODEL, preproc_ini['instruments']['model'])
-        ts_master, rg_master = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
+        ts_main, rg_main = cloudnet_variables['CLASS']['ts'], cloudnet_variables['CLASS']['rg']
         cn_available = True
         CNclass = cloudnet_variables['CLASS']
         CNbits = cloudnet_variables['category_bits']
     except Exception as e:
         cn_available = False
         CNclass, CNbits = None, None
-        ts_master = np.arange(ZSpec['VHSpec']['ts'][0], ZSpec['VHSpec']['ts'][-1], _DEFAULT_TIME_RES)
-        rg_master = ZSpec['VHSpec']['rg']
+        ts_main = np.arange(ZSpec['VHSpec']['ts'][0], ZSpec['VHSpec']['ts'][-1], _DEFAULT_TIME_RES)
+        rg_main = ZSpec['VHSpec']['rg']
         logger.warning(f'WARNING :: Skipped CLoudnet Data --> set {_DEFAULT_TIME_RES} sec time.')
 
     # input polly data
@@ -279,13 +280,13 @@ def features_from_nc(
         ZSpec['VHSpec']['var'],
         ZSpec['HSpec']['var'],
         ZSpec['VHSpec']['mask'],
-        new_time=ts_master,
-        n_channels=kwargs['n_channels']
+        kwargs['n_channels'],
+        ts_main
     )
 
     ZSpec['VHSpec']['dimlabel'] = ['time', 'range', 'vel', 'channel', 'pol']
-    ZSpec['VHSpec']['ts'] = ts_master
-    ZSpec['VHSpec']['rg'] = rg_master
+    ZSpec['VHSpec']['ts'] = ts_main
+    ZSpec['VHSpec']['rg'] = rg_main
     ZSpec['VHSpec']['var'] = interp_var
     ZSpec['VHSpec']['mask'] = interp_mask
 
@@ -305,7 +306,7 @@ def features_from_nc(
 
         # Add cloudnet data if available
         if cn_available:
-            ds = VoodooXR(ts_master, rg_master)
+            ds = VoodooXR(ts_main, rg_main)
             # all 2D variables
             for ivar in preproc_ini['instruments']['cloudnet']:
                 ds.add_nD_variable(
@@ -321,7 +322,7 @@ def features_from_nc(
                 )
             # all 2D model data
             for ivar in preproc_ini['instruments']['model']:
-                cloudnet_model[ivar] = interpolate2d(cloudnet_model[ivar], new_time=ts_master, new_range=rg_master)
+                cloudnet_model[ivar] = interpolate2d(cloudnet_model[ivar], new_time=ts_main, new_range=rg_main)
                 ds.add_nD_variable(
                     ivar, ('ts', 'rg'), cloudnet_model[ivar]['var'],
                     **{key: cloudnet_model[ivar][key] for key in preproc_ini['larda']['params']}
@@ -329,7 +330,7 @@ def features_from_nc(
 
             if lidar_available:
                 for ivar in preproc_ini['instruments']['lidar']:
-                    polly_variables[ivar] = interpolate2d(polly_variables[ivar], new_time=ts_master, new_range=rg_master)
+                    polly_variables[ivar] = interpolate2d(polly_variables[ivar], new_time=ts_main, new_range=rg_main)
                     ds.add_nD_variable(
                         ivar, ('ts', 'rg'), polly_variables[ivar]['var'],
                         **{key: polly_variables[ivar][key] for key in preproc_ini['larda']['params']}
@@ -373,4 +374,56 @@ def features_from_nc(
             logger.critical(f'DONE :: {TIME_SPAN_[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN_[1]:%H:%M:%S} zarr files generated, elapsed time = '
                             f'{timedelta(seconds=int(time.time() - start_time))} min')
 
-    return features, targets, multitargets, masked, CNclass, ts_master, rg_master
+    return features, targets, multitargets, masked, CNclass, ts_main, rg_main
+
+
+
+def spectra_fold_to_zarr(args):
+    xr_ds = VoodooXR(None, None)
+    # add coordinates
+    xr_ds.add_coordinate({'nsamples': np.arange(args[0].shape[0])}, 'Number of training samples')
+    xr_ds.add_coordinate({'nvelocity': np.arange(args[0].shape[1])}, 'Number of velocity bins')
+    xr_ds.add_coordinate({'nchannels': np.arange(args[0].shape[2])}, 'Number of stacked spectra')
+    xr_ds.add_coordinate({'npolarization': np.arange(args[0].shape[3])}, 'vertical(co) and horizontal(cx) polarization')
+    xr_ds.add_nD_variable('features', ('nsamples', 'nvelocity', 'nchannels', 'npolarization'), args[0], **{})
+    xr_ds.add_nD_variable('targets', ('nsamples'), args[1], **{})
+
+    return xr_ds
+
+
+def validation_fold_to_zarr(args):
+    xr_ds2D = VoodooXR(args[12], args[13])
+    xr_ds2D.add_nD_variable(
+        'classes', ('ts', 'rg'), args[3],
+        **{'colormap': 'cloudnet_target_new',
+           'rg_unit': 'km',
+           'var_unit': '',
+           'system': 'Cloudnetpy',
+           'var_lims': [0, 10]}
+    )
+    xr_ds2D.add_nD_variable(
+        'status', ('ts', 'rg'), args[4],
+        **{'colormap': 'cloudnetpy_detection_status',
+           'rg_unit': 'km',
+           'var_unit': '',
+           'system': 'Cloudnetpy',
+           'var_lims': [0, 7]}
+    )
+    xr_ds2D.add_nD_variable(
+        'Ze', ('ts', 'rg'), args[17],
+        **{'colormap': 'jet',
+           'rg_unit': 'km',
+           'var_unit': 'dBZ',
+           'system': 'Cloudnetpy',
+           'var_lims': [-50, 20]}
+    )
+    xr_ds2D.add_nD_variable(
+        'mask', ('ts', 'rg'), args[8],
+        **{'colormap': 'coolwarm',
+           'rg_unit': 'km', 'var_unit': '',
+           'system': 'Cloudnetpy',
+           'var_lims': [0, 1]}
+    )
+
+
+

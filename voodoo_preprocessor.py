@@ -5,7 +5,7 @@ Short description:
 """
 
 import logging
-import sys
+import sys, os
 from datetime import timedelta, datetime
 
 from libVoodoo.Utils import traceback_error, read_cmd_line_args
@@ -23,16 +23,21 @@ logger.setLevel(logging.WARNING)
 if __name__ == '__main__':
 
     _DEFAULT_CHANNELS = 12
-    _DEFAULT_DOPPBINS = 256
-
-    VOODOO_PATH = '/home/sdig/code/voodoo/'
     ANN_INI_FILE = 'HP_12chdp2.toml'
 
-    DATA_PATH = f'{VOODOO_PATH}/data/{ANN_INI_FILE[:-5]}/'
+    VOODOO_PATH = os.getcwd()
+    DATA_PATH = f'{VOODOO_PATH}/data/{ANN_INI_FILE[:-5]}/hourly/noSL/'
 
     method_name, args, kwargs = read_cmd_line_args(sys.argv)
 
     t_train = float(kwargs["t_train"]) if 't_train' in kwargs else 60.0
+    system = kwargs['radar'] if 'radar' in kwargs else 'limrad94'
+    cnet = kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94'
+    save = kwargs['save'] if 'save' in kwargs else True
+    site = kwargs['site'] if 'site' in kwargs else 'lacros_dacapo_gpu'
+    dpol = kwargs['dpol'] if 'dpol' in kwargs else True
+    n_ch = int(kwargs['n_ch']) if 'n_ch' in kwargs else 12
+
 
     if 'dt_start' in kwargs:
         dt_begin = datetime.strptime(f'{kwargs["dt_start"]}', '%Y%m%d-%H%M')
@@ -45,17 +50,17 @@ if __name__ == '__main__':
         TIME_SPAN_ = [dt_begin, dt_end]
 
     try:
-        features, targets, multitargets, masked, classes, ts, rg = features_from_nc(
+        _ = features_from_nc(
             time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,
-            system=kwargs['radar'] if 'radar' in kwargs else 'limrad94',
-            cloudnet=kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94',
-            save=kwargs['save'] if 'save' in kwargs else True,
-            n_channels=_DEFAULT_CHANNELS,
+            system=system,
+            cloudnet=cnet,
+            save=save,
+            n_channels=n_ch,
             ann_settings_file=ANN_INI_FILE,
-            site=kwargs['site'] if 'site' in kwargs else 'lacros_dacapo_gpu',
-            dual_polarization=True,
+            site=site,
+            dual_polarization=dpol,
         )
 
     except Exception:

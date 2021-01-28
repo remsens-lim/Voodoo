@@ -23,15 +23,12 @@ nc-files/**/*
 *.pyc
 *.swp
 .gitignore~
-.spyderworkspace
-*.lprof
-*.lprof~
-.ipynb_checkpoints
-.ipynb_checkpoints/*
+*DS_Store*
+.idea/
+venv/
 **/__pycache__/**/*
 libVoodoo/__pycache__/*
 data*/
-data_new/
 torch_models/
 
 

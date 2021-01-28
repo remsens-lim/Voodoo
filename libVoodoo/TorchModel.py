@@ -25,11 +25,8 @@ from typing import List, Tuple
 
 from .Utils import log_number_of_classes, argnearest
 from .Utils import logger as log_UT
-from generate_trainingset import VoodooXR
+from .Loader import preproc_ini, VoodooXR
 
-PATH_TO_LARDA = '/home/sdig/code/larda3/larda/'
-sys.path.append(PATH_TO_LARDA)
-import pyLARDA.Transformations as TR
 
 
 log_TM = logging.getLogger(__name__)
@@ -306,12 +303,6 @@ class VoodooNet(nn.Module):
         return _feature_out, _target_out
 
     @staticmethod
-    def create_quicklook(da):
-        f, ax = plt.subplots(nrows=1, figsize=(14, 5.7))
-        f, ax = TR.plot_timeheight2(da, fig=f, ax=ax)
-        return f, ax
-
-    @staticmethod
     def new_classification(pred, mask):
 
         nts, nrg = mask.shape
@@ -413,9 +404,9 @@ class VoodooNet(nn.Module):
         POLARIZ = 0
         (n_ts, n_rg), (n_ch, n_vel) = X2D['mask'].shape, XnD.shape[2:]
         xr_ds = VoodooXR(X2D['ts'].values, X2D['rg'].values)
-        xr_ds._add_coordinate({'cl': np.arange(0, n_class)}, 'Number of classes')
-        xr_ds._add_coordinate({'vel': np.arange(0, n_vel)}, 'Number of spectral bins')
-        xr_ds._add_coordinate({'ch': np.arange(0, n_ch)}, 'Number of channels')
+        xr_ds.add_coordinate({'cl': np.arange(0, n_class)}, 'Number of classes')
+        xr_ds.add_coordinate({'vel': np.arange(0, n_vel)}, 'Number of spectral bins')
+        xr_ds.add_coordinate({'ch': np.arange(0, n_ch)}, 'Number of channels')
 
         xr_ds['mask'] = X2D['mask'].copy()
 

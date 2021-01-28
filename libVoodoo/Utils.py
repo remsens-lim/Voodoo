@@ -2,7 +2,7 @@ import datetime
 import logging
 import re
 import subprocess
-import sys
+import sys, os
 import traceback
 from itertools import groupby
 from itertools import product
@@ -226,10 +226,9 @@ def write_ann_config_file(**kwargs):
     Returns:    0
 
     """
-    import pyLARDA.helpers as h
     path = kwargs['path'] if 'path' in kwargs else ''
     name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
-    if len(path) > 0: h.change_dir(path)
+    if len(path) > 0: change_dir(path)
 
     import json
     with open(f"{name}", 'wt', encoding='utf8') as out:
@@ -253,16 +252,37 @@ def read_ann_config_file(**kwargs):
     Returns:    0
 
     """
-    import pyLARDA.helpers as h
     path = kwargs['path'] if 'path' in kwargs else ''
     name = kwargs['name'] if 'name' in kwargs else 'no-name.cfg'
-    if len(path) > 0: h.change_dir(path)
+    if len(path) > 0: change_dir(path)
 
     import json
     with open(f"{name}", 'r', encoding='utf8') as json_file:
         data = json.load(json_file)
     print(f'Loaded ann configure file :: {name}')
     return data
+
+
+
+def change_dir(folder_path, **kwargs):
+    """
+    This routine changes to a folder or creates it (including subfolders) if it does not exist already.
+
+    Args:
+        folder_path (string): path of folder to switch into
+    """
+
+    folder_path = folder_path.replace('//', '/', 1)
+
+    if not os.path.exists(os.path.dirname(folder_path)):
+        try:
+            os.makedirs(os.path.dirname(folder_path))
+        except OSError as exc:  # Guard against race condition
+            if exc.errno != errno.EEXIST:
+                raise
+
+    os.chdir(folder_path)
+    logger.debug('\ncd to: {}'.format(folder_path))
 
 
 def make_html_overview(template_loc, case_study_info, png_names):
@@ -685,17 +705,57 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
         case = load_case_list(TOML_PATH, case_str)
         TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
         dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
+        zarr_file = f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}-{kwargs["CLOUDNET"]}-ND.zarr'
 
         # check if a mat files is available
         try:
-            with xr.open_zarr(f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}.zarr') as zarr_data:
+            with xr.open_zarr(zarr_file) as zarr_data:
                 # for training & validation
                 # _multitarget = zarr_data['multitargets'].values
                 _feature = zarr_data['features'].values
                 _target = zarr_data['targets'].values
                 _masked = zarr_data['masked'].values
 
-                # for validation
+                logger.debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} zarr files')
+
+        except KeyError:
+            N_NOT_AVAILABLE += 1
+            logger.info(f"{zarr_file} variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
+            continue
+
+        except FileNotFoundError:
+            N_NOT_AVAILABLE += 1
+            logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
+
+        except ValueError as e:
+            if 'group not found at path' in str(e):
+                logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
+            else:
+                logger.info(f"{zarr_file} some value is missing! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{e}")
+
+            N_NOT_AVAILABLE += 1
+            continue
+
+        except Exception as e:
+            logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
+                            f"Check folder: {zarr_file}.zarr, n_Failed = {N_NOT_AVAILABLE}")
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_tb)
+            logger.critical(f'{e}')
+            N_NOT_AVAILABLE += 1
+            continue
+
+        if _masked.all(): continue  # if there are no data points
+
+        if (_target == -999.0).all(): continue  # if there are no labels available
+
+        if len(_feature.shape) == 3:
+            _feature = _feature[:, :, :, np.newaxis]
+
+        zarr_file = f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}-{kwargs["CLOUDNET"]}-2D.zarr'
+        try:
+            with xr.open_zarr(zarr_file) as zarr_data:
                 _class = zarr_data['CLASS'].values if 'CLASS' in zarr_data else []
                 _status = zarr_data['detection_status'].values if 'detection_status' in zarr_data else []
                 _catbits = zarr_data['category_bits'].values if 'category_bits' in zarr_data else []
@@ -717,22 +777,20 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
                 _attbsc532 = zarr_data['attbsc532'].values if 'attbsc532' in zarr_data else []
                 _depol = zarr_data['depol'].values if 'depol' in zarr_data else []
 
-                logger.debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} zarr files')
-
         except KeyError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{zarr_file} variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
             continue
 
         except FileNotFoundError:
             N_NOT_AVAILABLE += 1
-            logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+            logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
 
         except ValueError as e:
             if 'group not found at path' in str(e):
-                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  not found! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
             else:
-                logger.info(f"{DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr  some value is missing! n_Failed = {N_NOT_AVAILABLE}")
+                logger.info(f"{zarr_file} some value is missing! n_Failed = {N_NOT_AVAILABLE}")
                 logger.info(f"{e}")
 
             N_NOT_AVAILABLE += 1
@@ -740,18 +798,12 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
 
         except Exception as e:
             logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                            f"Check folder: {DATA_PATH}/xarray/{dt_str}_{kwargs['RADAR']}.zarr, n_Failed = {N_NOT_AVAILABLE}")
+                            f"Check folder: {zarr_file}.zarr, n_Failed = {N_NOT_AVAILABLE}")
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
-            logger.critical(f'Exception: Check ~/{kwargs["DATA_PATH"]}/xarray/{dt_str}_{kwargs["RADAR"]}.zarr)')
             logger.critical(f'{e}')
             N_NOT_AVAILABLE += 1
             continue
-
-        if _masked.all(): continue  # if there are no data points
-
-        if len(_feature.shape) == 3:
-            _feature = _feature[:, :, :, np.newaxis]
 
         # apply training mask
         if TASK == 'train':
@@ -764,8 +816,7 @@ def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
 
             NOTE: The detection status differs depending on the cloudnet version (matlab/python)!
             """
-
-            if (_target == -999.0).all(): continue  # if there are no labels available
+            # for validation
             training_mask = load_training_mask(_class, _status, cloudnet_type=kwargs["CLOUDNET"])
             idx_valid_samples = set_intersection(_masked, training_mask)
 
