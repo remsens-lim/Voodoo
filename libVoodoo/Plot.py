@@ -51,7 +51,6 @@ def create_quicklook_ts(da):
     return f, ax
 
 
-
 def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
     import matplotlib.ticker as plticker
     Z = ZSpec.sel(ts=ts, rg=rg)
@@ -74,6 +73,7 @@ def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
     ax.grid(which='both')
 
     return fig, ax
+
 
 def create_acc_loss_graph(stats):
     fig = plt.figure(figsize=(15, 12))
@@ -151,6 +151,7 @@ def load_xy_style(axis, xlabel='Time [UTC]', ylabel='Height [m]', fs=10):
     axis.tick_params(axis='both', which='minor', top=True, right=True, width=2, length=3)
     return axis
 
+
 def load_cbar_style(cbar, cbar_label=''):
     """
     Method that alters the apperance of labels on the color bar axis in place.
@@ -162,7 +163,6 @@ def load_cbar_style(cbar, cbar_label=''):
     """
     cbar.ax.set_ylabel(cbar_label, fontweight='normal', fontsize=_FONT_SIZE)
     cbar.ax.tick_params(axis='both', which='major', labelsize=_FONT_SIZE, width=2, length=4)
-
 
 
 def featureql(xr_ds, xr_ds2D, indices, **kwargs):
@@ -251,6 +251,7 @@ def grid_plt(xr_ds, xr_ds2D, indices):
 def print_elapsed_time(t0, string='time = '):
     logger.info(f'{string}{datetime.timedelta(seconds=int(time.time() - t0))} [min:sec]')
 
+
 def save_figure(fig, **kwargs):
     """
     Creates at folder and saves a matplotlib figure.
@@ -305,6 +306,7 @@ def plot_bar_data(fig, ax, time, data, mask_value=0.0, font_size=_FONT_SIZE):
     ax_new.tick_params(axis='both', which='minor', width=2, length=3)
     return ax_new
 
+
 def plot_ll_thichkness(ax, t, l1, l2, font_size=_FONT_SIZE):
     y_lim = [-0.12, 2.5]
 
@@ -348,6 +350,7 @@ def add_lwp_to_classification(fig, ax, prediction, lwp, llt_v, llt_c, font_size=
     )
 
     return fig, ax
+
 
 def add_lwp_to_classification2(fig, ax, lwp, lwp_ad, lwp_ad2, font_size=_FONT_SIZE):
     # add the lwp ontop

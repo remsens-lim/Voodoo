@@ -108,7 +108,7 @@ def VoodooPredictor(
     print(modelfile)
     model.print_nparams()
 
-    prediction = model.testing(X_test, batch_size=BATCH_SIZE, dev=device)
+    prediction = model.predict(X_test, batch_size=BATCH_SIZE, dev=device)
     prediction = prediction.to('cpu')
 
     #prediction, _ = torch.max(prediction, dim=0)
