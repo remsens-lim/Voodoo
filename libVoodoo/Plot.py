@@ -9,6 +9,8 @@ from itertools import product
 
 import matplotlib
 import matplotlib.pyplot   as plt
+
+plt.rcParams.update({'figure.max_open_warning': 0})
 import numpy as np
 from matplotlib import ticker
 
@@ -43,6 +45,13 @@ def create_quicklook(da):
     return f, ax
 
 
+def create_quicklook_ts(da):
+    f, ax = plt.subplots(nrows=1, figsize=(14, 5.7))
+    f, ax = tr.plot_timeseries(da, fig=f, ax=ax)
+    return f, ax
+
+
+
 def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
     import matplotlib.ticker as plticker
     Z = ZSpec.sel(ts=ts, rg=rg)
@@ -67,23 +76,52 @@ def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
     return fig, ax
 
 def create_acc_loss_graph(stats):
-    fig = plt.figure(figsize=(10, 10))
-
-    ax1 = plt.subplot2grid((2, 1), (0, 0))
-    ax2 = plt.subplot2grid((2, 1), (1, 0), sharex=ax1)
-
-    ax1.plot(stats[:, 1], label="acc")
-    ax1.plot(stats[:, 2], label="val_acc")
-    ax1.legend(loc=2)
-    ax2.plot(stats[:, 3], label="loss")
-    ax2.plot(stats[:, 4], label="val_loss")
-    ax2.legend(loc=2)
+    fig = plt.figure(figsize=(15, 12))
+    names = [
+        'TP',
+        'TN',
+        'FP',
+        'FN',
+        'precision',
+        #'npv',
+        'recall',
+        #'specificity',
+        'accuracy',
+        'F1-score',
+        #'Jaccard-index',
+    ]
+    ax1 = plt.subplot2grid((3, 1), (0, 0))
+    ax2 = plt.subplot2grid((3, 1), (1, 0), sharex=ax1)
+    ax3 = plt.subplot2grid((3, 1), (2, 0), sharex=ax1)
+    train_stats, val_stats = [], []
+    train_loss, val_loss = [], []
+    for istat in stats:
+        train_stats.append(istat[0][0]['array'][4:])
+        train_loss.append(istat[0][1])
+        val_stats.append(istat[1][4:])
+        val_loss.append(istat[1][-1])
+    train_stats = np.array(train_stats)
+    val_stats = np.array(val_stats)
+    for i, iline in enumerate(names[4:]):
+        ax1.plot(train_stats[:, i], label=f"{iline}")
+        ax2.plot(val_stats[:, i], label=f"val_{iline}")
+    ax3.plot(train_loss, label=f"loss")
+    ax3.plot(val_loss, label=f"val_loss")
+    ax1.legend(loc=2, bbox_to_anchor=(-.21, 1))
+    ax2.legend(loc=2, bbox_to_anchor=(-.21, 1))
+    ax3.legend(loc=2, bbox_to_anchor=(-.21, 1))
     ax1.grid()
     ax2.grid()
-    load_xy_style(ax1, xlabel='validation epochs', ylabel='accuracy [1]', fs=10)
-    load_xy_style(ax2, xlabel='validation epochs', ylabel='loss [-]', fs=10)
+    ax3.grid()
+    ax1.set(ylim=[0.0, 1.0])
+    ax2.set(ylim=[0.0, 1.0])
+    ax3.set(ylim=[0.0, 1.6])
+    load_xy_style(ax1, xlabel='training epochs', ylabel='accuracy [1]', fs=10)
+    load_xy_style(ax2, xlabel='validation epochs', ylabel='accuracy [1]', fs=10)
+    load_xy_style(ax3, xlabel='validation epochs', ylabel='loss [-]', fs=10)
+    fig.subplots_adjust(left=0.175, right=0.95, top=0.9, bottom=0.1)
 
-    return fig, np.array([ax1, ax2], dtype=object)
+    return fig, np.array([ax1, ax2, ax3], dtype=object)
 
 
 # Some adjustments to the axis labels, ticks and fonts
@@ -106,12 +144,25 @@ def load_xy_style(axis, xlabel='Time [UTC]', ylabel='Height [m]', fs=10):
     axis.set_ylabel(ylabel, fontweight='normal', fontsize=fs)
     if xlabel == 'Time [UTC]':
         axis.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M'))
-        axis.xaxis.set_major_locator(matplotlib.dates.HourLocator(interval=3))
-        axis.xaxis.set_minor_locator(matplotlib.dates.MinuteLocator(byminute=[0, 30]))
+        axis.xaxis.set_major_locator(matplotlib.dates.HourLocator(interval=2))
+        axis.xaxis.set_minor_locator(matplotlib.dates.MinuteLocator(byminute=[0, 15, 30, 45]))
         axis.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(500))
     axis.tick_params(axis='both', which='major', top=True, right=True, labelsize=fs, width=3, length=4)
     axis.tick_params(axis='both', which='minor', top=True, right=True, width=2, length=3)
     return axis
+
+def load_cbar_style(cbar, cbar_label=''):
+    """
+    Method that alters the apperance of labels on the color bar axis in place.
+
+    Args:
+        ax (matplotlib.axis) :: axis that gets adjusted
+        **cbar_label (string) :: name of the cbar axis label, Defaults to empty string.
+
+    """
+    cbar.ax.set_ylabel(cbar_label, fontweight='normal', fontsize=_FONT_SIZE)
+    cbar.ax.tick_params(axis='both', which='major', labelsize=_FONT_SIZE, width=2, length=4)
+
 
 
 def featureql(xr_ds, xr_ds2D, indices, **kwargs):

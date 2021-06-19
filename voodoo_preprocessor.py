@@ -22,11 +22,10 @@ logger.setLevel(logging.WARNING)
 #
 if __name__ == '__main__':
 
-    _DEFAULT_CHANNELS = 12
     ANN_INI_FILE = 'HP_12chdp2.toml'
 
     VOODOO_PATH = os.getcwd()
-    DATA_PATH = f'{VOODOO_PATH}/data/{ANN_INI_FILE[:-5]}/hourly/noSL/'
+    DATA_PATH = f'{VOODOO_PATH}/data/Vnet_6ch_noliqext/hourly/'
 
     method_name, args, kwargs = read_cmd_line_args(sys.argv)
 
@@ -34,9 +33,9 @@ if __name__ == '__main__':
     system = kwargs['radar'] if 'radar' in kwargs else 'limrad94'
     cnet = kwargs['cnet'] if 'cnet' in kwargs else 'CLOUDNETpy94'
     save = kwargs['save'] if 'save' in kwargs else True
-    site = kwargs['site'] if 'site' in kwargs else 'lacros_dacapo_gpu'
+    site = kwargs['site'] if 'site' in kwargs else 'lacros_dacapo_gpu'#  'leipzig_gpu'  #
     dpol = kwargs['dpol'] if 'dpol' in kwargs else True
-    n_ch = int(kwargs['n_ch']) if 'n_ch' in kwargs else 12
+    n_ch = int(kwargs['n_ch']) if 'n_ch' in kwargs else 6
 
 
     if 'dt_start' in kwargs:
@@ -44,13 +43,12 @@ if __name__ == '__main__':
         dt_end = dt_begin + timedelta(minutes=t_train)
         TIME_SPAN_ = [dt_begin, dt_end]
     else:
-        #debug case PA 1. August 2019 5 UTC
-        dt_begin = datetime.strptime('20190801-0500', '%Y%m%d-%H%M')
-        dt_end = dt_begin + timedelta(minutes=30.0)
+        dt_begin = datetime.strptime('20190801-0600', '%Y%m%d-%H%M')
+        dt_end = dt_begin + timedelta(minutes=60.0)
         TIME_SPAN_ = [dt_begin, dt_end]
 
     try:
-        _ = features_from_nc(
+        _, _ = features_from_nc(
             time_span=TIME_SPAN_,
             voodoo_path=VOODOO_PATH,
             data_path=DATA_PATH,
@@ -61,6 +59,7 @@ if __name__ == '__main__':
             ann_settings_file=ANN_INI_FILE,
             site=site,
             dual_polarization=dpol,
+            build_lists=False if site == 'lacros_dacapo_gpu' else True,
         )
 
     except Exception:

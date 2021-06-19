@@ -12,22 +12,20 @@ import xarray as xr
 import numpy as np
 import libVoodoo.TorchModel as TM
 import libVoodoo.Utils as UT
-from generate_trainingset import load_features_from_nc, VoodooXR
+from libVoodoo.Loader import features_from_nc, VoodooXR
 
-VOODOO_PATH = '/home/sdig/code/larda3/voodoo/'
-DATA_PATH = os.path.join(VOODOO_PATH, 'data_12chdp/xarray_zarr/')
+VOODOO_PATH = os.getcwd()
+DATA_PATH = os.path.join(VOODOO_PATH, 'data/Vnet_6ch_noliqext/10folds_all/')
 pt_models_path = os.path.join(VOODOO_PATH, 'torch_models/')
-MODEL_TOML = os.path.join(VOODOO_PATH, 'HP_12chdp3.toml')
+MODEL_TOML = os.path.join(VOODOO_PATH, 'HP_12chdp2.toml')
+TEST_PATH = os.path.join(VOODOO_PATH, f'data/Vnet_6ch_noliqext/validation/validation_testingset-1-10folds_all-ND.zarr')
 # model=model-1609964168-20eps.pt
 # model=model-1610033363-4eps.pt
 iGPU = 0
 DEVICE_train = f'cuda:{iGPU}'
-
-_DEFAULT_CHANNELS = 12
-_DEFAULT_DOPPBINS = 256
-BATCH_SIZE = 500
+BATCH_SIZE = 512
 CLOUDNET = 'CLOUDNETpy94'
-NCLASSES = 11
+NCLASSES = 2
 
 if __name__ == '__main__':
     # setting device on GPU if available, else CPU
@@ -43,27 +41,27 @@ if __name__ == '__main__':
     zero_column = np.zeros(n_folds, dtype=int)
 
     df_nclasses = pd.DataFrame(
-        {class_: zero_column for class_ in UT.cloudnetpy_classes},
+        {class_: zero_column for class_ in ['CD', 'non-CD']},
         index=[f'fold{i}' for i in range(n_folds)]
     )
 
     NPOL = 1
-    NFOLDS = 10
+    NFOLDS = 1
     NCHANNELS = 6
     NDBINS = 256
-    batch_size = 256
+    batch_size = 512
     df_meandist = np.zeros((NCLASSES, NPOL, NCHANNELS, NDBINS))
     df_stddist = np.zeros((NCLASSES, NPOL, NCHANNELS, NDBINS))
 
     iFN_mean = []
     iFN_std = []
     for iFN in trange(NFOLDS):
-        TEST_PATH = os.path.join(DATA_PATH, f'20181127-20190927-{iFN}-allclasses-dc2-12ch2pol.zarr')
-        #TEST_PATH = os.path.join(DATA_PATH, f'20190801-20190801-X-12ch2pol.zarr')
+        if NFOLDS > 1:
+            TEST_PATH = os.path.join(DATA_PATH, f'20181127-20190927-{iFN}-10folds_all-ND.zarr')
         print(f'Loading compressed zarr file ...... {TEST_PATH}')
-        X, y = TM.VoodooNet.fetch_data(TEST_PATH, shuffle=True, remove_sl=False)
-        class_dist = UT.log_number_of_classes(np.array(y))
-        df_nclasses.loc[f'fold{iFN}'] = class_dist
+        X, y = TM.VoodooNet.fetch_data(TEST_PATH, shuffle=True)
+        class_dist = np.array([np.count_nonzero(y==i) for i in range(NCLASSES)])
+        df_nclasses.loc[f'fold{iFN}'] = class_dist[1:]
         print(f'\nGPU:{iGPU} {np.sum(class_dist, dtype=np.int):12d}   total samples: fn{iFN}')
 
         iterator = tqdm(

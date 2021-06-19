@@ -19,6 +19,19 @@ from tqdm.auto import tqdm
 logger = logging.getLogger('libVoodoo')
 logger.setLevel(logging.CRITICAL)
 
+cloudnetpy_classes_n = [
+    'Clear sky',
+    'Cloud liquid\ndroplets only',
+    'Drizzle or rain.',
+    'Drizzle/rain &\ncloud droplet',
+    'Ice particles.',
+    'Ice coexisting with\nsupercooled\nliquid droplets.',
+    'Melting ice\nparticles',
+    'Melting ice &\ncloud droplets',
+    'Aerosol',
+    'Insects',
+    'Aerosol and\nInsects',
+]
 cloudnetpy_classes = [
     'Clear sky',
     'Cloud liquid droplets only',
@@ -177,11 +190,22 @@ def get_cloud_base_from_liquid_mask(liq_mask, rg):
 
     CB = np.full(n_ts, np.nan)
 
-    for iT in range(n_ts):
-        idx = np.argwhere(cbct_mask[iT, :] == -1)
-        CB[iT] = rg[int(idx[0])] if len(idx) > 0 else 0.0
+    for ind_time in range(n_ts):
+        idx = np.argwhere(cbct_mask[ind_time, :] == -1)
+        CB[ind_time] = rg[int(idx[0])] if len(idx) > 0 else 0.0
     return CB
 
+def get_bases_or_tops(dt_list, bases_tops, key='cb'):
+    dt_s, rg_s, dt1key, rg1key = [], [], [], []
+    for i in range(len(bases_tops[0])):
+        for j in range(bases_tops[0][i][f'idx_{key}'].size):
+            if bases_tops[0][i]['width'][j] > 150.:
+                dt_s.append(dt_list[i])
+                rg_s.append(bases_tops[0][i][f'val_{key}'][j] / 1000.)
+                if j == 0:
+                    dt1key.append(dt_list[i])
+                    rg1key.append(bases_tops[0][i][f'val_{key}'][0] / 1000.)
+    return {'all': [dt_s, rg_s], 'first': [dt1key, rg1key]}
 
 def find_bases_tops(mask, rg_list):
     """
@@ -196,14 +220,14 @@ def find_bases_tops(mask, rg_list):
     """
     cloud_prop = []
     cloud_mask = np.full(mask.shape, 0, dtype=np.int)
-    for iT in range(mask.shape[0]):
-        cloud = [(k, sum(1 for j in g)) for k, g in groupby(mask[iT, :])]
+    for ind_time in range(mask.shape[0]): #tqdm(range(mask.shape[0]), ncols=100, unit=' time steps'):
+        cloud = [(k, sum(1 for j in g)) for k, g in groupby(mask[ind_time, :])]
         idx_cloud_edges = np.cumsum([prop[1] for prop in cloud])
         bases, tops = idx_cloud_edges[0:][::2][:-1], idx_cloud_edges[1:][::2]
         if tops.size > 0 and tops[-1] == mask.shape[1]:
             tops[-1] = mask.shape[1] - 1
-        cloud_mask[iT, bases] = -1
-        cloud_mask[iT, tops] = +1
+        cloud_mask[ind_time, bases] = -1
+        cloud_mask[ind_time, tops] = +1
         cloud_prop.append({'idx_cb': bases, 'val_cb': rg_list[bases],  # cloud bases
                            'idx_ct': tops, 'val_ct': rg_list[tops],  # cloud tops
                            'width': [ct - cb for ct, cb in zip(rg_list[tops], rg_list[bases])]
@@ -263,7 +287,6 @@ def read_ann_config_file(**kwargs):
     return data
 
 
-
 def change_dir(folder_path, **kwargs):
     """
     This routine changes to a folder or creates it (including subfolders) if it does not exist already.
@@ -275,12 +298,7 @@ def change_dir(folder_path, **kwargs):
     folder_path = folder_path.replace('//', '/', 1)
 
     if not os.path.exists(os.path.dirname(folder_path)):
-        try:
-            os.makedirs(os.path.dirname(folder_path))
-        except OSError as exc:  # Guard against race condition
-            if exc.errno != errno.EEXIST:
-                raise
-
+         os.makedirs(os.path.dirname(folder_path))
     os.chdir(folder_path)
     logger.debug('\ncd to: {}'.format(folder_path))
 
@@ -330,7 +348,7 @@ def intersection(lst1, lst2):
 
 def set_intersection(mask0, mask1):
     mask_flt = np.where(~mask0.astype(np.bool).flatten())
-    mask1_flt = np.where(~mask1.flatten())
+    mask1_flt = np.where(~mask1.astype(np.bool).flatten())
     maskX_flt = intersection(mask_flt[0], mask1_flt[0])
     len_flt = len(maskX_flt)
     idx_list = []
@@ -341,8 +359,7 @@ def set_intersection(mask0, mask1):
             idx_list.append(iter)
             cnt += 1
 
-    return idx_list
-
+    return np.array(idx_list, dtype=int)
 
 def container_from_prediction(ts, rg, var, mask, **kwargs):
     prediction_container = {}
@@ -402,6 +419,16 @@ def variable_to_container(var, ts, rg, mask, **kwargs):
     container['mask'] = mask
     container['var'] = var
     return container
+
+
+def container_to_xarray(container, path):
+    xr_ds = xr.DataArray(
+        container['var'],
+        coords=[container['ts'], container['rg']],
+        dims=["time", "height"],
+        attrs=container['paraminfo']
+    )
+    return xr_ds
 
 
 def post_processor_temperature(data, temperature, **kwargs):
@@ -492,7 +519,7 @@ def post_processor_homogenize(classes, nlabels=9):
 
     def gen_one_hot(classes):
         one_hot = np.zeros(nlabels)
-        for class_ in classes[iT:iT + WSIZE, iR:iR + WSIZE].flatten():
+        for class_ in classes[ind_time:ind_time + WSIZE, ind_range:ind_range + WSIZE].flatten():
             if int(class_) < 9:
                 one_hot[int(class_)] = 1
             else:
@@ -509,18 +536,18 @@ def post_processor_homogenize(classes, nlabels=9):
     n_ts_pad, n_rg_pad = mask_pad.shape
 
     logger.info(f'Start Homogenizing')
-    for iT, iR in tqdm(product(range(n_ts_pad - WSIZE), range(n_rg_pad - WSIZE)), total=(n_ts_pad - WSIZE) * (n_rg_pad - WSIZE), unit='pixel'):
-        if mask[iT, iR]:
+    for ind_time, ind_range in tqdm(product(range(n_ts_pad - WSIZE), range(n_rg_pad - WSIZE)), total=(n_ts_pad - WSIZE) * (n_rg_pad - WSIZE), unit='pixel'):
+        if mask[ind_time, ind_range]:
             continue  # skip clear sky pixel
         #        else:
         #            # If more than 35 of 49 pixels are classified
         #            # as clear, then the central pixel is set to clear
-        #            if np.sum(mask_pad[iT:iT + WSIZE, iR:iR + WSIZE]) > min_bins:
-        #                mask_out[iT, iR] = True
+        #            if np.sum(mask_pad[ind_time:ind_time + WSIZE, ind_range:ind_range + WSIZE]) > min_bins:
+        #                mask_out[ind_time, ind_range] = True
         #                continue  # skip isolated pixel (rule 7a shupe 2007)
 
         # Homogenize
-        n_samples_total = np.count_nonzero(gen_one_hot(classes[iT:iT + WSIZE, iR:iR + WSIZE]), axis=0)
+        n_samples_total = np.count_nonzero(gen_one_hot(classes[ind_time:ind_time + WSIZE, ind_range:ind_range + WSIZE]), axis=0)
 
         if n_samples_total == 0: continue
 
@@ -532,7 +559,7 @@ def post_processor_homogenize(classes, nlabels=9):
         # Otherwise, the central pixel is set
         # to the classification type that is most plentiful in the box.
         # (rule 7c shupe 2007) change to dominant type
-        classes_out[iT, iR] = np.argmax(n_samples_total)
+        classes_out[ind_time, ind_range] = np.argmax(n_samples_total)
 
     return classes_out
 
@@ -585,13 +612,10 @@ def ma_corr_coef(X1, X2):
     return np.ma.corrcoef(np.ma.masked_less_equal(X1, 0.0), np.ma.masked_less_equal(X2, 0.0))[0, 1]
 
 
-def load_training_mask(classes, status, cloudnet_type):
-    idx_good_radar_and_lidar = get_good_radar_and_lidar_index(cloudnet_type)
-    idx_good_lidar_only = get_good_lidar_only_index(cloudnet_type)
-
+def load_training_mask(classes, status, cloudnet_type='CLOUDNETpy'):
     """
-    CLOUDNET
-    "0: Clear sky\n
+    classes
+    0: Clear sky\n
     1: Cloud droplets only\n
     2: Drizzle or rain\n
     3: Drizzle/rain & cloud droplets\n
@@ -603,29 +627,28 @@ def load_training_mask(classes, status, cloudnet_type):
     9: Insects\n
     10: Aerosol & insects";
 
-    (CLOUDNET MATLAB VERSION)
-    "0: Clear sky\n
-    1: Lidar echo only\n
-    2: Radar echo but uncorrected atten.\n
-    3: Good radar & lidar echos\n
-    4: No radar but unknown attenuation\n
-    5: Good radar echo only\n
-    6: No radar but known attenuation\n
-    7: Radar corrected for liquid atten.\n
-    8: Radar ground clutter\n
-    9: Lidar molecular scattering";
-
+    status
+    0: Clear sky.\n
+    1: Good radar and lidar echos.\n
+    2: Good radar echo only.\n
+    3: Radar echo, corrected for liquid attenuation.
+    4: Lidar echo only.\nValue
+    5: Radar echo, uncorrected for liquid attenuation.\nValue
+    6: Radar ground clutter.\nValue
+    7: Lidar clear-air molecular scattering.";
     """
     # create mask
     valid_samples = np.full(status.shape, False)
-    valid_samples[status == idx_good_radar_and_lidar] = True  # add good radar radar & lidar
+    valid_samples[status == 1] = True  # add good radar radar & lidar
     valid_samples[classes == 1] = True  # add cloud droplets only class
+    #valid_samples[classes == 2] = True  # add drizzle/rain
+    valid_samples[classes == 3] = True  # add cloud droplets + drizzle/rain
     valid_samples[classes == 5] = True  # add mixed-phase class pixel
-    valid_samples[classes == 6] = True  # add melting layer class pixel
+    #valid_samples[classes == 6] = True  # add melting layer
     valid_samples[classes == 7] = True  # add melting layer + SCL class pixel
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
-    valid_samples[status == idx_good_lidar_only] = False
+    valid_samples[status == 4] = False
 
     return ~valid_samples
 
@@ -644,320 +667,15 @@ def load_case_list(path, case_name):
 
 def log_number_of_classes(classes, text=''):
     # numer of samples per class afer removing ice
-    class_n_distribution = np.zeros(len(cloudnetpy_classes), dtype=int)
+    class_name_list = ['droplets available', 'no droplets availabe']
+    class_dist = np.zeros(len(class_name_list), dtype=int)
     logger.info(text)
     logger.info(f'{classes.size:12d}   total')
-    for i in range(len(cloudnetpy_classes)):
-        n = np.sum(classes == i)
-        logger.info(f'{n:12_d}   {cloudnetpy_classes[i]}')
-        class_n_distribution[i] = n
-    return class_n_distribution
+    for ind, ind_name in enumerate(class_name_list):
+        logger.info(f'{class_dist[ind]:12_d}   {ind_name}')
+        class_dist[ind] = np.sum(classes == ind+1)
+    return class_dist
 
-
-def target_class2bit_mask(target_labels):
-    #
-    #     clutter = categorize_bits.quality_bits['clutter']
-    #     classification = np.zeros(bits['cold'].shape, dtype=int)
-    #     classification[bits['droplet'] & ~bits['falling']] = 1
-    #     classification[~bits['droplet'] & bits['falling']] = 2
-    #     classification[bits['droplet'] & bits['falling']] = 3
-    #     classification[~bits['droplet'] & bits['falling'] & bits['cold']] = 4
-    #     classification[bits['droplet'] & bits['falling'] & bits['cold']] = 5
-    #     classification[bits['melting']] = 6
-    #     classification[bits['melting'] & bits['droplet']] = 7
-    #     classification[bits['aerosol']] = 8
-    #     classification[bits['insect'] & ~clutter] = 9
-    #     classification[bits['aerosol'] & bits['insect'] & ~clutter] = 10
-    #     classification[clutter & ~bits['aerosol']] = 0
-
-    #     bit_mask: droplet(0) / falling(1) / cold(2) / melting(3) / insect(4)
-
-    bit_mask = np.zeros((target_labels.size, 5))
-    # cloud droplets only
-    droplets = (target_labels == 1) + (target_labels == 3) + (target_labels == 5) + (target_labels == 7)
-    falling = (target_labels == 2) + (target_labels == 3) + (target_labels == 4) + (target_labels == 5)
-    cold = (target_labels == 4) + (target_labels == 5)
-    melting = (target_labels == 6) + (target_labels == 7)
-    insects = (target_labels == 9) + (target_labels == 10)
-    bit_mask[droplets, 0] = 1
-    bit_mask[falling, 1] = 1
-    bit_mask[cold, 2] = 1
-    bit_mask[melting, 3] = 1
-    bit_mask[insects, 4] = 1
-
-    return bit_mask
-
-
-def load_dataset_from_zarr(DATA_PATH, TOML_PATH, TASK='train', **kwargs):
-    N_NOT_AVAILABLE = 0
-    features, labels, multilabels, mask = [], [], [], []
-    class_, status, catbits, qualbits, insect_prob = [], [], [], [], []
-    mT, mP, mq, ts, rg, lwp, u_w, v_w = [], [], [], [], [], [], [], []
-    Z, VEL, VEL_sigma, width, beta, attbsc532, depol = [], [], [], [], [], [], []
-
-    xarr_ds = []
-    data_chunk_heads = [chunk for chunk in load_case_file(TOML_PATH).keys()]
-
-    for icase, case_str in tqdm(enumerate(data_chunk_heads), total=len(data_chunk_heads), unit='files'):
-
-        # gather time interval, etc..:505
-
-        case = load_case_list(TOML_PATH, case_str)
-        TIME_SPAN = [datetime.datetime.strptime(t, '%Y%m%d-%H%M') for t in case['time_interval']]
-        dt_str = f'{TIME_SPAN[0]:%Y%m%d_%H%M}-{TIME_SPAN[1]:%H%M}'
-        zarr_file = f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}-{kwargs["CLOUDNET"]}-ND.zarr'
-
-        # check if a mat files is available
-        try:
-            with xr.open_zarr(zarr_file) as zarr_data:
-                # for training & validation
-                # _multitarget = zarr_data['multitargets'].values
-                _feature = zarr_data['features'].values
-                _target = zarr_data['targets'].values
-                _masked = zarr_data['masked'].values
-
-                logger.debug(f'\nloaded :: {TIME_SPAN[0]:%A %d. %B %Y - %H:%M:%S} to {TIME_SPAN[1]:%H:%M:%S} zarr files')
-
-        except KeyError:
-            N_NOT_AVAILABLE += 1
-            logger.info(f"{zarr_file} variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
-            continue
-
-        except FileNotFoundError:
-            N_NOT_AVAILABLE += 1
-            logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
-
-        except ValueError as e:
-            if 'group not found at path' in str(e):
-                logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
-            else:
-                logger.info(f"{zarr_file} some value is missing! n_Failed = {N_NOT_AVAILABLE}")
-                logger.info(f"{e}")
-
-            N_NOT_AVAILABLE += 1
-            continue
-
-        except Exception as e:
-            logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                            f"Check folder: {zarr_file}.zarr, n_Failed = {N_NOT_AVAILABLE}")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            traceback.print_exception(exc_type, exc_value, exc_tb)
-            logger.critical(f'{e}')
-            N_NOT_AVAILABLE += 1
-            continue
-
-        if _masked.all(): continue  # if there are no data points
-
-        if (_target == -999.0).all(): continue  # if there are no labels available
-
-        if len(_feature.shape) == 3:
-            _feature = _feature[:, :, :, np.newaxis]
-
-        zarr_file = f'{DATA_PATH}/{dt_str}_{kwargs["RADAR"]}-{kwargs["CLOUDNET"]}-2D.zarr'
-        try:
-            with xr.open_zarr(zarr_file) as zarr_data:
-                _class = zarr_data['CLASS'].values if 'CLASS' in zarr_data else []
-                _status = zarr_data['detection_status'].values if 'detection_status' in zarr_data else []
-                _catbits = zarr_data['category_bits'].values if 'category_bits' in zarr_data else []
-                _qualbits = zarr_data['quality_bits'].values if 'quality_bits' in zarr_data else []
-                _insect_prob = zarr_data['insect_prob'].values if 'insect_prob' in zarr_data else []
-                _temperature = zarr_data['T'].values if 'T' in zarr_data else []
-                _pressure = zarr_data['P'].values if 'P' in zarr_data else []
-                _q = zarr_data['q'].values if 'q' in zarr_data else []
-                _ts = zarr_data['ts'].values if 'ts' in zarr_data else []
-                _rg = zarr_data['rg'].values if 'rg' in zarr_data else []
-                _lwp = zarr_data['LWP'].values if 'LWP' in zarr_data else []
-                _uw = zarr_data['UWIND'].values if 'UWIND' in zarr_data else []
-                _vw = zarr_data['VWIND'].values if 'VWIND' in zarr_data else []
-                _Z = zarr_data['Z'].values if 'Z' in zarr_data else []
-                _VEL = zarr_data['VEL'].values if 'VEL' in zarr_data else []
-                _VEL_sigma = zarr_data['VEL_sigma'].values if 'VEL_sigma' in zarr_data else []
-                _width = zarr_data['width'].values if 'width' in zarr_data else []
-                _beta = zarr_data['beta'].values if 'beta' in zarr_data else []
-                _attbsc532 = zarr_data['attbsc532'].values if 'attbsc532' in zarr_data else []
-                _depol = zarr_data['depol'].values if 'depol' in zarr_data else []
-
-        except KeyError:
-            N_NOT_AVAILABLE += 1
-            logger.info(f"{zarr_file} variable 'multitargets' not found! n_Failed = {N_NOT_AVAILABLE}")
-            continue
-
-        except FileNotFoundError:
-            N_NOT_AVAILABLE += 1
-            logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
-
-        except ValueError as e:
-            if 'group not found at path' in str(e):
-                logger.info(f"{zarr_file} not found! n_Failed = {N_NOT_AVAILABLE}")
-            else:
-                logger.info(f"{zarr_file} some value is missing! n_Failed = {N_NOT_AVAILABLE}")
-                logger.info(f"{e}")
-
-            N_NOT_AVAILABLE += 1
-            continue
-
-        except Exception as e:
-            logger.critical(f"Unexpected error: {sys.exc_info()[0]}\n"
-                            f"Check folder: {zarr_file}.zarr, n_Failed = {N_NOT_AVAILABLE}")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            traceback.print_exception(exc_type, exc_value, exc_tb)
-            logger.critical(f'{e}')
-            N_NOT_AVAILABLE += 1
-            continue
-
-        # apply training mask
-        if TASK == 'train':
-            """
-            select pixel satisfying the following expression:
-            training_mask = (   "Good radar & lidar echos" 
-            + "Ice & supercooled liquid" 
-            + "Cloud droplets only"       ) 
-            - "Lidar echos only"
-
-            NOTE: The detection status differs depending on the cloudnet version (matlab/python)!
-            """
-            # for validation
-            training_mask = load_training_mask(_class, _status, cloudnet_type=kwargs["CLOUDNET"])
-            idx_valid_samples = set_intersection(_masked, training_mask)
-
-            if len(idx_valid_samples) < 1: continue
-
-            if len(_feature.shape) == 4:
-                _feature = _feature[idx_valid_samples, :, :]
-            elif len(_feature.shape) == 5:
-                _feature = _feature[idx_valid_samples, :, :, :]
-            else:
-                raise ValueError(f'Wrong feature set dimensions : {_feature.shape}')
-
-            _target = _target[idx_valid_samples, np.newaxis]
-            # _multitarget = _multitarget[idx_valid_samples, :]
-
-        logger.debug(f'\n dim = {_feature.shape}')
-        logger.debug(f'\n Number of missing files = {N_NOT_AVAILABLE}')
-
-        features.append(_feature)
-        labels.append(_target)
-        # multilabels.append(_multitarget)
-
-        if TASK == 'train':
-            continue
-
-        class_.append(_class)
-        status.append(_status)
-        catbits.append(_catbits)
-        qualbits.append(_qualbits)
-        insect_prob.append(_insect_prob)
-        mask.append(_masked)
-        mT.append(_temperature)
-        mP.append(_pressure)
-        mq.append(_q)
-        ts.append(_ts)
-        lwp.append(_lwp)
-        u_w.append(_uw)
-        v_w.append(_vw)
-        Z.append(_Z)
-        VEL.append(_VEL)
-        VEL_sigma.append(_VEL_sigma)
-        width.append(_width)
-        beta.append(_beta)
-        attbsc532.append(_attbsc532)
-        depol.append(_depol)
-
-    features = np.concatenate(features, axis=0)
-    labels = np.concatenate(labels, axis=0)
-    # multilabels = np.concatenate(multilabels, axis=0)
-    returns = [features, np.squeeze(labels), multilabels]
-
-    if TASK == 'train':
-        for i in range(21):
-            returns.append(None)
-    else:
-        returns.append(np.concatenate(class_, axis=0))
-        returns.append(np.concatenate(status, axis=0))
-        returns.append(np.concatenate(catbits, axis=0))  # 5
-        returns.append(np.concatenate(qualbits, axis=0))
-        returns.append(np.concatenate(insect_prob, axis=0))
-        returns.append(np.concatenate(mask, axis=0))
-        returns.append(np.concatenate(mT, axis=0))
-        returns.append(np.concatenate(mP, axis=0))  # 10
-        returns.append(np.concatenate(mq, axis=0))
-        returns.append(np.concatenate(ts, axis=0))
-        returns.append(np.array(_rg))
-        returns.append(np.concatenate(lwp, axis=0))
-        returns.append(np.concatenate(u_w, axis=0))
-        returns.append(np.concatenate(v_w, axis=0))
-        returns.append(np.concatenate(Z, axis=0))
-        returns.append(np.concatenate(VEL, axis=0))
-        returns.append(np.concatenate(VEL_sigma, axis=0))
-        returns.append(np.concatenate(width, axis=0))
-        returns.append(np.concatenate(beta, axis=0))
-        returns.append(np.concatenate(attbsc532, axis=0))
-        returns.append(np.concatenate(depol, axis=0))
-
-    return returns
-
-
-def one_hot_to_classes(cnn_pred, mask):
-    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
-
-    Args:
-        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
-        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
-
-    Returns:
-        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
-    """
-    predicted_classes = np.zeros(mask.shape, dtype=np.float32)
-    predicted_probability = np.zeros(mask.shape + (9,), dtype=np.float32)
-    cnt = 0
-    for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
-        if mask[iT, iR]: continue
-        predicted_classes[iT, iR] = np.argmax(cnn_pred[cnt])
-        predicted_probability[iT, iR, :] = cnn_pred[cnt]
-        cnt += 1
-
-    return predicted_classes, predicted_probability
-
-
-def classes_to_one_hot(classes, mask):
-    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
-
-    Args:
-        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
-        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
-
-    Returns:
-        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
-    """
-    one_hot = []
-
-    for iT, iR in product(range(classes.shape[0]), range(classes.shape[1])):
-        if mask[iT, iR]: continue
-        one_hot.append(classes[iT, iR])
-
-    return np.array(one_hot)
-
-
-def one_hot_to_spectra(features, mask):
-    """Converts a one-hot-encodes ANN prediction into Cloudnet-like classes.
-
-    Args:
-        cnn_pred (numpy.array): predicted ANN results (num_samples, 9)
-        mask (numpy.array, boolean): needs to be provided to skip missing/cloud-free pixels
-
-    Returns:
-        predicted_classes (numpy.array): predicted values converted to Cloudnet classes
-    """
-    from itertools import product
-    print((mask.shape,) + (features.shape[2],))
-    spectra = np.zeros(mask.shape + (features.shape[1], features.shape[2],), dtype=np.float32)
-    cnt = 0
-    for iT, iR in product(range(mask.shape[0]), range(mask.shape[1])):
-        if mask[iT, iR]: continue
-        spectra[iT, iR, :, :] = features[cnt]
-        cnt += 1
-
-    return spectra
 
 
 def argnearest(array, value):
@@ -978,7 +696,6 @@ def argnearest(array, value):
         if np.abs(array[i] - value) > np.abs(array[i + 1] - value):
             i = i + 1
     return i
-
 
 
 def interpolate2d(data, mask_thres=0.1, **kwargs):
@@ -1055,14 +772,288 @@ def dt_to_ts(dt):
     # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
     return (dt - datetime.datetime(1970, 1, 1)).total_seconds()
 
+
 def ts_to_dt(ts):
     """unix timestamp to dt"""
     return datetime.datetime.utcfromtimestamp(ts)
+
 
 def lin2z(array):
     """linear values to dB (for np.array or single number)"""
     return 10 * np.ma.log10(array)
 
+
 def z2lin(array):
     """dB to linear values (for np.array or single number)"""
     return 10 ** (array / 10.)
+
+def isKthBitSet(n, k):
+    if n & (1 << (k - 1)):
+        print("SET")
+    else:
+        print("NOT SET")
+
+
+def evaluation_metrics(pred_labels, true_labels, status=None):
+    TP = 0
+    TN = 0
+    FP = 0
+    FN = 0
+
+
+    # if no status is given, metric is calculated during optimization
+    if status is None:
+        for pred, truth in zip(pred_labels, true_labels):
+            if truth in [1, 3, 5, 7]:  # TRUE
+                if pred == 1:  # is droplet
+                    TP += 1
+                else:
+                    FN += 1
+            else:  # FALSE
+                if pred == 1:
+                    FP += 1
+                else:
+                    TN += 1
+
+
+    # if status is given, prediction and true labels in time-range
+    else:
+        evaluation_mask = ~load_training_mask(true_labels, status)
+        # also remove good radar echos only
+        evaluation_mask[status == 2] = False
+
+        n_time, n_range = true_labels.shape
+        for ind_time in range(n_time):
+            for ind_range in range(n_range):
+                if evaluation_mask[ind_time, ind_range]:
+                    cloundet_label = true_labels[ind_time, ind_range]
+                    predicted_label = pred_labels[ind_time, ind_range]
+                    if cloundet_label in [1, 3, 5, 7]:  #TRUE
+                        if predicted_label == 1:  # is droplet
+                            TP += 1
+                        else:
+                            FN += 1
+                    else:                               #FALSE
+                        if predicted_label == 1:
+                            FP += 1
+                        else:
+                            TN += 1
+
+    from collections import OrderedDict
+    out = OrderedDict({
+        'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
+        'precision': TP/max(TP + FP, 1.0e-7),
+        'npv': TN/max(TN + FN, 1.0e-7),
+        'recall': TP/max(TP + FN, 1.0e-7),
+        'specificity': TN/max(TN + FP, 1.0e-7),
+        'accuracy': (TP + TN)/max(TP + TN + FP + FN, 1.0e-7),
+        'F1-score': 2*TP/max(2*TP + FP + FN, 1.0e-7),
+        'Jaccard-index': TP / max(TP + FN + FP, 1.0e-7),
+    })
+    out.update({
+        'array': np.array([val for val in out.values()], dtype=float)
+    })
+    return out
+
+
+
+def LWP(ds_2D, liq_masks, bases_tops=None):
+    from libVoodoo.meteoSI import mod_ad
+    def calc_adLWP(ds_2D, liquid_mask, bt=None):
+        import scipy.interpolate
+        ts, rg = ds_2D['time'].values, ds_2D['height'].values
+        f = scipy.interpolate.interp2d(
+            ds_2D['model_time'].values,
+            ds_2D['model_height'].values,
+            ds_2D['temperature'].values.T,
+            kind='linear',
+            copy=True,
+            bounds_error=False,
+            fill_value=None
+        )
+        temperature = f(ts, rg)[:, :].T
+
+        f = scipy.interpolate.interp2d(
+            ds_2D['model_time'].values,
+            ds_2D['model_height'].values,
+            ds_2D['pressure'].values.T,
+            kind='linear',
+            copy=True,
+            bounds_error=False,
+            fill_value=None
+        )
+        pressure = f(ts, rg)[:, :].T
+
+        if bt is not None:
+            bt_lists, bt_mask = bt
+        else:
+            bt_lists, bt_mask = find_bases_tops(liquid_mask, rg)
+
+        adLWP = np.zeros(ts.size)
+        for ind_time in range(ts.size): #tqdm(range(ts.size), ncols=100, unit=' time steps'):
+            n_cloud_layers = len(bt_lists[ind_time]['idx_cb'])
+            if n_cloud_layers < 1: continue
+            Tclouds, Pclouds, RGclouds = [], [], []
+            for iL in range(n_cloud_layers):
+                tmp_idx = range(bt_lists[ind_time]['idx_cb'][iL], bt_lists[ind_time]['idx_ct'][iL])
+                if tmp_idx.stop - tmp_idx.start > 1:  # exclude single range gate clouds
+                    Tclouds.append(temperature[ind_time, tmp_idx])
+                    Pclouds.append(pressure[ind_time, tmp_idx])
+                    RGclouds.append(rg[tmp_idx])
+            try:
+                Tclouds = np.concatenate(Tclouds)
+                Pclouds = np.concatenate(Pclouds)
+                RGclouds = np.concatenate(RGclouds)
+                adLWP[ind_time] = np.sum(mod_ad(Tclouds, Pclouds, [], RGclouds))
+            except:
+                continue
+        return adLWP
+    lwp = calc_adLWP(ds_2D, liq_masks, bt=bases_tops)
+
+    return np.array(lwp)
+
+def correlation_coefficient(x, y):
+    x, y = np.ma.masked_invalid(x), np.ma.masked_invalid(y)
+    x, y = np.ma.masked_greater_equal(x, 1.0e10), np.ma.masked_greater_equal(y, 1.0e10)
+    x, y = np.ma.masked_less_equal(x, 0.0), np.ma.masked_less_equal(y, 0.0)
+    return np.ma.corrcoef(x, y)[0, 1]
+
+def timerange(begin, end):
+    result = []
+    pivot = begin
+    while pivot <= end:
+        result.append([pivot, pivot + datetime.timedelta(hours=23, minutes=59)])
+        pivot += datetime.timedelta(days=1)
+    return result
+
+
+def get_subset(dt_list, mask):
+    return [dt for dt, msk in zip(dt_list, mask) if msk]
+
+
+
+
+############
+from numba import jit
+
+grav = 9.80991  # mean earth gravitational acceleration in m s-2
+R = 8.31446261815324  # gas constant in kg m2 s−2 K−1 mol−1
+eps = 0.62  # ratio of gas constats for dry air and water vapor dimensionless
+cp = 1005.  # specific heat of air at constant pressure in J kg-1 K-1
+cv = 1860.  # specific heat of air at constant volume in J kg-1 K-1
+gamma_d = 9.76786e-3  # dry-adiabatic lapse rate in K m-1
+Rair = 287.058e-3  # specific gas constant of air J kg-1 K-1
+m_mol = 0.0289644  # molar mass of air in kg mol-1
+
+
+@jit(nopython=True, fastmath=True)
+def saturated_water_vapor_pressure(T: np.array) -> np.array:
+    """ Calculates the saturated water vapor pressure.
+
+    Args:
+        T: temperature in [C]
+    Returns:
+        saturated_water_vapor_pressure in [Pa] = [kg m-1 s-2]
+    Source:
+        https://en.wikipedia.org/wiki/Vapour_pressure_of_water
+    """
+    return 0.61078 * np.exp(17.27 * T / (T + 237.3))
+
+
+@jit(nopython=True, fastmath=True)
+def mixing_ratio(e_sat: np.array, p: np.array) -> np.array:
+    """ Calculates the ratio of the mass of a variable atmospheric constituent to the mass of dry air.
+
+    Args:
+        e_sat: saturated water vapor pressure in [kPa]
+        p: pressure in [Pa]
+    Returns:
+        mixing_ratio dimensionless
+    Source:
+        https://glossary.ametsoc.org/wiki/Mixing_ratio
+    """
+    return 0.622 * e_sat / (p - e_sat)
+
+
+@jit(nopython=True, fastmath=True)
+def latent_heat_of_vaporization(T: np.array) -> np.array:
+    """ Latent heat (also known as latent energy or heat of transformation) is energy released or absorbed,
+        by a body or a thermodynamic system, during a constant-temperature process — usually a first-order
+        phase transition.
+
+    Args:
+        T: temperature in [C]
+    Returns:
+        latent_heat_of_vaporization in [J kg-1]
+    Source:
+        https://en.wikipedia.org/wiki/Latent_heat
+    """
+    return (2500.8 - 2.36 * T + 1.6e-3 * T * T - 6e-5 * T * T * T) * 1.0e-3
+
+
+@jit(nopython=True, fastmath=True)
+def air_density(T: np.array, p: np.array) -> np.array:
+    """ Calculates the density using the ideal gas law.
+
+    Args:
+        T: temperature in [C]
+        p: pressure in [Pa]
+    Returns:
+        air_density in [kg m-3]
+    Source:
+        https://en.wikipedia.org/wiki/Barometric_formula
+    """
+    return p * m_mol / ((T + 273.15) * Rair) * 1.0e-3
+
+
+def pseudo_adiabatic_lapse_rate(T: np.array, p: np.array, Lv: np.array) -> np.array:
+    """ The rate of decrease of temperature with height of a parcel undergoing a pseudoadiabatic process.
+
+    Args:
+        T: temperature in [C]
+        p: pressure in [Pa]
+    Returns:
+        pseudo_adiabatic_lapse_rate in [kg m-1]
+    Source:
+        https:https://glossary.ametsoc.org/wiki/Pseudoadiabatic_lapse_rate
+    """
+    e_sat = saturated_water_vapor_pressure(T)
+    rv = mixing_ratio(e_sat, p)
+
+    numerator = (1 + rv) * ((1 + Lv * rv) / (R + T))
+    denominator = (cp + rv * cv + (Lv * Lv * rv * (eps + rv)) / (R * T * T))
+    return grav * numerator / denominator
+
+
+def adiabatic_liquid_water_content(T: np.array, p: np.array, mask: np.array, delta_h: float = 0.035):
+    """ Computes the liquid water content under adiabatic assumtion.
+
+    Args:
+        T: temperature in [K]
+        p: pressure in [Pa]
+        mask: liquid cloud droplet mask
+        delta_h: mean range resolution in [km]
+    Returns:
+        pseudo_adiabatic_lapse_rate in [kg m-1]
+    Source:
+        https://link.springer.com/article/10.1007/BF01030057
+    """
+    T_cel = T - 273.15
+    LWCad = np.zeros(mask.shape)
+    for ind_time in range(mask.shape[0]):
+        for ind_range in range(mask.shape[1]):
+            if mask[ind_time, ind_range]:
+                Lv = latent_heat_of_vaporization(T_cel[ind_time, ind_range])
+                gamma_s = pseudo_adiabatic_lapse_rate(T_cel[ind_time, ind_range], p[ind_time, ind_range], Lv)
+                rho = air_density(T_cel[ind_time, ind_range], p[ind_time, ind_range])
+                # formula (1)
+                LWCad[ind_time, ind_range] = rho * cp / Lv * (gamma_d - gamma_s) * delta_h
+
+    # correction term formula (2)
+    LWCad = LWCad * (1.239 - 0.145 * np.log(delta_h))
+
+    return LWCad
+
+
+
+

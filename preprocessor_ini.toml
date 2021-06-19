@@ -13,7 +13,7 @@
     cloudnet = ['CLASS', 'detection_status', 'Z', 'VEL', 'VEL_sigma', 'width', 'Tw', 'insect_prob', 'beta', 'category_bits', 'quality_bits']
     cloudnet_ts = ['LWP']
     model = ['T', 'P', 'q', 'UWIND', 'VWIND']
-    lidar = ['attbsc1064', 'attbsc532', 'depol']
+    lidar = []  #['attbsc1064', 'attbsc532', 'depol']
 
 [larda]
     path = '/home/sdig/code/larda3/larda/'

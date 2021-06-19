@@ -51,28 +51,89 @@ __email__ = "willi.schimmel@uni-leipzig.de"
 __status__ = "Prototype"
 
 
+def N_out_conv(n_in, layer, dim=0):
+    return int((n_in + 2 * layer.padding[dim] - layer.dilation[dim] * (layer.kernel_size[dim] - 1) - 1) / layer.stride[dim] + 1)
+
+
+def N_out_pool(n_in, layer, dim=0):
+    return int((n_in + 2 * layer.padding - layer.kernel_size[dim]) / layer.stride[dim] + 1)
+
+
 class Conv2DUnit(nn.Module):
-    def __init__(self, in_shape, nfltrs, kernel, stride, padding, downsample=None):
+    def __init__(self, in_shape, nfltrs, kernel, stride, padding, resnet=False):
         super(Conv2DUnit, self).__init__()
 
-        #self.conv = nn.Conv2d(in_shape, nfltrs, kernel_size=tuple(kernel), padding=tuple(padding), padding_mode='circular')
+        # 1. layer
+        self.conv1 = nn.Conv2d(in_shape, in_shape, kernel_size=(1, 1), padding=(0, 0), bias=False)
+        self.bn1 = nn.BatchNorm2d(num_features=in_shape)
 
-        self.conv = nn.Conv2d(
-            in_shape, nfltrs,
+        # 2. layer
+        self.conv2 = nn.Conv2d(
+            in_shape, in_shape,
             kernel_size=tuple(kernel),
             padding=tuple(padding),
             stride=tuple(stride),
-            padding_mode='circular')
+            padding_mode='circular',
+            bias=False)
+        self.bn2 = nn.BatchNorm2d(num_features=in_shape)
 
-        self.bn = nn.BatchNorm2d(num_features=nfltrs)
+        # 3. layer
+        self.conv3 = nn.Conv2d(in_shape, nfltrs, kernel_size=(1, 1), padding=(0, 0), bias=False)
+        self.bn3 = nn.BatchNorm2d(num_features=nfltrs)
+
         self.relu = nn.ELU()
-        #self.pool = nn.AvgPool2d(tuple(pool))
+
+        #if self.pool is not None:
+        #    self.pool = nn.AvgPool2d(tuple(pool))
+
+        self.resnet = resnet
+        if resnet:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(in_shape, nfltrs, kernel_size=(1, 1), padding=(0, 0), stride=tuple(stride), bias=False),
+                nn.BatchNorm2d(num_features=nfltrs),
+                #nn.AvgPool2d(tuple(pool))
+            )
 
     def forward(self, input):
-        output = self.conv(input)
-        output = self.bn(output)
+        # 1. layer
+        output = self.conv1(input)
+        output = self.bn1(output)
         output = self.relu(output)
+
+        # 2. layer
+        output = self.conv2(output)
+        output = self.bn2(output)
+        output = self.relu(output)
+
+        # 3. layer
+        output = self.conv3(output)
+        output = self.bn3(output)
         #output = self.pool(output)
+
+        if self.resnet:
+            # skip connection
+            ident = self.downsample(input)
+            output += ident
+
+        output = self.relu(output)
+
+
+#        n_H = N_out_conv(input.shape[-2], self.conv, dim=0)
+#        n_W = N_out_conv(input.shape[-1], self.conv, dim=1)
+#
+#        n_H = N_out_pool(n_H, self.pool, dim=0)
+#        n_W = N_out_pool(n_W, self.pool, dim=1)
+#
+#        print(f'calc H/W out = {n_H} x {n_W}')
+#        print(output.shape, ident.shape)
+#
+#        n_H = N_out_conv(input.shape[-2], self.downsample, dim=0)
+#        n_W = N_out_conv(input.shape[-1], self.downsample, dim=1)
+#
+#        n_H = N_out_pool(n_H, self.pool, dim=0)
+#        n_W = N_out_pool(n_W, self.pool, dim=1)
+#
+#        print(f'calc skip H/W out = {n_H} x {n_W}')
 
         return output
 
@@ -87,89 +148,16 @@ class DenseUnit(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, input):
+
         output = self.dense(input)
         output = self.bn(output)
         output = self.relu(output)
         output = self.dropout(output)
+
         return output
 
 
 class VoodooNet(nn.Module):
-#    def __init__(
-#            self,
-#            input_shape: Tuple[int],
-#            output_shape: int,
-#            dense_layers: Tuple[int] = None,
-#            num_filters: Tuple[int] = None,
-#            kernel_sizes: Tuple[Tuple[int]] = None,
-#            stride_sizes: Tuple[Tuple[int]] = None,
-#            pool_sizes: Tuple[Tuple[int]] = None,
-#            pad_sizes: Tuple[Tuple[int]] = None,
-#            dev: str = None,
-#            kernel_init: str = None,
-#            regularizer: str = None,
-#            batch_norm: str = True,
-#            hidden_activations: str = 'elu',
-#            output_activation: str = 'softmax',
-#            dropout: float = 0.0,
-#            **kwargs: dict):
-#        """
-#        Defining a PyTorch model.
-#
-#        Args:
-#            input_shape (tuple): shape of the input tensor
-#            output_shape (tuple): shape of the output tensor
-#
-#        Keyword Args:
-#            dense_layers: number of dense layers
-#            num_filters: list containing the number of nodes per conv layer
-#            kernel_sizes: list containing the 2D kernel
-#            stride_sizes: dimensions of the stride
-#            pool_sizes: dimensions of the pooling layers
-#            kernel_init: weight initializer method
-#            regularizer: regularization strategy
-#            hidden_activations: name of the activation functions for the convolutional layers
-#            output_activation: name of the activation functions for the dense output layer
-#            batch_norm: normalize the input layer by adjusting and scaling the activations
-#            dropout: percentage/100 of randome neuron dropouts during training
-#            metrics: list of metrics used for training
-#
-#        """
-#
-#        super(VoodooNet, self).__init__()
-#        self.n_conv = len(num_filters) if num_filters is not None else 0
-#        self.n_dense = len(dense_layers) if dense_layers is not None else 0
-#        self.batch_norm = batch_norm
-#        self.input_shape = input_shape
-#        self.output_shape = output_shape
-#        self.pool_sizes = np.array(pool_sizes)
-#        self.stride_sizes = np.array(stride_sizes)
-#        self.kernel_sizes = np.array(kernel_sizes)
-#        self.pad_sizes = np.array(pad_sizes)
-#        self.num_filters = np.array(num_filters)
-#        self.dense_layers = np.array(dense_layers)
-#        self.dropout = kwargs['DROPOUT']
-#        self.device = self.get_device(dev if dev is not None else 'cuda:0')
-#        self.training = True
-#        self.lr = kwargs['LEARNING_RATE']
-#        self.lr_decay = kwargs['DECAY_RATE']
-#        self.momentum = kwargs['MOMENTUM']
-#        self.output_activation = nn.Softmax if kwargs['OUTPUT_ACTIVATION'] else identity
-#        self.optimizer = self.get_optimizer(kwargs['OPTIMIZER'])
-#        self.loss = self.get_loss_function(kwargs['LOSS'])
-#
-#        # initialize convolutional layer
-#        self._define_cnn()
-#
-#        # flatten last convolution
-#        self._define_flatten()
-#
-#        # calculate flat dimension
-#        self.n_flat = self.flatten_conv()
-#
-#        # initialize dense layers
-#        self._define_dense(dropout=dropout)
-
     def __init__(
             self,
             input_shape: Tuple[int],
@@ -229,7 +217,7 @@ class VoodooNet(nn.Module):
         if pad_sizes is not None:
             self.pad_sizes = np.array(pad_sizes)
         else:
-            self.pad_sizes = np.array([[kern[0]-1, kern[1]-2] for kern in kernel_sizes])
+            self.pad_sizes = np.array([[int(kern[0]/2), int(kern[1]/2)] for kern in kernel_sizes])
 
         self.num_filters = np.array(num_filters)
         self.dense_layers = np.array(dense_layers)
@@ -263,6 +251,152 @@ class VoodooNet(nn.Module):
         x = self.convolution_network(x)
         x = self.flatten(x)
         return x.shape[1]
+
+    def _define_cnn(self):
+
+        in_shape = self.input_shape[1]
+        iterator = enumerate(zip(self.num_filters, self.kernel_sizes, self.stride_sizes, self.pad_sizes))
+        self.conv2D = OrderedDict()
+        for i, (ifltrs, ikrn, istride, ipad) in iterator:
+            # Create 14 layers of the unit with max pooling in between
+            self.conv2D.update({f'conv2d_{i}': Conv2DUnit(in_shape, ifltrs, ikrn, istride, ipad, resnet=self.resnet)})
+            in_shape = ifltrs
+
+        # Add all the units into the Sequential layer in exact order
+        self.convolution_network = nn.Sequential(self.conv2D)
+
+    def _define_flatten(self):
+        self.flatten = nn.Flatten()
+
+    def _define_dense(self, dropout=0.0):
+
+        log_TM.debug('calc flattened :', self.n_flat)
+        in_shape = self.n_flat
+        self.dense = OrderedDict()
+        for i, inodes in enumerate(self.dense_layers):
+            self.dense.update({f'dense_{i}': DenseUnit(in_shape, inodes, dropout=dropout)})
+            in_shape = inodes
+
+        # output layer
+        self.dense.update({f'dense_{i + 1}': nn.Linear(in_shape, self.output_shape)})
+
+        self.dense_network = nn.Sequential(self.dense)
+
+    def save(self, path: str = None, aux: Dict = None):
+        checkpoint = {
+            'state_dict': self.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'auxiliaray': aux
+        }
+        torch.save(checkpoint, path)
+        return 0
+
+    def print_nparams(self):
+        pytorch_total_params = sum(p.numel() for p in self.parameters())
+        pytorch_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        log_TM.info(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
+        log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
+        log_TM.critical(f'             Total  parameters: {pytorch_total_params:_d}')
+
+    def forward(self, x):
+        x = self.convolution_network(x)
+        x = self.flatten(x)
+        x = self.dense_network(x)
+        return x
+
+    def fwd_pass(self, X, y, train=False):
+        if train:
+            self.zero_grad()
+
+        outputs = self(X)
+        metrics = evaluation_metrics(outputs[:, 1] > 0.5, y)
+        loss = self.loss(outputs, y)
+
+        if train:
+            loss.backward()
+            self.optimizer.step()
+
+        return metrics, loss
+
+    def randome_test(self, X_test, y_test, test_size=256, dev='cpu'):
+        random_start = np.random.randint(len(X_test) - test_size)
+        if test_size > 0:
+            X = X_test[random_start:random_start + test_size]
+            y = y_test[random_start:random_start + test_size]
+
+            with torch.no_grad():
+                val_metrics, val_loss = self.fwd_pass(X.to(dev), y.to(dev))
+        else:
+            val_metrics, val_loss = [], []
+            iterator = tqdm(
+                range(0, len(X_test), 256),
+                ncols=100,
+                unit=f' batches - validation'
+            )
+            for i in iterator:
+                X = X_test[i:i + 256].to(dev)
+                y = y_test[i:i + 256].to(dev)
+
+                with torch.no_grad():
+                    _1, _2 = self.fwd_pass(X.to(dev), y.to(dev))
+                    val_metrics.append(_1['array'])
+                    val_loss.append(_2.numpy())
+
+            val_metrics = np.mean(val_metrics, axis=0)
+            val_loss = np.mean(val_loss)
+
+        return val_metrics, val_loss
+
+    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10, dev='cpu'):
+        self.to(dev)
+        self.train()
+        statistics = []
+        log_TM.info('\nOptimize')
+
+        self.optimizer = self.optimizer(self.parameters(), lr=self.lr)
+        self.lr_scheduler = self.lr_scheduler(self.optimizer, step_size=50, gamma=0.1)
+
+        for epoch in range(epochs):
+            iterator = tqdm(
+                range(0, len(X), batch_size),
+                ncols=100,
+                unit=f' batches - epoch:{epoch + 1}/{epochs}'
+            )
+            for i in iterator:
+                # show_batch(X[i:i+batch_size])
+                batch_X = X[i:i + batch_size].to(dev)
+                batch_y = y[i:i + batch_size].to(dev)
+                if len(batch_y) < 2: continue
+
+                batch_metric, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
+
+                if i % 5 == 0:
+                    self.lr_scheduler.step()
+                    val_metric, val_loss = self.randome_test(
+                        X_test, y_test, test_size=1024, dev=dev
+                    )
+                    statistics.append(
+                        [np.append(batch_metric, batch_loss.to('cpu').detach().numpy()),
+                         np.append(val_metric, val_loss.to('cpu').detach().numpy())]
+                    )
+
+        return statistics
+
+    def testing(self, X_test, batch_size=2048, dev='cpu'):
+        self.to(dev)
+        self.eval()
+        pred = []
+        log_TM.info('\nTesting')
+        with torch.no_grad():
+            for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
+                batch_X = X_test[i:i + batch_size].to(dev)
+                pred.append(self(batch_X))
+
+        activation = self.output_activation(dim=1)
+        return activation(torch.cat(pred, 0))
+
+
+    # static methods
 
     @staticmethod
     def get_device(dev):
@@ -304,50 +438,6 @@ class VoodooNet(nn.Module):
         else:
             raise RuntimeError(f'No model found for path: {model_path}')
 
-    def _define_cnn(self):
-
-        in_shape = self.input_shape[1]
-        iterator = enumerate(zip(self.num_filters, self.kernel_sizes, self.stride_sizes, self.pad_sizes))
-        self.conv2D = OrderedDict()
-        for i, (ifltrs, ikrn, istride, ipad) in iterator:
-            # Create 14 layers of the unit with max pooling in between
-            self.conv2D.update({f'conv2d_{i}': Conv2DUnit(in_shape, ifltrs, ikrn, istride, ipad)})
-            in_shape = ifltrs
-
-        # Add all the units into the Sequential layer in exact order
-        self.convolution_network = nn.Sequential(self.conv2D)
-
-#    def _define_cnn(self):
-#
-#        in_shape = self.input_shape[1]
-#        iterator = enumerate(zip(self.num_filters, self.kernel_sizes, self.pool_sizes, self.pad_sizes))
-#        self.conv2D = OrderedDict()
-#        for i, (ifltrs, ikrn, ipool, ipad) in iterator:
-#            # Create 14 layers of the unit with max pooling in between
-#            self.conv2D.update({f'conv2d_{i}': Conv2DUnit(in_shape, ifltrs, ikrn, ipool, ipad)})
-#            in_shape = ifltrs
-#
-#        # Add all the units into the Sequential layer in exact order
-#        self.convolution_network = nn.Sequential(self.conv2D)
-
-    def _define_flatten(self):
-        self.flatten = nn.Flatten()
-
-    def _define_dense(self, dropout=0.0):
-
-        log_TM.debug('calc flattened :', self.n_flat)
-        in_shape = self.n_flat
-        self.dense = OrderedDict()
-        for i, inodes in enumerate(self.dense_layers):
-            self.dense.update({f'dense_{i}': DenseUnit(in_shape, inodes, dropout=dropout)})
-            in_shape = inodes
-
-        # output layer
-        self.dense.update({f'dense_{i + 1}': nn.Linear(in_shape, self.output_shape)})
-
-        self.dense_network = nn.Sequential(self.dense)
-
-
     @staticmethod
     def fetch_data(
             path: str,
@@ -387,7 +477,7 @@ class VoodooNet(nn.Module):
 
             if merge_classes is not None:
                 tmp = y.copy()
-                for key, val in merge_classes.items(): # i from 0, ..., ngroups-1
+                for key, val in merge_classes.items():  # i from 0, ..., ngroups-1
                     for jclass in val:
                         tmp[y == jclass] = key
                 y = tmp
@@ -589,228 +679,9 @@ class VoodooNet(nn.Module):
 
         return xr_ds
 
-    def save(self, path: str = None, aux: Dict = None):
-        checkpoint = {
-            'state_dict': self.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'auxiliaray': aux
-        }
-        torch.save(checkpoint, path)
-        return 0
-
-    def print_nparams(self):
-        pytorch_total_params = sum(p.numel() for p in self.parameters())
-        pytorch_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        log_TM.info(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
-        log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
-        log_TM.critical(f'             Total  parameters: {pytorch_total_params:_d}')
-
-    def forward(self, x):
-        x = self.convolution_network(x)
-        x = self.flatten(x)
-        x = self.dense_network(x)
-        return x
-
-    def fwd_pass_accuracy_only(self, X, y, train=False):
-        if train:
-            self.zero_grad()
-
-        outputs = self(X)
-        matches = [torch.argmax(i) == j for i, j in zip(outputs, y)]
-        acc = matches.count(True) / len(matches)
-        loss = self.loss(outputs, y)
-
-        if train:
-            optimizer = self.optimizer(
-                self.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-            )
-            loss.backward()
-            optimizer.step()
-
-        return acc, loss
-
-    def fwd_pass(self, X, y, train=False):
-        if train:
-            self.zero_grad()
-
-        outputs = self(X)
-        #metrics = evaluation_metrics(outputs, y)
-        metrics = evaluation_metrics(outputs[:, 1] > 0.5, y)
-        loss = self.loss(outputs, y)
-
-        if train:
-            loss.backward()
-            self.optimizer.step()
-
-        return metrics, loss
-
-    def randome_test(self, X_test, y_test, test_size=256, dev='cpu', stride=2):
-        random_start = np.random.randint(len(X_test) - test_size)
-        if test_size > 0:
-            X = X_test[random_start:random_start + test_size]
-            y = y_test[random_start:random_start + test_size]
-
-            with torch.no_grad():
-                val_metrics, val_loss = self.fwd_pass(X.to(dev), y.to(dev))
-        else:
-            val_metrics, val_loss = [], []
-            if stride > 0:
-                stride = int(stride)
-                X_test, y_test = X_test[::stride], y_test[::stride]
-
-            iterator = tqdm(
-                range(0, len(X_test), 256),
-                ncols=100,
-                unit=f' batches - validation'
-            )
-            for i in iterator:
-                X = X_test[i:i + 256]
-                y = y_test[i:i + 256]
-
-                with torch.no_grad():
-                    _1, _2 = self.fwd_pass(X.to(dev), y.to(dev))
-                    val_metrics.append(_1['array'])
-                    val_loss.append(_2.to('cpu'))
-
-            val_metrics = np.mean(val_metrics, axis=0)
-            val_loss = np.mean(torch.stack(val_loss).numpy())
-
-        return val_metrics, val_loss
-
-    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10, dev='cpu'):
-        self.to(dev)
-        self.train()
-        statistics = []
-        log_TM.info('\nOptimize')
-
-        self.optimizer = self.optimizer(self.parameters(), lr=self.lr)
-        self.lr_scheduler = self.lr_scheduler(self.optimizer, step_size=50, gamma=0.1)
-
-        for epoch in range(epochs):
-            iterator = tqdm(
-                range(0, len(X), batch_size),
-                ncols=100,
-                unit=f' batches - epoch:{epoch + 1}/{epochs}'
-            )
-            for i in iterator:
-                # show_batch(X[i:i+batch_size])
-                batch_X = X[i:i + batch_size].to(dev)
-                batch_y = y[i:i + batch_size].to(dev)
-                if len(batch_y) < 2: continue
-
-                batch_metric, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
-
-                if i % 250 == 0:
-                    val_metric, val_loss = self.randome_test(
-                        X_test, y_test, test_size=-1, dev=dev
-                    )
-                    statistics.append(
-                        [np.append(batch_metric, batch_loss.to('cpu').detach().numpy()),
-                         np.append(val_metric, val_loss)]
-                    )
-
-        return statistics
-
-    def testing(self, X_test, batch_size=2048, dev='cpu'):
-        self.to(dev)
-        self.eval()
-        pred = []
-        log_TM.info('\nTesting')
-        with torch.no_grad():
-            for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
-                batch_X = X_test[i:i + batch_size].to(dev)
-                pred.append(self(batch_X))
-
-        activation = self.output_activation(dim=1)
-        return activation(torch.cat(pred, 0))
-
-
-#    def optimize2(self, train, test, epochs=10, dev='cpu'):
-#        self.to(dev)
-#        self.train()
-#        stat = []
-#        log_TM.info('\nOptimize')
-#        batch_acc, batch_loss = 0, 0
-#
-#        for epoch in range(epochs):
-#            epA, epL = [], []
-#            epVA, epVL = [], []
-#            iterator = tqdm(
-#                train,
-#                ncols=100,
-#                unit=f' batches - epoch:{epoch + 1}/{epochs}'
-#            )
-#            for batch_X, batch_y in iterator:
-#                batch_X, batch_y = batch_X.to(dev), batch_y.to(dev)
-#                batch_acc, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
-#
-#            # Validation
-#            iterator = tqdm(
-#                test,
-#                ncols=100,
-#                unit=f' batches - epoch:{epoch + 1}/{epochs}'
-#            )
-#            with torch.set_grad_enabled(False):
-#                for batch_X, batch_y in iterator:
-#                    # Transfer to GPU
-#                    batch_X, batch_y = batch_X.to(dev), batch_y.to(dev)
-#                    val_acc, val_loss = self.fwd_pass(batch_X, batch_y, train=False)
-#                    epA.append(batch_acc)
-#                    epVA.append(val_acc)
-#                    epL.append(float(batch_loss))
-#                    epVL.append(float(val_loss))
-#                    stat.append([epoch, np.mean(epA), np.mean(epVA), np.mean(epL), np.mean(epVL)])
-#
-#            log_TM.info(f'ep{epoch + 1:4d}/{epochs} Acc: {stat[-1][1]:.2f} / {stat[-1][2]:.2f}  '
-#                        f'Loss: {stat[-1][3]:.8f} / {stat[-1][4]:.8f}')
-#
-#        return np.array(stat)
-#
-#    def testing2(self, X_test, dev='cpu'):
-#        self.to(dev)
-#        self.eval()
-#        pred = []
-#        log_TM.info('\nTesting')
-#        iterator = tqdm(
-#            X_test,
-#            ncols=100,
-#            unit=f' batches'
-#        )
-#        with torch.set_grad_enabled(False):
-#            for batch_X in iterator:
-#                # Transfer to GPU
-#                batch_X = batch_X.to(dev)
-#                pred.append(self(batch_X))
-#
-#        sm = nn.Softmax(dim=1)
-#        return sm(torch.cat(pred, 0))
-#
-#    def lrp(self, X_test, y_test, batch_size=1, dev='cpu'):
-#        from captum.attr import IntegratedGradients
-#        attr_algo = IntegratedGradients(self)
-#
-#        self.train()
-#        att_list, delta_list = [], []
-#        log_TM.info('\nLayerwise-relevance propagation')
-#        for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
-#            batch_X = X_test[i:i + batch_size].to(dev)
-#            batch_y = y_test[i:i + batch_size].to(dev)
-#
-#            attributes, delta = attr_algo.attribute(
-#                batch_X[0],
-#                target=batch_y[0],
-#                return_convergence_delta=True
-#            )
-#            att_list.append(attributes)
-#            delta_list.append(delta)
-#
-#        return
-
-
 def identity(input):
     return input
+
 
 def random_choice(xr_ds, rg_int, N=4, iclass=4, var='CLASS'):
     nts, nrg = xr_ds.ZSpec.ts.size, xr_ds.ZSpec.rg.size
@@ -844,7 +715,6 @@ def evaluation_metrics(pred_labels, true_labels, status=None):
     FP = 0
     FN = 0
 
-
     # if no status is given, metric is calculated during optimization
     if status is None:
         for pred, truth in zip(pred_labels, true_labels):
@@ -872,12 +742,12 @@ def evaluation_metrics(pred_labels, true_labels, status=None):
                 if evaluation_mask[ind_time, ind_range]:
                     cloundet_label = true_labels[ind_time, ind_range]
                     predicted_label = pred_labels[ind_time, ind_range]
-                    if cloundet_label in [1, 3, 5, 7]:  #TRUE
+                    if cloundet_label in [1, 3, 5, 7]:  # TRUE
                         if predicted_label == 1:  # is droplet
                             TP += 1
                         else:
                             FN += 1
-                    else:                               #FALSE
+                    else:  # FALSE
                         if predicted_label == 1:
                             FP += 1
                         else:
@@ -886,18 +756,15 @@ def evaluation_metrics(pred_labels, true_labels, status=None):
     from collections import OrderedDict
     out = OrderedDict({
         'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
-        'precision': TP/max(TP + FP, 1.0e-7),
-        'npv': TN/max(TN + FN, 1.0e-7),
-        'recall': TP/max(TP + FN, 1.0e-7),
-        'specificity': TN/max(TN + FP, 1.0e-7),
-        'accuracy': (TP + TN)/max(TP + TN + FP + FN, 1.0e-7),
-        'F1-score': 2*TP/max(2*TP + FP + FN, 1.0e-7),
+        'precision': TP / max(TP + FP, 1.0e-7),
+        'npv': TN / max(TN + FN, 1.0e-7),
+        'recall': TP / max(TP + FN, 1.0e-7),
+        'specificity': TN / max(TN + FP, 1.0e-7),
+        'accuracy': (TP + TN) / max(TP + TN + FP + FN, 1.0e-7),
+        'F1-score': 2 * TP / max(2 * TP + FP + FN, 1.0e-7),
         'Jaccard-index': TP / max(TP + FN + FP, 1.0e-7),
     })
     out.update({
         'array': np.array([val for val in out.values()], dtype=float)
     })
     return out
-
-
-

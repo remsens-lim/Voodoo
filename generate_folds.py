@@ -1,18 +1,10 @@
 #!/home/sdig/anaconda3/bin/python
-
 import logging
 import sys, os
 import re
 
-from libVoodoo.Utils import load_dataset_from_zarr, log_number_of_classes, change_dir
-from libVoodoo.Loader import spectra_fold_to_zarr, validation_fold_to_zarr, logger
-
-""" /home/sdig/code/larda3/voodoo/tomls/
-- `auto-trainingset-20181127-20190927.toml` —>	60/600 = 723 files
-- `auto-trainingset-20181127-20190928.toml` —>	60/300 = 1469 files
-- `auto-trainingset-20181128-20190927.toml` —>	60/180 = 2432 files
-- `auto-trainingset-20181128-20190928.toml` —>	60/60 = 7320 files
-"""
+from libVoodoo.Utils import log_number_of_classes, change_dir, read_cmd_line_args
+from libVoodoo.Loader import dataset_from_zarr_new, validation_fold_to_zarr, logger
 
 if __name__ == '__main__':
 
@@ -22,38 +14,49 @@ if __name__ == '__main__':
     ANN_INI_FILE = 'HP_12chdp2.toml'
     task = 'train'
 
-    CALIBRATED_PATH = f'{voodoo_path}/data/{ANN_INI_FILE[:-5]}/hourly/noSL/'
-    CONCATINATED_PATH = f'{voodoo_path}/data/{ANN_INI_FILE[:-5]}/{scenario}/'
-    TOMLS_PATH = f'{voodoo_path}/tomls/{scenario}/'
+    _, agrs, kwargs = read_cmd_line_args()
+    ifile = kwargs['fn'] if 'fn' in kwargs else 1
+    task = kwargs['task'] if 'task' in kwargs else 'validation'
 
-    nfiles = 10
-    change_dir(CONCATINATED_PATH)
+    CALIBRATED_PATH = f'{voodoo_path}/data/Vnet_6ch_noliqext/hourly/'
+    TOMLS_PATH = f'{voodoo_path}/tomls/'
+
 
     # reprocess entire trainingset
-    for ifold in range(nfiles):
-        toml_file = f'{TOMLS_PATH}/auto-trainingset-20181127-20190927-{ifold}.toml'
+    if task == 'validation':
+        toml_file = f'{TOMLS_PATH}/{scenario}/validation_trainingset.toml'
+        m = 'validation_testingset'
+        CONCATINATED_PATH = f'{voodoo_path}/data/Vnet_6ch_noliqext/validation/'
+    elif task == 'train':
+        toml_file = f'{TOMLS_PATH}/auto-trainingset-20190801-20190801.toml'
+        m = 'debugger_trainingset'
+        CONCATINATED_PATH = f'{voodoo_path}/data/Vnet_6ch_noliqext/{scenario}/'
+    else:
+        toml_file = f'{TOMLS_PATH}/{scenario}/auto-trainingset-20181127-20190927-{ifile}.toml'
         m = re.search('\d{8}-\d{8}', toml_file).group(0)
-        print(f'\nLoad toml file: {toml_file}')
+        CONCATINATED_PATH = f'{voodoo_path}/data/Vnet_6ch_noliqext/{scenario}/'
+    print(f'\nLoad toml file: {toml_file}')
 
-        args = load_dataset_from_zarr(
-            CALIBRATED_PATH,
-            toml_file,
-            CLOUDNET='CLOUDNETpy94',
-            RADAR='limrad94',
-            TASK=task,
-        )
+    change_dir(CONCATINATED_PATH)
 
-        log_number_of_classes(args[1], text=f'\nsamples per class')
+    ND_ds, twoD_ds = dataset_from_zarr_new(
+        CALIBRATED_PATH,
+        toml_file,
+        CLOUDNET='CLOUDNETpy94',
+        RADAR='limrad94',
+        TASK=task,
+        PLOT=False,
+    )
 
-        # ND variables
-        xr_ds = spectra_fold_to_zarr(args)
-        FILE_NAME = f'{m}-{ifold}-{scenario}-ND.zarr'
-        xr_ds.to_zarr(store=FILE_NAME, mode='w')
+    numbers = log_number_of_classes(ND_ds['targets'].values, text=f'\nsamples per class')
+    print(numbers)
+
+    # ND variables
+    FILE_NAME = f'{m}-{ifile}-{scenario}-ND.zarr'
+    ND_ds.to_zarr(store=FILE_NAME, mode='w')
+    print(f'save :: {FILE_NAME}')
+    if task != 'train':
+        # 2D variables
+        FILE_NAME = f'{m}-{ifile}-{scenario}-2D.zarr'
+        twoD_ds.to_zarr(store=FILE_NAME, mode='w')
         print(f'save :: {FILE_NAME}')
-
-        if task == 'predict':
-            # 2D variables
-            xr_ds2D = validation_fold_to_zarr(args)
-            FILE_NAME = f'{m}-{ifold}-{scenario}-2D.zarr'
-            xr_ds2D.to_zarr(store=FILE_NAME, mode='w')
-            print(f'save :: {FILE_NAME}')
