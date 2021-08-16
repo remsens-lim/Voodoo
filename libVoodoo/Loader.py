@@ -564,9 +564,9 @@ def dataset_from_zarr_new(DATA_PATH, TOML_PATH, TASK='train', PLOT=False, **kwar
 
         logger.debug(f'\n dim(SPC) = {_featSPC.shape},  dim(CLS) = {_targCLS.shape}')
 
-    logger.critical(f'Number of missing ND files = {N_NOT_AVAILABLE}')
-    logger.critical(f'Number of missing 2D files = {N2D_NOT_AVAILABLE}')
-    logger.critical(f'ZARR LIST {NA_LIST}')
+    logger.info(f'Number of missing ND files = {N_NOT_AVAILABLE}')
+    logger.info(f'Number of missing 2D files = {N2D_NOT_AVAILABLE}')
+    logger.info(f'ZARR LIST {NA_LIST}')
 
     if TASK == 'predict':
         return ND_to_fold(ND_featSPC, ND_targCLS), xr.concat(twoD_LIST, dim='ts')

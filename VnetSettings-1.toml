@@ -1,7 +1,6 @@
 [pytorch]
-    iGPU = 0
     fn = 'dbg'
-    p = 0.5
+    p = 0.375
     resnet = 'VN'
 
     dense_layers = [128]

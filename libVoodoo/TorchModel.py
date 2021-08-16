@@ -92,7 +92,7 @@ class VoodooNet(nn.Module):
             lr_decay: float = None,
             momentum: float = None,
             optimizer: str = None,
-            dev: str = None,
+            dev: str = 'cpu',
             loss: str = None,
             resnet: bool = False,
             kernel_init: str = None,
@@ -142,7 +142,7 @@ class VoodooNet(nn.Module):
         self.num_filters = np.array(num_filters)
         self.dense_layers = np.array(dense_layers)
         self.dropout = dropout
-        self.device = self.get_device(dev if dev is not None else 'cuda:0')
+        self.device = dev
         self.training = True
         self.lr = learning_rate
         self.lr_decay = lr_decay
@@ -216,14 +216,14 @@ class VoodooNet(nn.Module):
 
         return metrics, loss
 
-    def randome_test(self, X_test, y_test, test_size=256, dev='cpu', stride=2):
+    def randome_test(self, X_test, y_test, test_size=256, stride=2):
         random_start = np.random.randint(len(X_test) - test_size)
         if test_size > 0:
             X = X_test[random_start:random_start + test_size]
             y = y_test[random_start:random_start + test_size]
 
             with torch.no_grad():
-                val_metrics, val_loss = self.fwd_pass(X.to(dev), y.to(dev))
+                val_metrics, val_loss = self.fwd_pass(X.to(self.device), y.to(self.device))
         else:
             val_metrics, val_loss = [], []
             if stride > 0:
@@ -240,7 +240,7 @@ class VoodooNet(nn.Module):
                 y = y_test[i:i + 256]
 
                 with torch.no_grad():
-                    _1, _2 = self.fwd_pass(X.to(dev), y.to(dev))
+                    _1, _2 = self.fwd_pass(X.to(self.device), y.to(self.device))
                     val_metrics.append(_1['array'])
                     val_loss.append(_2.to('cpu'))
 
@@ -249,8 +249,8 @@ class VoodooNet(nn.Module):
 
         return val_metrics, val_loss
 
-    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10, dev='cpu'):
-        self.to(dev)
+    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10):
+        self.to(self.device)
         self.train()
         statistics = []
         log_TM.info('\nOptimize')
@@ -266,15 +266,15 @@ class VoodooNet(nn.Module):
             )
             for i in iterator:
                 # show_batch(X[i:i+batch_size])
-                batch_X = X[i:i + batch_size].to(dev)
-                batch_y = y[i:i + batch_size].to(dev)
+                batch_X = X[i:i + batch_size].to(self.device)
+                batch_y = y[i:i + batch_size].to(self.device)
                 if len(batch_y) < 2: continue
 
                 batch_metric, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
 
                 if i % 250 == 0:
                     val_metric, val_loss = self.randome_test(
-                        X_test, y_test, test_size=-1, dev=dev
+                        X_test, y_test, test_size=-1,
                     )
                     statistics.append(
                         [np.append(batch_metric, batch_loss.to('cpu').detach().numpy()),
@@ -283,13 +283,13 @@ class VoodooNet(nn.Module):
 
         return statistics
 
-    def predict(self, X_test, batch_size=2048, dev='cpu'):
-        self.to(dev)
+    def predict(self, X_test, batch_size=2048):
+        self.to(self.device)
         self.eval()
         pred = []
         with torch.no_grad():
             for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
-                batch_X = X_test[i:i + batch_size].to(dev)
+                batch_X = X_test[i:i + batch_size].to(self.device)
                 pred.append(self(batch_X))
 
         activation = self.output_activation(dim=1)
@@ -310,16 +310,6 @@ class VoodooNet(nn.Module):
         log_TM.info(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
         log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
         log_TM.critical(f'             Total  parameters: {pytorch_total_params:_d}')
-
-    @staticmethod
-    def get_device(dev):
-        if torch.cuda.is_available():
-            log_TM.info("Available GPUs:", torch.cuda.device_count())
-            device = torch.device(dev)  # you can continue going on here, likrne cuda:1 cuda:2....etc.
-        else:
-            device = torch.device("cpu")
-        log_TM.info(f"Running on {device}")
-        return device
 
     @staticmethod
     def get_optimizer(string):

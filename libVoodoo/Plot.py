@@ -57,7 +57,7 @@ def plot_single_spectrogram(ZSpec, ts, rg, **font_settings):
 
     Z = np.squeeze(Z.values)
     X, Y = np.meshgrid(
-        np.linspace(-Z.shape[1]//2, Z.shape[1]//2, num=Z.shape[1]),
+        np.linspace(-Z.shape[1] // 2, Z.shape[1] // 2, num=Z.shape[1]),
         np.linspace(0, Z.shape[0], num=Z.shape[0])
     )
 
@@ -83,12 +83,12 @@ def create_acc_loss_graph(stats):
         'FP',
         'FN',
         'precision',
-        #'npv',
+        # 'npv',
         'recall',
-        #'specificity',
+        # 'specificity',
         'accuracy',
         'F1-score',
-        #'Jaccard-index',
+        # 'Jaccard-index',
     ]
     ax1 = plt.subplot2grid((3, 1), (0, 0))
     ax2 = plt.subplot2grid((3, 1), (1, 0), sharex=ax1)
@@ -221,10 +221,10 @@ def featureql(xr_ds, xr_ds2D, indices, **kwargs):
 
 def grid_plt(xr_ds, xr_ds2D, indices):
     from matplotlib.gridspec import GridSpec
-    fig = plt.figure(figsize=(16, 16))#, constrained_layout=True)
+    fig = plt.figure(figsize=(16, 16))  # , constrained_layout=True)
     ncols = 4
 
-    gs = GridSpec(ncols+2, ncols, left=0.05, right=0.98, hspace=0.25, wspace=0.1)
+    gs = GridSpec(ncols + 2, ncols, left=0.05, right=0.98, hspace=0.25, wspace=0.1)
     ax_class = fig.add_subplot(gs[:2, :])
 
     N = 4
@@ -241,7 +241,7 @@ def grid_plt(xr_ds, xr_ds2D, indices):
 
     ax_feat = np.zeros((ncols, ncols), dtype=object)
     for i, j in product(range(ncols), range(ncols)):
-        ax_feat[i, j] = fig.add_subplot(gs[i+2, j])
+        ax_feat[i, j] = fig.add_subplot(gs[i + 2, j])
 
     fig, ax_feat = featureql(xr_ds, xr_ds2D, indices, fig=fig, ax=ax_feat)
 
@@ -298,7 +298,7 @@ def plot_bar_data(fig, ax, time, data, mask_value=0.0, font_size=_FONT_SIZE):
     ax_new.tick_params(labelbottom=False, labeltop=True)
     ax_new.grid(True)
 
-    time_extend = datetime.timedelta(seconds=(time[-1].values - time[0].values).astype(np.float64)/10**9)
+    time_extend = datetime.timedelta(seconds=(time[-1].values - time[0].values).astype(np.float64) / 10 ** 9)
     ax_new = tr.set_xticks_and_xlabels(ax_new, time_extend)
     ax_new.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
     ax_new.tick_params(axis='both', which='both', right=True, top=True)
@@ -322,7 +322,7 @@ def plot_ll_thichkness(ax, t, l1, l2, font_size=_FONT_SIZE):
     ax1.tick_params(axis='both', which='both', right=True)
     ax1.tick_params(axis='both', which='major', labelsize=font_size, width=3, length=5.5)
     ax1.tick_params(axis='both', which='minor', width=2, length=3)
-    time_extend = datetime.timedelta(seconds=(t[-1].values - t[0].values).astype(np.float64)/10**9)
+    time_extend = datetime.timedelta(seconds=(t[-1].values - t[0].values).astype(np.float64) / 10 ** 9)
     ax1 = tr.set_xticks_and_xlabels(ax1, time_extend)
     ax1.legend(loc='upper left')
 
@@ -371,5 +371,3 @@ def add_lwp_to_classification2(fig, ax, lwp, lwp_ad, lwp_ad2, font_size=_FONT_SI
     ax.legend(loc='best')
 
     return fig, ax
-
-

@@ -1,4 +1,6 @@
 import datetime
+from numba import jit
+from tqdm.auto import tqdm
 import logging
 import re
 import subprocess
@@ -6,6 +8,7 @@ import sys, os
 import traceback
 from itertools import groupby
 from itertools import product
+from typing import List, Tuple, Dict
 
 import numpy as np
 
@@ -195,6 +198,7 @@ def get_cloud_base_from_liquid_mask(liq_mask, rg):
         CB[ind_time] = rg[int(idx[0])] if len(idx) > 0 else 0.0
     return CB
 
+
 def get_bases_or_tops(dt_list, bases_tops, key='cb'):
     dt_s, rg_s, dt1key, rg1key = [], [], [], []
     for i in range(len(bases_tops[0])):
@@ -206,6 +210,7 @@ def get_bases_or_tops(dt_list, bases_tops, key='cb'):
                     dt1key.append(dt_list[i])
                     rg1key.append(bases_tops[0][i][f'val_{key}'][0] / 1000.)
     return {'all': [dt_s, rg_s], 'first': [dt1key, rg1key]}
+
 
 def find_bases_tops(mask, rg_list):
     """
@@ -220,7 +225,7 @@ def find_bases_tops(mask, rg_list):
     """
     cloud_prop = []
     cloud_mask = np.full(mask.shape, 0, dtype=np.int)
-    for ind_time in range(mask.shape[0]): #tqdm(range(mask.shape[0]), ncols=100, unit=' time steps'):
+    for ind_time in range(mask.shape[0]):  # tqdm(range(mask.shape[0]), ncols=100, unit=' time steps'):
         cloud = [(k, sum(1 for j in g)) for k, g in groupby(mask[ind_time, :])]
         idx_cloud_edges = np.cumsum([prop[1] for prop in cloud])
         bases, tops = idx_cloud_edges[0:][::2][:-1], idx_cloud_edges[1:][::2]
@@ -298,7 +303,7 @@ def change_dir(folder_path, **kwargs):
     folder_path = folder_path.replace('//', '/', 1)
 
     if not os.path.exists(os.path.dirname(folder_path)):
-         os.makedirs(os.path.dirname(folder_path))
+        os.makedirs(os.path.dirname(folder_path))
     os.chdir(folder_path)
     logger.debug('\ncd to: {}'.format(folder_path))
 
@@ -360,6 +365,7 @@ def set_intersection(mask0, mask1):
             cnt += 1
 
     return np.array(idx_list, dtype=int)
+
 
 def container_from_prediction(ts, rg, var, mask, **kwargs):
     prediction_container = {}
@@ -641,10 +647,10 @@ def load_training_mask(classes, status, cloudnet_type='CLOUDNETpy'):
     valid_samples = np.full(status.shape, False)
     valid_samples[status == 1] = True  # add good radar radar & lidar
     valid_samples[classes == 1] = True  # add cloud droplets only class
-    #valid_samples[classes == 2] = True  # add drizzle/rain
+    # valid_samples[classes == 2] = True  # add drizzle/rain
     valid_samples[classes == 3] = True  # add cloud droplets + drizzle/rain
     valid_samples[classes == 5] = True  # add mixed-phase class pixel
-    #valid_samples[classes == 6] = True  # add melting layer
+    # valid_samples[classes == 6] = True  # add melting layer
     valid_samples[classes == 7] = True  # add melting layer + SCL class pixel
 
     # at last, remove lidar only pixel caused by adding cloud droplets only class
@@ -673,9 +679,8 @@ def log_number_of_classes(classes, text=''):
     logger.info(f'{classes.size:12d}   total')
     for ind, ind_name in enumerate(class_name_list):
         logger.info(f'{class_dist[ind]:12_d}   {ind_name}')
-        class_dist[ind] = np.sum(classes == ind+1)
+        class_dist[ind] = np.sum(classes == ind + 1)
     return class_dist
-
 
 
 def argnearest(array, value):
@@ -772,6 +777,17 @@ def dt_to_ts(dt):
     # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
     return (dt - datetime.datetime(1970, 1, 1)).total_seconds()
 
+def dh_to_ts(day_str, dh):
+    """decimal hour to unix timestamp"""
+    # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return datetime.datetime.strptime(day_str, '%Y%m%d') + datetime.timedelta(seconds=float(dh*3600))
+
+
+def dh_to_dt(day_str, dh):
+    """decimal hour to unix timestamp"""
+    # return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+    t0 = datetime.datetime.strptime(day_str, '%Y%m%d') - datetime.datetime(1970, 1, 1)
+    return datetime.datetime.strptime(day_str, '%Y%m%d') + datetime.timedelta(seconds=float(dh*3600))
 
 def ts_to_dt(ts):
     """unix timestamp to dt"""
@@ -787,19 +803,30 @@ def z2lin(array):
     """dB to linear values (for np.array or single number)"""
     return 10 ** (array / 10.)
 
+
+@jit(nopython=True, fastmath=True)
 def isKthBitSet(n, k):
     if n & (1 << (k - 1)):
-        print("SET")
+        return True
     else:
-        print("NOT SET")
+        return False
 
+def chunkIt(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
 
 def evaluation_metrics(pred_labels, true_labels, status=None):
     TP = 0
     TN = 0
     FP = 0
     FN = 0
-
 
     # if no status is given, metric is calculated during optimization
     if status is None:
@@ -828,12 +855,12 @@ def evaluation_metrics(pred_labels, true_labels, status=None):
                 if evaluation_mask[ind_time, ind_range]:
                     cloundet_label = true_labels[ind_time, ind_range]
                     predicted_label = pred_labels[ind_time, ind_range]
-                    if cloundet_label in [1, 3, 5, 7]:  #TRUE
+                    if cloundet_label in [1, 3, 5, 7]:  # TRUE
                         if predicted_label == 1:  # is droplet
                             TP += 1
                         else:
                             FN += 1
-                    else:                               #FALSE
+                    else:  # FALSE
                         if predicted_label == 1:
                             FP += 1
                         else:
@@ -842,19 +869,18 @@ def evaluation_metrics(pred_labels, true_labels, status=None):
     from collections import OrderedDict
     out = OrderedDict({
         'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
-        'precision': TP/max(TP + FP, 1.0e-7),
-        'npv': TN/max(TN + FN, 1.0e-7),
-        'recall': TP/max(TP + FN, 1.0e-7),
-        'specificity': TN/max(TN + FP, 1.0e-7),
-        'accuracy': (TP + TN)/max(TP + TN + FP + FN, 1.0e-7),
-        'F1-score': 2*TP/max(2*TP + FP + FN, 1.0e-7),
+        'precision': TP / max(TP + FP, 1.0e-7),
+        'npv': TN / max(TN + FN, 1.0e-7),
+        'recall': TP / max(TP + FN, 1.0e-7),
+        'specificity': TN / max(TN + FP, 1.0e-7),
+        'accuracy': (TP + TN) / max(TP + TN + FP + FN, 1.0e-7),
+        'F1-score': 2 * TP / max(2 * TP + FP + FN, 1.0e-7),
         'Jaccard-index': TP / max(TP + FN + FP, 1.0e-7),
     })
     out.update({
         'array': np.array([val for val in out.values()], dtype=float)
     })
     return out
-
 
 
 def LWP(ds_2D, liq_masks, bases_tops=None):
@@ -890,7 +916,7 @@ def LWP(ds_2D, liq_masks, bases_tops=None):
             bt_lists, bt_mask = find_bases_tops(liquid_mask, rg)
 
         adLWP = np.zeros(ts.size)
-        for ind_time in range(ts.size): #tqdm(range(ts.size), ncols=100, unit=' time steps'):
+        for ind_time in range(ts.size):  # tqdm(range(ts.size), ncols=100, unit=' time steps'):
             n_cloud_layers = len(bt_lists[ind_time]['idx_cb'])
             if n_cloud_layers < 1: continue
             Tclouds, Pclouds, RGclouds = [], [], []
@@ -908,15 +934,18 @@ def LWP(ds_2D, liq_masks, bases_tops=None):
             except:
                 continue
         return adLWP
+
     lwp = calc_adLWP(ds_2D, liq_masks, bt=bases_tops)
 
     return np.array(lwp)
+
 
 def correlation_coefficient(x, y):
     x, y = np.ma.masked_invalid(x), np.ma.masked_invalid(y)
     x, y = np.ma.masked_greater_equal(x, 1.0e10), np.ma.masked_greater_equal(y, 1.0e10)
     x, y = np.ma.masked_less_equal(x, 0.0), np.ma.masked_less_equal(y, 0.0)
     return np.ma.corrcoef(x, y)[0, 1]
+
 
 def timerange(begin, end):
     result = []
@@ -931,10 +960,7 @@ def get_subset(dt_list, mask):
     return [dt for dt, msk in zip(dt_list, mask) if msk]
 
 
-
-
 ############
-from numba import jit
 
 grav = 9.80991  # mean earth gravitational acceleration in m s-2
 R = 8.31446261815324  # gas constant in kg m2 s−2 K−1 mol−1
@@ -1054,6 +1080,99 @@ def adiabatic_liquid_water_content(T: np.array, p: np.array, mask: np.array, del
 
     return LWCad
 
+def compute_metrics(cn_class, cn_status, liq_mask, lwp_masks):
+    # compute the errormatrix for binned lwp values
+    beta = 0.5
+    _eps = 1.0e-7
+    arr = np.zeros((len(lwp_masks) + 1, 11))
+    _valid_cloudnet = (cn_status == 1)
+    _valid_cloudnet[((cn_class == 1) + (cn_class == 3) + (cn_class == 5) + (cn_class == 7))] = True
+    _valid_cloudnet[cn_status == 4] = False
+    #_valid_cloudnet[:, :38] = False #do not validate first chirp
+
+    for i in range(1, len(lwp_masks) + 1):
+
+        _valid_mask = np.zeros(liq_mask.shape)
+        _lwp_bin_mask = np.array([lwp_masks[i - 1]] * cn_class.shape[1]).T
+        _valid_mask[liq_mask] = 1
+
+        _valid_mask = _valid_mask[_lwp_bin_mask * _valid_cloudnet]
+        _ref_mask = cn_class[_lwp_bin_mask * _valid_cloudnet]
+
+        TP, TN, FP, FN = 0, 0, 0, 0
+        for pred, truth in zip(_valid_mask, _ref_mask):
+            if truth in [1, 3, 5, 7]:  # TRUE
+                if pred == 1:  # is droplet
+                    TP += 1
+                else:
+                    FN += 1
+            else:  # FALSE
+                if pred == 1:
+                    FP += 1
+                else:
+                    TN += 1
+
+        arr[i, :4] = TP, TN, FP, FN
+        arr[i, 4] = TP / max(TP + FP, _eps)  # precision
+        arr[i, 5] = TN / max(TN + FN, _eps)  # npv
+        arr[i, 6] = TP / max(TP + FN, _eps)  # recall
+        arr[i, 7] = TN / max(TN + FP, _eps)  # specificity
+        arr[i, 8] = (TP + TN) / max(TP + TN + FP + FN, _eps)  # accuracy
+        arr[i, 9] = 2 * TP / max(2 * TP + FP + FN, _eps)  # F1-score
+        arr[i, 10] = (1 + beta*beta)*arr[i, 4]*arr[i, 6]/(arr[i, 6] + beta*beta*arr[i, 4])
+
+    arr[0, :4] = np.sum(arr[1:, :4], axis=0)
+    arr[0, 4:] = np.mean(arr[1:, 4:], axis=0)
+    return arr
 
 
 
+def convection_index_fast(mdv: np.array, dts: int = 2, drg: int = 1):
+    """ Computes the convective index, see formula (6) in Kneifel et al. 2020.
+
+     Args:
+         mdv: mean Doppler velocity
+         dts: number of time steps, default=minimum=2
+         drg: number range bins, default=minimum=1
+     Source:
+         https://journals.ametsoc.org/view/journals/atsc/77/10/jasD200007.xml
+
+    """
+    assert drg*dts > 1, f'increase number of time steps (dts={dts}) or range bins (drg={drg}) used to compute the mean'
+    from scipy.signal import convolve2d
+    vel = np.ma.fix_invalid(-mdv, copy=True)
+    vel = np.ma.masked_greater_equal(vel, 99)
+    vel = np.ma.masked_invalid(vel)
+
+    rect = np.ones((dts, drg))/(dts*drg)
+    mean_vel = convolve2d(vel, rect, mode='same', boundary='fill', fillvalue=-999)
+
+    return np.abs(vel-mean_vel)/mean_vel
+
+
+def convection_index(mdv: xr.DataArray, dts: int = 2, drg: int = 1):
+    """ Computes the convective index, see formula (6) in Kneifel et al. 2020.
+
+     Args:
+         mdv: mean Doppler velocity
+         dts: number of time steps, default=minimum=2
+         drg: number range bins, default=minimum=1
+     Source:
+         https://journals.ametsoc.org/view/journals/atsc/77/10/jasD200007.xml
+
+    """
+    assert drg*dts > 1, f'increase number of time steps (dts={dts}) or range bins (drg={drg}) used to compute the mean'
+
+    ts, rg = mdv['time'].values, mdv['height'].values
+    vel = np.ma.fix_invalid(-mdv.values, copy=True)
+    vel = np.ma.masked_greater_equal(vel, 99)
+    vel = np.ma.masked_invalid(vel)
+    kappa = np.zeros(vel.shape)
+
+    for it in tqdm(range(0, len(ts), dts), unit=' time steps'):
+        for ir in range(0, len(rg), drg):
+            orig = vel[it:it + dts, ir:ir + dts]
+            mean_val = np.ma.mean(orig)
+            kappa[it:it + dts, ir:ir + dts] = np.ma.abs(orig - mean_val) / mean_val
+
+    return kappa

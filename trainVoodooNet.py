@@ -1,5 +1,6 @@
 #!/home/sdig/anaconda3/bin/python
 import time
+
 t0_marker = time.time()  # first thing = get unix time stamp for Vnet file name
 
 import logging
@@ -42,12 +43,17 @@ class_name_list = ['droplets available', 'no droplets available']
 TM.log_TM.setLevel(logging.CRITICAL)
 
 
+
 if __name__ == '__main__':
+    ''' Main program for training
+    
+    '''
+
     print('start')
     # ./TorchTrain.py fn=0 gpu=0
     _, agrs, kwargs = UT.read_cmd_line_args()
 
-    setup = kwargs['setup'] if 'setup' in kwargs else 0
+    setup = kwargs['setup'] if 'setup' in kwargs else 1
     torch_settings = toml.load(os.path.join(voodoo_path, f'VnetSettings-{setup}.toml'))['pytorch']
 
     if 'fn' in kwargs:
@@ -136,15 +142,18 @@ if __name__ == '__main__':
         X_train, y_train, X_test, y_test,
         batch_size=torch_settings['batch_size'],
         epochs=torch_settings['epochs'],
-        dev=torch_settings["dev"]
     )
 
-    model.save(path=m_name, aux=torch_settings)
+    _path = pt_models_path + torch_settings['Vnet_label']
+    os.makedirs(_path, exist_ok=True)
+    model.save(path=_path+'/'+m_name, aux=torch_settings)
     print(f'\nmodel saved: {m_name}')
 
     # creat accuracy/loss graph
+
+    os.makedirs(_path+'/plots/', exist_ok=True)
     fig, ax = create_acc_loss_graph(stat)
-    fig.savefig(m_name.replace('.pt', '.png'))
+    fig.savefig(_path+'/plots/'+m_name.replace('.pt', '.png'))
     print(f"fig saved: {m_name.replace('.pt', '.png')}")
 
 
@@ -155,22 +164,16 @@ if __name__ == '__main__':
             tomlfile=f'{voodoo_path}/tomls/auto-trainingset-{date_str}-{date_str}.toml',
             datafile=f'{voodoo_path}/data/Vnet_6ch_noliqext/hourly/',
             modelfile=m_name,
-            igpu=torch_settings["iGPU"],
             filenumber=torch_settings["fn"],
-            liquid_threshold=torch_settings["p"],
-            #resnet=torch_settings["resnet"],
+            liquid_threshold=[torch_settings["p"], 1],
             **torch_settings
-
         )
         cut_fn = m_name.find('-fn') if '-fn' in m_name else None
         VoodooAnalyser(
             date_str,
             'punta-arenas',
             modelfile=m_name,
-            igpu=torch_settings["iGPU"],
-            liquid_threshold=torch_settings["p"],
-            idk_factor=1,
+            liquid_threshold=[torch_settings["p"], 1],
             time_lwp_smoothing=10 * 60,     # in sec
             entire_day='false',
-            **torch_settings
         )
