@@ -3,28 +3,19 @@ This module contains functions for generating deep learning models with Tensorfl
 
 """
 
-import logging
 import os
-import time
 from collections import OrderedDict
 
 import numpy as np
+
 np.random.seed(0)
 
 import torch
 import torch.nn as nn
 torch.manual_seed(0)
 
-import xarray as xr
 from tqdm.auto import tqdm
-from typing import List, Tuple, Dict
-
-from .Utils import log_number_of_classes, load_training_mask
-from .Utils import logger as log_UT
-
-log_TM = logging.getLogger(__name__)
-log_TM.setLevel(logging.CRITICAL)
-log_UT.setLevel(logging.INFO)
+from typing import Tuple, Dict, List
 
 
 __author__ = "Willi Schimmel"
@@ -95,13 +86,16 @@ class VoodooNet(nn.Module):
             dev: str = 'cpu',
             loss: str = None,
             resnet: bool = False,
+            fn: int = 0,
+            p: float=0.5,
+            batch_size=256,
+            metrics: List[str] = None,
             kernel_init: str = None,
             regularizer: str = None,
             batch_norm: str = True,
             hidden_activations: str = 'elu',
             output_activation: str = None,
-            dropout: float = 0.0,
-            **kwargs: dict):
+            dropout: float = 0.0):
         """
         Defining a PyTorch model.
 
@@ -126,6 +120,8 @@ class VoodooNet(nn.Module):
         """
 
         super(VoodooNet, self).__init__()
+        self.hidden_activations = hidden_activations
+        self.regularizer = regularizer
         self.n_conv = len(num_filters) if num_filters is not None else 0
         self.n_dense = len(dense_layers) if dense_layers is not None else 0
         self.batch_norm = batch_norm
@@ -207,7 +203,7 @@ class VoodooNet(nn.Module):
             self.zero_grad()
 
         outputs = self(X)
-        metrics = evaluation_metrics(outputs[:, 1] > 0.5, y)
+        metrics = []
         loss = self.loss(outputs, y)
 
         if train:
@@ -215,73 +211,6 @@ class VoodooNet(nn.Module):
             self.optimizer.step()
 
         return metrics, loss
-
-    def randome_test(self, X_test, y_test, test_size=256, stride=2):
-        random_start = np.random.randint(len(X_test) - test_size)
-        if test_size > 0:
-            X = X_test[random_start:random_start + test_size]
-            y = y_test[random_start:random_start + test_size]
-
-            with torch.no_grad():
-                val_metrics, val_loss = self.fwd_pass(X.to(self.device), y.to(self.device))
-        else:
-            val_metrics, val_loss = [], []
-            if stride > 0:
-                stride = int(stride)
-                X_test, y_test = X_test[::stride], y_test[::stride]
-
-            iterator = tqdm(
-                range(0, len(X_test), 256),
-                ncols=100,
-                unit=f' batches - validation'
-            )
-            for i in iterator:
-                X = X_test[i:i + 256]
-                y = y_test[i:i + 256]
-
-                with torch.no_grad():
-                    _1, _2 = self.fwd_pass(X.to(self.device), y.to(self.device))
-                    val_metrics.append(_1['array'])
-                    val_loss.append(_2.to('cpu'))
-
-            val_metrics = np.mean(val_metrics, axis=0)
-            val_loss = np.mean(torch.stack(val_loss).numpy())
-
-        return val_metrics, val_loss
-
-    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10):
-        self.to(self.device)
-        self.train()
-        statistics = []
-        log_TM.info('\nOptimize')
-
-        self.optimizer = self.optimizer(self.parameters(), lr=self.lr)
-        self.lr_scheduler = self.lr_scheduler(self.optimizer, step_size=50, gamma=0.1)
-
-        for epoch in range(epochs):
-            iterator = tqdm(
-                range(0, len(X), batch_size),
-                ncols=100,
-                unit=f' batches - epoch:{epoch + 1}/{epochs}'
-            )
-            for i in iterator:
-                # show_batch(X[i:i+batch_size])
-                batch_X = X[i:i + batch_size].to(self.device)
-                batch_y = y[i:i + batch_size].to(self.device)
-                if len(batch_y) < 2: continue
-
-                batch_metric, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
-
-                if i % 250 == 0:
-                    val_metric, val_loss = self.randome_test(
-                        X_test, y_test, test_size=-1,
-                    )
-                    statistics.append(
-                        [np.append(batch_metric, batch_loss.to('cpu').detach().numpy()),
-                         np.append(val_metric, val_loss)]
-                    )
-
-        return statistics
 
     def predict(self, X_test, batch_size=2048):
         self.to(self.device)
@@ -307,9 +236,9 @@ class VoodooNet(nn.Module):
     def print_nparams(self):
         pytorch_total_params = sum(p.numel() for p in self.parameters())
         pytorch_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        log_TM.info(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
-        log_TM.info(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
-        log_TM.critical(f'             Total  parameters: {pytorch_total_params:_d}')
+        print(f'Total non-trainable parameters: {pytorch_total_params - pytorch_trainable_params:,d}')
+        print(f'    Total trainable parameters: {pytorch_trainable_params:_d}')
+        print(f'             Total  parameters: {pytorch_total_params:_d}')
 
     @staticmethod
     def get_optimizer(string):
@@ -336,103 +265,11 @@ class VoodooNet(nn.Module):
     @staticmethod
     def load(model_path: str = None):
         if os.path.exists(model_path):
-            log_TM.info(f'Loaded model from disk:\n{model_path}')
+            print(f'Loaded model from disk:\n{model_path}')
             return torch.load(model_path)
         else:
             raise RuntimeError(f'No model found for path: {model_path}')
-
-    @staticmethod
-    def fetch_data(
-            path: str,
-            shuffle: bool = True,
-            balance: int = False,
-            remove_classes: List[int] = None,
-            garbage: List[int] = None,
-            drop_pct: float = 0.0,
-            merge_classes: Dict = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        t0 = time.time()
-        with xr.open_zarr(path) as data:
-            X = data['features'].values
-            y = data['targets'].values
-
-            print(f'time elapsed reading {path} :: {int(time.time() - t0)} sec')
-
-            assert len(X) != 4, f'Input data has wrong shape: {X.shape}'
-
-            ichannel = 0
-            X = X[:, :, :, ichannel]  # good!
-            X = X[:, :, :, np.newaxis]
-
-            # nsamples, npolarization, ntimesteps, nDopplerbins
-            X = X.transpose(0, 3, 2, 1)
-            log_number_of_classes(y, text=f'\nsamples per class in {path}')
-
-            if garbage is not None:
-                for i in garbage:
-                    y[y == i] = 10
-
-            if remove_classes is not None:
-                for iclass in remove_classes:
-                    X, y = VoodooNet.remove_randomely(100, iclass, X, y)
-                log_number_of_classes(y, text=f'\nsamples per class, classes removed: {*remove_classes,}')
-
-            if merge_classes is not None:
-                tmp = y.copy()
-                for key, val in merge_classes.items(): # i from 0, ..., ngroups-1
-                    for jclass in val:
-                        tmp[y == jclass] = key
-                y = tmp
-
-            if balance > 0:
-                for i in range(11):
-                    X, y = VoodooNet.remove_randomely(balance, i, X, y)
-                log_number_of_classes(y, text=f'\nsamples per class balanced')
-
-            X = torch.Tensor(X)
-            y = torch.Tensor(y)
-            y = y.type(torch.LongTensor)
-
-            if shuffle:
-                perm = torch.randperm(len(y))
-                X, y = X[perm], y[perm]
-
-            if 0 < drop_pct < 1:
-                idx_drop = int(X.shape[0] * drop_pct)
-                X, y = X[idx_drop:, ...], y[idx_drop:]
-
-            return X, y
-
-    @staticmethod
-    def fetch_2Ddata(path):
-        # load 2d data
-        with xr.open_zarr(path) as data:
-            ds = data.copy()
-            ds['classes'].attrs = {'colormap': 'cloudnet_target_new', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy', 'var_lims': [0, 10]}
-            ds['status'].attrs = {'colormap': 'cloudnetpy_detection_status', 'rg_unit': 'km', 'var_unit': '', 'system': 'Cloudnetpy', 'var_lims': [0, 7]}
-            ds['Ze'].attrs = {'colormap': 'jet', 'rg_unit': 'km', 'var_unit': 'dBZ', 'system': 'Cloudnetpy', 'var_lims': [-50, 20]}
-        return ds
-
-    @staticmethod
-    def remove_randomely(remove_from_class, class_nr, _feature_set, _target_labels):
-        idx = np.where(_target_labels == class_nr)[0]
-        perm = np.arange(0, idx.size)
-        np.random.shuffle(perm)
-        idx = idx[perm]
-
-        if 0.0 <= remove_from_class <= 100.0:
-            rand_choice = idx[:int(idx.size * remove_from_class / 100.)]
-        elif remove_from_class > 100:
-            idx_cut = remove_from_class if len(idx) > remove_from_class else -2
-            rand_choice = idx[idx_cut:]
-        else:
-            raise ValueError(f'Choose value above 0, not {remove_from_class}')
-
-        _feature_out = np.delete(_feature_set, rand_choice, axis=0)
-        _target_out = np.delete(_target_labels, rand_choice, axis=0)
-        return _feature_out, _target_out
-
+        
     @staticmethod
     def new_classification(pred, mask):
 
@@ -449,82 +286,8 @@ class VoodooNet(nn.Module):
 
         return classes
 
-    @staticmethod
-    def reshape(pred, mask, newshape):
-        pred_reshaped = np.zeros(newshape)
-        cnt = 0
-        for i in range(newshape[0]):
-            for j in range(newshape[1]):
-                if mask[i, j]: continue
-                pred_reshaped[i, j] = pred[cnt]
-                cnt += 1
-
-        return pred_reshaped
-
-
 def identity(input):
     return input
-
-def evaluation_metrics(pred_labels, true_labels, status=None):
-    TP = 0
-    TN = 0
-    FP = 0
-    FN = 0
-
-
-    # if no status is given, metric is calculated during optimization
-    if status is None:
-        for pred, truth in zip(pred_labels, true_labels):
-            if truth in [1, 3, 5, 7]:  # TRUE
-                if pred == 1:  # is droplet
-                    TP += 1
-                else:
-                    FN += 1
-            else:  # FALSE
-                if pred == 1:
-                    FP += 1
-                else:
-                    TN += 1
-
-
-    # if status is given, prediction and true labels in time-range
-    else:
-        evaluation_mask = ~load_training_mask(true_labels, status)
-        # also remove good radar echos only
-        evaluation_mask[status == 2] = False
-
-        n_time, n_range = true_labels.shape
-        for ind_time in range(n_time):
-            for ind_range in range(n_range):
-                if evaluation_mask[ind_time, ind_range]:
-                    cloundet_label = true_labels[ind_time, ind_range]
-                    predicted_label = pred_labels[ind_time, ind_range]
-                    if cloundet_label in [1, 3, 5, 7]:  #TRUE
-                        if predicted_label == 1:  # is droplet
-                            TP += 1
-                        else:
-                            FN += 1
-                    else:                               #FALSE
-                        if predicted_label == 1:
-                            FP += 1
-                        else:
-                            TN += 1
-
-    from collections import OrderedDict
-    out = OrderedDict({
-        'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
-        'precision': TP/max(TP + FP, 1.0e-7),
-        'npv': TN/max(TN + FN, 1.0e-7),
-        'recall': TP/max(TP + FN, 1.0e-7),
-        'specificity': TN/max(TN + FP, 1.0e-7),
-        'accuracy': (TP + TN)/max(TP + TN + FP + FN, 1.0e-7),
-        'F1-score': 2*TP/max(2*TP + FP + FN, 1.0e-7),
-        'Jaccard-index': TP / max(TP + FN + FP, 1.0e-7),
-    })
-    out.update({
-        'array': np.array([val for val in out.values()], dtype=float)
-    })
-    return out
 
 def smooth_prediction(probabilities, shape):
         # plot smoothed data
