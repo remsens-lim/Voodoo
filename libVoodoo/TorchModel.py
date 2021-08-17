@@ -241,6 +241,30 @@ class VoodooNet(nn.Module):
         print(f'             Total  parameters: {pytorch_total_params:_d}')
 
     @staticmethod
+    def reshape(input, mask):
+        input_reshaped = np.zeros(mask.shape)
+        cnt = 0
+        for i in range(mask.shape[0]):
+            for j in range(mask.shape[1]):
+                if mask[i, j]: continue
+                input_reshaped[i, j] = input[cnt]
+                cnt += 1
+
+        return input_reshaped
+
+    @staticmethod
+    def reshape3d(input, mask, n=256):
+        input_reshaped = np.zeros(mask.shape + (n,))
+        cnt = 0
+        for i in range(mask.shape[0]):
+            for j in range(mask.shape[1]):
+                if mask[i, j]: continue
+                input_reshaped[i, j, :] = input[cnt]
+                cnt += 1
+
+        return input_reshaped
+
+    @staticmethod
     def get_optimizer(string):
         if string == 'sgd':
             return torch.optim.SGD
