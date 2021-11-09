@@ -1,15 +1,26 @@
 [pytorch]
-    fn = 'dbg'
-    p = 0.375
+
+    iGPU = 0
+    fn = 'X'
+    port = 1
+    p = 0.35
     resnet = 'VN'
 
     dense_layers = [128]
     dropout = 0.0
+<<<<<<< HEAD
     #batch_size = 512
     #epochs = 2
     #balance = -1
     #remove_classes = []
     #garbage_classes = []
+=======
+    batch_size = 512
+    epochs = 2
+    balance = 600000
+    remove_classes = []
+    garbage_classes = []
+>>>>>>> training release
 
     optimizer  = 'adam'
 
@@ -28,3 +39,18 @@
 
 
 
+# define normalization boundaries and conversion for radar (feature) and lidar (label) space
+[feature]
+    [feature.Spec]
+        use = true
+        add_flipped = false
+        var_lims = [1.0e-5, 1.0e2]
+        var_converter= 'lin2z'
+        scaling = 'normalize'  # minmaxscaler, normalize
+        despeckle2D = true          # 2D convolution (5x5 window), removes single non-zero values,
+        main_peak = true            #
+        ghost_echo_1 = false         # reduces the domain (Nyquist velocitdy) by ± 2.5 [m/s], when signal > 0 [dBZ] within 200m above antenna
+        ghost_echo_2 = true         #
+        dealiasing = false         #
+        add_horizontal_channel = true
+        spectra_debug_ql = false

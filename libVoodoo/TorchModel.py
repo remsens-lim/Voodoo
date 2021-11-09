@@ -212,11 +212,81 @@ class VoodooNet(nn.Module):
 
         return metrics, loss
 
+<<<<<<< HEAD
+=======
+    def randome_test(self, X_test, y_test, test_size=256, stride=2):
+        random_start = np.random.randint(len(X_test) - test_size)
+        if test_size > 0:
+            X = X_test[random_start:random_start + test_size]
+            y = y_test[random_start:random_start + test_size]
+
+            with torch.inference_mode():
+                val_metrics, val_loss = self.fwd_pass(X.to(self.device), y.to(self.device))
+        else:
+            val_metrics, val_loss = [], []
+            if stride > 0:
+                stride = int(stride)
+                X_test, y_test = X_test[::stride], y_test[::stride]
+
+            iterator = tqdm(
+                range(0, len(X_test), 256),
+                ncols=100,
+                unit=f' batches - validation'
+            )
+            for i in iterator:
+                X = X_test[i:i + 256]
+                y = y_test[i:i + 256]
+
+                with torch.inference_mode():
+                    _1, _2 = self.fwd_pass(X.to(self.device), y.to(self.device))
+                    val_metrics.append(_1['array'])
+                    val_loss.append(_2.to('cpu'))
+
+            val_metrics = np.mean(val_metrics, axis=0)
+            val_loss = np.mean(torch.stack(val_loss).numpy())
+
+        return val_metrics, val_loss
+
+    def optimize(self, X, y, X_test, y_test, batch_size=100, epochs=10):
+        self.to(self.device)
+        self.train()
+        statistics = []
+        log_TM.info('\nOptimize')
+
+        self.optimizer = self.optimizer(self.parameters(), lr=self.lr)
+        self.lr_scheduler = self.lr_scheduler(self.optimizer, step_size=50, gamma=0.1)
+
+        for epoch in range(epochs):
+            iterator = tqdm(
+                range(0, len(X), batch_size),
+                ncols=100,
+                unit=f' batches - epoch:{epoch + 1}/{epochs}'
+            )
+            for i in iterator:
+                # show_batch(X[i:i+batch_size])
+                batch_X = X[i:i + batch_size].to(self.device)
+                batch_y = y[i:i + batch_size].to(self.device)
+                if len(batch_y) < 2: continue
+
+                batch_metric, batch_loss = self.fwd_pass(batch_X, batch_y, train=True)
+
+                if i % 250 == 0:
+                    val_metric, val_loss = self.randome_test(
+                        X_test, y_test, test_size=-1,
+                    )
+                    statistics.append(
+                        [np.append(batch_metric, batch_loss.to('cpu').detach().numpy()),
+                         np.append(val_metric, val_loss)]
+                    )
+
+        return statistics
+
+>>>>>>> training release
     def predict(self, X_test, batch_size=2048):
         self.to(self.device)
         self.eval()
         pred = []
-        with torch.no_grad():
+        with torch.inference_mode():
             for i in tqdm(range(0, len(X_test), batch_size), ncols=100, unit=' batches'):
                 batch_X = X_test[i:i + batch_size].to(self.device)
                 pred.append(self(batch_X))
