@@ -6,16 +6,14 @@ This module contains routines for loading and preprocessing cloud radar and lida
 import logging
 import sys
 import time
+import warnings
 from datetime import timedelta, datetime
-
-import traceback
 
 import numpy as np
 import toml
 import xarray as xr
 from tqdm.auto import tqdm
 
-import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from .Utils import interpolate2d, ts_to_dt, lin2z, argnearest, load_training_mask
@@ -40,9 +38,6 @@ _DEFAULT_TIME_RES = 30
 preproc_ini = toml.load('preprocessor_ini.toml')
 
 sys.path.append(preproc_ini['larda']['path'])
-import pyLARDA.helpers as h
-import pyLARDA.Transformations as tr
-import pyLARDA.VIS_Colormaps as cmaps
 import matplotlib.pyplot as plt
 
 plt.rcParams.update({'figure.max_open_warning': 0})
@@ -474,6 +469,7 @@ def validation_fold_to_zarr(args):
     )
 
 def dataset_from_zarr_new(DATA_PATH, TOML_PATH, TASK='train', PLOT=False, **kwargs):
+    import pyLARDA.Transformations as tr
     N_NOT_AVAILABLE, N2D_NOT_AVAILABLE = 0, 0
 
     ND_targCLS, ND_targBIT, ND_featSPC = [], [], []

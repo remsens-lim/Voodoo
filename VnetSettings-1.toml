@@ -1,27 +1,12 @@
 [pytorch]
 
-    iGPU = 0
-    fn = 'X'
-    port = 1
     p = 0.35
-    resnet = 'VN'
 
     dense_layers = [128]
     dropout = 0.0
-<<<<<<< HEAD
-    #batch_size = 512
-    #epochs = 2
-    #balance = -1
-    #remove_classes = []
-    #garbage_classes = []
-=======
+    balance = -1
     batch_size = 512
     epochs = 2
-    balance = 600000
-    remove_classes = []
-    garbage_classes = []
->>>>>>> training release
-
     optimizer  = 'adam'
 
     # why elu? --> https://arxiv.org/pdf/1511.07289.pdf

@@ -86,6 +86,8 @@ class VoodooNet(nn.Module):
             dev: str = 'cpu',
             loss: str = None,
             resnet: bool = False,
+            epochs: int = 2,
+            balance: int = -1,
             fn: int = 0,
             p: float=0.5,
             batch_size=256,
@@ -212,8 +214,6 @@ class VoodooNet(nn.Module):
 
         return metrics, loss
 
-<<<<<<< HEAD
-=======
     def randome_test(self, X_test, y_test, test_size=256, stride=2):
         random_start = np.random.randint(len(X_test) - test_size)
         if test_size > 0:
@@ -251,7 +251,6 @@ class VoodooNet(nn.Module):
         self.to(self.device)
         self.train()
         statistics = []
-        log_TM.info('\nOptimize')
 
         self.optimizer = self.optimizer(self.parameters(), lr=self.lr)
         self.lr_scheduler = self.lr_scheduler(self.optimizer, step_size=50, gamma=0.1)
@@ -281,7 +280,6 @@ class VoodooNet(nn.Module):
 
         return statistics
 
->>>>>>> training release
     def predict(self, X_test, batch_size=2048):
         self.to(self.device)
         self.eval()
