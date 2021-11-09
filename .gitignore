@@ -29,7 +29,7 @@ venv/
 **/__pycache__/**/*
 libVoodoo/__pycache__/*
 data*/
-example_data/*
+#example_data/*
 torch_models/
 
 
