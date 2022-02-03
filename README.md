@@ -30,7 +30,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="420" height="300">
+    <img src="Voodoo/voodoo_logo.png" alt="Logo" width="420" height="300">
   </a>
 
   <h3 align="center">VOODOO</h3>
@@ -102,7 +102,7 @@ The CNN will ultimately be a feature within the Cloudnet processing suite.
 <div align="center">
   <h3 align="center">Some examples of enhancend Cloudnet mixed-phase detection </h3>
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="libVoodoo/previews.png" alt="previews.png" width="900" height="500">
+    <img src="Voodoo/previews.png" alt="previews.png" width="900" height="500">
   </a>
 </div>
 
@@ -228,4 +228,4 @@ Special thanks for templates and help during implementation.
 [license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
 [license-url]: https://github.com/KarlJohnsonnn/Voodoo/blob/master/LICENSE
 
-[product-screenshot]: libVoodoo/voodoo_logo.png
+[product-screenshot]: Voodoo/voodoo_logo.png
