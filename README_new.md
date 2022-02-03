@@ -17,12 +17,8 @@
 *** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
+
+[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40cloudposse)](https://twitter.com/RSAtmos_LIM)
 
 
 
@@ -30,7 +26,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="80" height="80">
+    <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="420" height="350">
   </a>
 
   <h3 align="center">Best-README-Template</h3>
@@ -80,16 +76,21 @@
 
 
 <!-- ABOUT THE PROJECT -->
-## About The Project
+## About The Project VOODOO
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+Machine learning approach using a convolutional neural network classifier to relate Doppler spectra morphologies to the presence of (supercooled) liquid cloud droplets in mixed-phase clouds.
 
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
+The release version provides the pre-trained machine learning model. Predictions are made by providing a list of Doppler radar time-spectrograms with dimensions: 
+* number of spectral bins = 256
+* number of time steps = 6 (equivalent to 30 sec of observations)
 
-Here's why:
-* Your time should be focused on creating something amazing. A project that solves a problem and helps others
-* You shouldn't be doing the same tasks over and over like creating a README from scratch
-* You should implement DRY principles to the rest of your life :smile:
+The model was trained on <a href="https://www.radiometer-physics.de/products/microwave-remote-sensing-instruments/94-ghz-fmcw-doppler-cloud-radar/">RPG-FMCW94</strong></a> data collected during <a href="https://dacapo.tropos.de/index.php/locations/15-dacapo-peso">DACAPO-PESO</strong></a>, therefore we recommend using this device for analysis.
+
+Two examples are provided:
+
+* for RPG-FMCW94 Doppler cloud radar: `Voodoo_predictor_RPG-FMCW94.ipynb`
+* for KAZR Doppler cloud radar: `Voodoo_predictor_KAZR.ipynb`
+* help me test and add more devices :smile:
 
 Of course, no one template will serve all projects since your needs may be different. So I'll be adding more in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue. Thanks to all the people have contributed to expanding this template!
 
@@ -140,15 +141,11 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 <!-- ROADMAP -->
 ## Roadmap
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
+- [x] Released version 1
+- [x] Add Tests
+- [ ] ???
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
+See the [open issues](https://github.com/KarlJohnsonnn/Voodoo/blob/release_v1/issues) for a full list of proposed features (and known issues).
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
