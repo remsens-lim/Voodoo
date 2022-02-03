@@ -17,7 +17,7 @@
 *** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
-[![Contributors][contributors-shield]][contributors-url]
+
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
@@ -92,14 +92,15 @@ The model was trained on <a href="https://www.radiometer-physics.de/products/mic
 
 Two examples are provided:
 
-* for RPG-FMCW94 Doppler cloud radar: `Voodoo_predictor_RPG-FMCW94.ipynb`
+* RPG-FMCW94 Doppler cloud radar `Voodoo_predictor_RPG-FMCW94.ipynb` test data is provided in the examples_data folder. The script requires a (hourly) LV0 binary file from RPG-FMCW94 and the corresponding Cloundet categorization file (for quicklooks and temporal resolution).
 * for KAZR Doppler cloud radar: `Voodoo_predictor_KAZR.ipynb`
 * help me test and add more devices :smile:
+
 
 The CNN will ultimately be a feature within the Cloudnet processing suite. 
 
 <div align="center">
-  <h3 align="center">Previews of enhancend Cloudnet liquid detections </h3>
+  <h3 align="center">Some examples of enhancend Cloudnet mixed-phase detection </h3>
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
     <img src="libVoodoo/previews.png" alt="previews.png" width="900" height="500">
   </a>
@@ -218,16 +219,14 @@ Use this space to list resources you find helpful and would like to give credit 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/othneildrew/Best-README-Template.svg?style=for-the-badge
-[contributors-url]: https://github.com/othneildrew/Best-README-Template/graphs/contributors
+
 [forks-shield]: https://img.shields.io/github/forks/othneildrew/Best-README-Template.svg?style=for-the-badge
-[forks-url]: https://github.com/othneildrew/Best-README-Template/network/members
+[forks-url]: https://github.com/KarlJohnsonnn/Voodoo/network/members
 [stars-shield]: https://img.shields.io/github/stars/othneildrew/Best-README-Template.svg?style=for-the-badge
-[stars-url]: https://github.com/othneildrew/Best-README-Template/stargazers
+[stars-url]: https://github.com/KarlJohnsonnn/Voodoo/stargazers
 [issues-shield]: https://img.shields.io/github/issues/othneildrew/Best-README-Template.svg?style=for-the-badge
-[issues-url]: https://github.com/othneildrew/Best-README-Template/issues
+[issues-url]: https://github.com/KarlJohnsonnn/Voodoo/issues
 [license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
-[license-url]: https://github.com/othneildrew/Best-README-Template/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/othneildrew
-[product-screenshot]: images/screenshot.png
+[license-url]: https://github.com/KarlJohnsonnn/Voodoo/blob/master/LICENSE
+
+[product-screenshot]: libVoodoo/voodoo_logo.png
