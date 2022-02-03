@@ -116,13 +116,6 @@ The CNN will ultimately be a feature within the Cloudnet processing suite.
 This is an example of how you may give instructions on setting up your project locally.
 To get a local copy up and running follow these simple example steps.
 
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
 
 ### Installation
 
@@ -133,16 +126,28 @@ _Below is an example of how you can instruct your audience on installing and set
    git clone https://github.com/KarlJohnsonnn/Voodoo.git
    ```
 
+2. Install the package
+   ```sh
+   python setup.py install
+   ```
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 
 
 <!-- USAGE EXAMPLES -->
-## Usage
+## Examples
 
 Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+1. Open jupyter notebook
+   ```sh
+   jupyter notebook
+   ```
+2. Open one of the example files `Voodoo_predictor_KAZR.ipynb`or `Voodoo_predictor_RPG-FMCW94.ipynb` to review the processing chain.
+
+
+
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -191,9 +196,9 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+Willi Schimmel - [@KarlJohnsonnn](https://twitter.com/KarlJohnsonnn) - willi.schimmel@uni-leipzig.de
 
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
+Project Link: [https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1](https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -202,16 +207,10 @@ Project Link: [https://github.com/your_username/repo_name](https://github.com/yo
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
+Special thanks for templates and help during implementation.
 
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
+* [Readme Template](https://github.com/othneildrew/Best-README-Template)
+* [TROPOS (Remote-sensing) GitHub](https://github.com/lacros-tropos)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
