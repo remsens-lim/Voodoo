@@ -39,5 +39,5 @@ nohup*
 *png*
 
 
-!libVoodoo/voodoo_logo.png
+!libVoodoo/*.png
 
