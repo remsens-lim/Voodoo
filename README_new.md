@@ -26,7 +26,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="420" height="350">
+    <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="420" height="300">
   </a>
 
   <h3 align="center">Best-README-Template</h3>
