@@ -17,8 +17,12 @@
 *** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
-
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40cloudposse)](https://twitter.com/RSAtmos_LIM)
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![Twitter](https://img.shields.io/twitter/follow/RSAtmos_LIM?style=for-the-badge)](https://twitter.com/RSAtmos_LIM)
 
 
 
@@ -29,10 +33,10 @@
     <img src="libVoodoo/voodoo_logo.png" alt="Logo" width="420" height="300">
   </a>
 
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">VOODOO</h3>
 
   <p align="center">
-    An awesome README template to jumpstart your projects!
+    A convolutional neural network approach for the pediction wheter cloud droplets are present in Doppler cloud radar spectra.
     <br />
     <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1"><strong>Explore the docs »</strong></a>
     <br />
@@ -78,7 +82,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project VOODOO
 
-Machine learning approach using a convolutional neural network classifier to relate Doppler spectra morphologies to the presence of (supercooled) liquid cloud droplets in mixed-phase clouds.
+Machine learning approach using a convolutional neural network (CNN) classifier to relate Doppler spectra morphologies to the presence of (supercooled) liquid cloud droplets in mixed-phase clouds.
 
 The release version provides the pre-trained machine learning model. Predictions are made by providing a list of Doppler radar time-spectrograms with dimensions: 
 * number of spectral bins = 256
@@ -92,9 +96,14 @@ Two examples are provided:
 * for KAZR Doppler cloud radar: `Voodoo_predictor_KAZR.ipynb`
 * help me test and add more devices :smile:
 
-Of course, no one template will serve all projects since your needs may be different. So I'll be adding more in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue. Thanks to all the people have contributed to expanding this template!
+The CNN will ultimately be a feature within the Cloudnet processing suite. 
 
-Use the `BLANK_README.md` to get started.
+<div align="center">
+  <h3 align="center">Previews of enhancend Cloudnet liquid detections </h3>
+  <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
+    <img src="libVoodoo/previews.png" alt="previews.png" width="900" height="500">
+  </a>
+</div>
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
