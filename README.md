@@ -34,13 +34,11 @@
   <h3 align="center">VOODOO</h3>
 
   <p align="center">
-    A convolutional neural network approach for the pediction wheter cloud droplets are present in Doppler cloud radar spectra.
+	Revealing supercooled liquid beyond lidar attenuation
     <br />
     <a href="https://github.com/remsens-lim/Voodoo"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/remsens-lim/Voodoo">View Demo</a>
-    ·
     <a href="https://github.com/remsens-lim/Voodoo/issues">Report Bug</a>
     ·
     <a href="https://github.com/remsens-lim/Voodoo/issues">Request Feature</a>
