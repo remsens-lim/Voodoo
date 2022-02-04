@@ -86,7 +86,7 @@ The release version provides the pre-trained machine learning model. Predictions
 * number of spectral bins = 256
 * number of time steps = 6 (equivalent to 30 sec of observations)
 
-The model was trained on <a href="https://www.radiometer-physics.de/products/microwave-remote-sensing-instruments/94-ghz-fmcw-doppler-cloud-radar/">RPG-FMCW94</strong></a> data collected during <a href="https://dacapo.tropos.de/index.php/locations/15-dacapo-peso">DACAPO-PESO</strong></a>, therefore we recommend using this device for analysis.
+The model was trained on <a href="https://www.radiometer-physics.de/products/microwave-remote-sensing-instruments/94-ghz-fmcw-doppler-cloud-radar/">RPG-FMCW94</strong></a> data collected during <a href="https://dacapo.tropos.de/index.php/locations/15-dacapo-peso">DACAPO-PESO</strong></a>, therefore we recommend using this device for analysis. Supervision and validiation is provided by the <a href="https://github.com/actris-cloudnet/cloudnetpy">CloudnetPy</strong></a> target classification and detection status.
 
 Two examples are provided:
 
