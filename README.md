@@ -27,7 +27,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
+  <a href="https://github.com/remsens-lim/Voodoo">
     <img src="Voodoo/voodoo_logo.png" alt="Logo" width="420" height="280">
   </a>
 
@@ -36,14 +36,14 @@
   <p align="center">
     A convolutional neural network approach for the pediction wheter cloud droplets are present in Doppler cloud radar spectra.
     <br />
-    <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/remsens-lim/Voodoo"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">View Demo</a>
+    <a href="https://github.com/remsens-lim/Voodoo">View Demo</a>
     ·
-    <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1/issues">Report Bug</a>
+    <a href="https://github.com/remsens-lim/Voodoo/issues">Report Bug</a>
     ·
-    <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1/issues">Request Feature</a>
+    <a href="https://github.com/remsens-lim/Voodoo/issues">Request Feature</a>
   </p>
 </div>
 
@@ -99,7 +99,7 @@ The CNN will ultimately be a feature within the Cloudnet processing suite.
 
 <div align="center">
   <h3 align="center">Some examples of enhancend Cloudnet mixed-phase detection </h3>
-  <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
+  <a href="https://github.com/remsens-lim/Voodoo">
     <img src="Voodoo/previews.png" alt="previews.png" width="1000" height="500">
   </a>
 </div>
@@ -195,7 +195,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Willi Schimmel - [@KarlJohnsonnn](https://twitter.com/KarlJohnsonnn) - willi.schimmel@uni-leipzig.de
 
-Project Link: [https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1](https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1)
+Project Link: [https://github.com/remsens-lim/Voodoo](https://github.com/remsens-lim/Voodoo)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -219,6 +219,6 @@ Special thanks for templates and help during implementation.
 
 
 [license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
-[license-url]: https://github.com/KarlJohnsonnn/Voodoo/blob/master/LICENSE
+[license-url]: https://github.com/remsens-lim/Voodoo/LICENSE
 
 [product-screenshot]: Voodoo/voodoo_logo.png
