@@ -120,7 +120,7 @@ _Below is an example of how run the example script, which prepares the data, mak
 
 1. Clone the repo
    ```sh
-   git clone https://github.com/KarlJohnsonnn/Voodoo.git
+   git clone https://github.com/remsens-lim/Voodoo.git
    ```
 
 2. Install the package
