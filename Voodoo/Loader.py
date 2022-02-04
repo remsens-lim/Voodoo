@@ -81,8 +81,8 @@ def VoodooPredictor(X):
 
     
     # load architecture
-    model_setup_file = f'VnetSettings.toml'
-    trained_model = 'Vnet0x615580bf-fn1-gpu0-VN.pt'
+    model_setup_file = f'model/VnetSettings.toml'
+    trained_model = 'model/Vnet0x615580bf-fn1-gpu0-VN.pt'
     
     torch_settings = toml.load(os.path.join(model_setup_file))['pytorch']
     torch_settings.update({'dev': 'cpu'})
