@@ -18,9 +18,7 @@
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
 
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
+
 [![MIT License][license-shield]][license-url]
 [![Twitter](https://img.shields.io/twitter/follow/RSAtmos_LIM?style=for-the-badge)](https://twitter.com/RSAtmos_LIM)
 
@@ -94,7 +92,7 @@ Two examples are provided:
 
 * RPG-FMCW94 Doppler cloud radar `Voodoo_predictor_RPG-FMCW94.ipynb` test data is provided in the examples_data folder. The script requires a (hourly) LV0 binary file from RPG-FMCW94 and the corresponding Cloundet categorization file (for quicklooks and temporal resolution).
 * for KAZR Doppler cloud radar: `Voodoo_predictor_KAZR.ipynb`
-* help me test and add more devices :smile:
+* help me test and add more devices :)
 
 
 The CNN will ultimately be a feature within the Cloudnet processing suite. 
@@ -218,12 +216,8 @@ Special thanks for templates and help during implementation.
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
-[forks-shield]: https://img.shields.io/github/forks/othneildrew/Best-README-Template.svg?style=for-the-badge
-[forks-url]: https://github.com/KarlJohnsonnn/Voodoo/network/members
-[stars-shield]: https://img.shields.io/github/stars/othneildrew/Best-README-Template.svg?style=for-the-badge
-[stars-url]: https://github.com/KarlJohnsonnn/Voodoo/stargazers
-[issues-shield]: https://img.shields.io/github/issues/othneildrew/Best-README-Template.svg?style=for-the-badge
-[issues-url]: https://github.com/KarlJohnsonnn/Voodoo/issues
+
+
 [license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
 [license-url]: https://github.com/KarlJohnsonnn/Voodoo/blob/master/LICENSE
 
