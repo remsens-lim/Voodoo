@@ -113,13 +113,12 @@ The CNN will ultimately be a feature within the Cloudnet processing suite.
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+The examples given use hourly radar spectra files in there specific file formats, i.e. LV0 binaries form RPG-FMCW94 and NetCDF files from KAZR. Th Cloudnet categorization file provides the temporal resolution where the high resolution radar profiels are mappend onto the 30 sec Cloudnet grid. Additionately, radar reflectivity and attenuated backscatter coefficient are plotted. 
 
 
 ### Installation
 
-_Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
+_Below is an example of how run the example script, which prepares the data, makes predictions and plots quicklooks. This method relies on external dependencies such as torch, xarray and others (see `setup.py`)._
 
 1. Clone the repo
    ```sh
@@ -169,7 +168,7 @@ See the [open issues](https://github.com/KarlJohnsonnn/Voodoo/blob/release_v1/is
 <!-- CONTRIBUTING -->
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Any contributions you make are **greatly appreciated**.
 
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
 Don't forget to give the project a star! Thanks again!
@@ -187,7 +186,7 @@ Don't forget to give the project a star! Thanks again!
 <!-- LICENSE -->
 ## License
 
-Distributed under the MIT License. See `LICENSE.txt` for more information.
+Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
