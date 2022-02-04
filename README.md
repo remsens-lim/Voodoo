@@ -30,7 +30,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="Voodoo/voodoo_logo.png" alt="Logo" width="420" height="300">
+    <img src="Voodoo/voodoo_logo.png" alt="Logo" width="420" height="280">
   </a>
 
   <h3 align="center">VOODOO</h3>
@@ -82,7 +82,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project VOODOO
 
-Machine learning approach using a convolutional neural network (CNN) classifier to relate Doppler spectra morphologies to the presence of (supercooled) liquid cloud droplets in mixed-phase clouds.
+Machine learning approach using a convolutional neural network (CNN) classifier to relate Doppler spectra morphologies to the presence of (supercooled) liquid cloud droplets in mixed-phase clouds. Preprint will be available soon!
 
 The release version provides the pre-trained machine learning model. Predictions are made by providing a list of Doppler radar time-spectrograms with dimensions: 
 * number of spectral bins = 256
@@ -102,7 +102,7 @@ The CNN will ultimately be a feature within the Cloudnet processing suite.
 <div align="center">
   <h3 align="center">Some examples of enhancend Cloudnet mixed-phase detection </h3>
   <a href="https://github.com/KarlJohnsonnn/Voodoo/tree/release_v1">
-    <img src="Voodoo/previews.png" alt="previews.png" width="900" height="500">
+    <img src="Voodoo/previews.png" alt="previews.png" width="1000" height="500">
   </a>
 </div>
 
