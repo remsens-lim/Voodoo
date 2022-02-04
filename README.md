@@ -18,7 +18,8 @@
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
 
-
+[![Release][release-shield]][release-url]
+[![DOI][zenodo-shield]][zenodo-url]
 [![MIT License][license-shield]][license-url]
 [![Twitter](https://img.shields.io/twitter/follow/RSAtmos_LIM?style=for-the-badge)](https://twitter.com/RSAtmos_LIM)
 
@@ -214,7 +215,11 @@ Special thanks for templates and help during implementation.
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
+[zenodo-shield]: https://img.shields.io/badge/doi-10.5281%2Fzenodo.5970206-lightgrey?style=for-the-badge&logo=appveyor
+[zenodo-url]: https://zenodo.org/badge/latestdoi/455474009
 
+[release-shield]: https://img.shields.io/github/downloads/remsens-lim/Voodoo/v1.0.0/total?style=for-the-badge
+[release-url]: https://zenodo.org/badge/latestdoi/455474009
 
 [license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
 [license-url]: https://github.com/remsens-lim/Voodoo/LICENSE
