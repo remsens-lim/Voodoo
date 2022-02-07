@@ -69,6 +69,29 @@ def argnearest(array, value):
     return i
 
 
+def interpolate_to_256(rpg_data, rpg_header, polarization='TotSpec'):
+    from scipy.interpolate import interp1d
+    
+    rng_offsets = rpg_header['RngOffs']
+    nts, nrg, nvel = rpg_data['TotSpec'].shape
+    
+    spec_new = np.zeros((nts, nrg, 256))
+    for ichirp in range(len(rng_offsets)-1):
+        nvel = rpg_header['SpecN'][ichirp]
+        if nvel == 256:
+            continue
+        
+        ia, ib = rng_offsets[ichirp], rng_offsets[ichirp+1]
+        old = rpg_header['velocity_vectors'][ichirp]
+        new = np.linspace(old[np.argmin(old)], old[np.argmax(old)], 256)
+        
+        spec = rpg_data[polarization][:, ia:ib, :]
+        f = interp1d(old, spec, axis=2, bounds_error=False, fill_value=-999., kind='linear')
+        spec_new[:, ia:ib, :] = f(new)
+
+    return spec_new
+
+
 @jit(nopython=True, fastmath=True)
 def isKthBitSet(n, k):
     if n & (1 << (k - 1)):

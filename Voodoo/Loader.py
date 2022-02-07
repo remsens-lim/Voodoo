@@ -6,6 +6,7 @@ import numpy as np
 import xarray as xr
 from tqdm.auto import tqdm
 from datetime import timedelta, datetime
+from scipy.interpolate import RegularGridInterpolator
 
 from .Utils import ts_to_dt, lin2z, decimalhour2unix, argnearest
 from .TorchModel import VoodooNet
@@ -45,8 +46,12 @@ def open_xarray_datasets(path):
 
 
 def hyperspectralimage(ts, vhspec, hspec, msk, n_channels, new_ts):
+    
+    vhs = vhspec
+    hs = hspec
+    
     n_ts_new = len(new_ts) if len(new_ts) > 0 else ValueError('Needs new_time array!')
-    n_ts, n_rg, n_vel = vhspec.shape
+    n_ts, n_rg, n_vel = vhs.shape
     mid = n_channels // 2
 
     ip_var = np.full((n_ts_new, n_rg, n_vel, n_channels, 2), fill_value=-999.0, dtype=np.float32)
@@ -59,8 +64,8 @@ def hyperspectralimage(ts, vhspec, hspec, msk, n_channels, new_ts):
 
             for itmp in range(-mid, mid):
                 iTdiff = itmp if iT_rd0 + itmp < n_ts else 0
-                ip_var[iT_cn, :, iBin, iTdiff + mid, 0] = vhspec[iT_rd0 + iTdiff, :, iBin]
-                ip_var[iT_cn, :, iBin, iTdiff + mid, 1] = hspec[iT_rd0 + iTdiff, :, iBin]
+                ip_var[iT_cn, :, iBin, iTdiff + mid, 0] = vhs[iT_rd0 + iTdiff, :, iBin]
+                ip_var[iT_cn, :, iBin, iTdiff + mid, 1] = hs[iT_rd0 + iTdiff, :, iBin]
                 ip_msk[iT_cn, :, iBin, iTdiff + mid] = msk[iT_rd0 + iTdiff, :, iBin]
 
     return ip_var, ip_msk
