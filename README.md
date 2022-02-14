@@ -207,6 +207,8 @@ Special thanks for templates and help during implementation.
 
 * [Readme Template](https://github.com/othneildrew/Best-README-Template)
 * [TROPOS (Remote-sensing) GitHub](https://github.com/lacros-tropos)
+* [CloudnetPy GitHub](https://github.com/actris-cloudnet/cloudnetpy)
+* [rpgPy GitHub](https://github.com/actris-cloudnet/rpgpy)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
