@@ -9,21 +9,8 @@ from Voodoo.Loader import features_from_nc
 from Voodoo.Utils import traceback_error, read_cmd_line_args
 
 
-PARAMETER = {
-    #'system': 'limrad94',
-    'system': 'KAZR',
-    'cloudnet': 'CLOUDNET',
-    #'cloudnet': 'CLOUDNETpy94',
-    'larda_path': '../larda3/larda',
-    'save': True,
-    'n_channels': 6,
 
-    'hourly_path': '/projekt2/ac3data/B07-data/arctic-mosaic/CloudNet/input/voodoo/hourly_zarr/',
-    #'hourly_path': '/projekt2/remsens/data_new/site-campaign/punta-arenas_dacapo-peso/cloudnet/calibrated/voodoo/hourly_zarr/',
-    #'hourly_path': '/projekt2/remsens/data_new/site-campaign/leipzig-lim/cloudnet/calibrated/voodoo/hourly_zarr/',
-
-    'site': 'mosaic_rs01',  # ('leipzig_rs01', 'lacros_dacapo_rs01', 'mosaic_rs01')
-}
+PARAMETER = PARAMETER_punta
 
 if __name__ == '__main__':
 
