@@ -75,6 +75,9 @@
 </details>
 
 
+<!-- DEPRICATED VERSION -->
+# VOODOO has moved to https://github.com/actris-cloudnet/voodoonet 
+
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project VOODOO
